@@ -157,7 +157,7 @@
       <div class="guide-bar">
         <div class="guide-section guide-highlight"><span class="g-emoji">❤️</span><span class="g-label">Like = Run</span><span class="g-sub">1 tile</span></div>
         <div class="guide-section"><span class="g-emoji">💬</span><span class="g-label">Chat: jump/left/right</span><span class="g-sub">dodge & move</span></div>
-        <div class="guide-section"><span class="g-emoji">🎁</span><span class="g-label">Gift = Power</span><span class="g-sub">use or get</span></div>
+        <div class="guide-section"><span class="g-emoji">🎁</span><span class="g-label">Gift = Mount + Power</span><span class="g-sub">random ride!</span></div>
         <div class="guide-section"><span class="g-emoji">⭐</span><span class="g-label">Follow = +3</span><span class="g-sub">boost</span></div>
       </div>
     </div>
@@ -382,6 +382,409 @@
     const MAX_INVENTORY = 3;
     const MAX_POWERUPS = 15;
     const activePowerups = []; // { tile, lane, typeIndex, mesh }
+
+    // ===== MOUNT / RIDE SYSTEM =====
+    const DEFAULT_MOUNT_INDEX = 0;
+
+    // Shared geometries (cached for performance)
+    const _legGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.55, 5);
+    const _thickLegGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.5, 5);
+
+    function buildHorse(accent) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshLambertMaterial({ color: 0x8B4513, flatShading: true });
+      const sMat = new THREE.MeshLambertMaterial({ color: accent, flatShading: true });
+      // Body
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.5), mat);
+      body.position.set(0, 0.8, 0); g.add(body);
+      // Neck
+      const neck = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.45, 0.25), mat);
+      neck.position.set(0, 1.05, -0.45); neck.rotation.x = -0.3; g.add(neck);
+      // Head
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.35), mat);
+      head.position.set(0, 1.2, -0.65); g.add(head);
+      // Saddle
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.35), sMat);
+      saddle.position.set(0, 1.1, 0); g.add(saddle);
+      // Legs
+      const fl = new THREE.Mesh(_legGeo, mat); fl.position.set(-0.18, 0.3, -0.35); g.add(fl);
+      const fr = new THREE.Mesh(_legGeo, mat); fr.position.set(0.18, 0.3, -0.35); g.add(fr);
+      const bl = new THREE.Mesh(_legGeo, mat); bl.position.set(-0.18, 0.3, 0.35); g.add(bl);
+      const br = new THREE.Mesh(_legGeo, mat); br.position.set(0.18, 0.3, 0.35); g.add(br);
+      // Tail
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.02, 0.4, 4), mat);
+      tail.position.set(0, 0.85, 0.65); tail.rotation.x = 0.5; g.add(tail);
+      return { mountGroup: g, animParts: { frontLeftLeg: fl, frontRightLeg: fr, backLeftLeg: bl, backRightLeg: br, tail, head } };
+    }
+
+    function buildMotorcycle(accent) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshLambertMaterial({ color: 0x333333, flatShading: true });
+      const sMat = new THREE.MeshLambertMaterial({ color: accent, flatShading: true });
+      // Frame
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 0.35), mat);
+      frame.position.set(0, 0.45, 0); g.add(frame);
+      // Seat
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.12, 0.3), sMat);
+      seat.position.set(0, 0.6, 0.05); g.add(seat);
+      // Handlebars
+      const hbar = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 5), mat);
+      hbar.position.set(0, 0.7, -0.4); hbar.rotation.z = Math.PI / 2; g.add(hbar);
+      // Front wheel
+      const fwGeo = new THREE.TorusGeometry(0.2, 0.05, 6, 12);
+      const fw = new THREE.Mesh(fwGeo, mat); fw.position.set(0, 0.22, -0.45); fw.rotation.y = Math.PI / 2; g.add(fw);
+      // Back wheel
+      const bw = new THREE.Mesh(fwGeo, mat); bw.position.set(0, 0.22, 0.35); bw.rotation.y = Math.PI / 2; g.add(bw);
+      // Engine
+      const eng = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), new THREE.MeshLambertMaterial({ color: 0x666666, flatShading: true }));
+      eng.position.set(0, 0.35, 0); g.add(eng);
+      return { mountGroup: g, animParts: { frontWheel: fw, backWheel: bw } };
+    }
+
+    function buildWhale(accent) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshLambertMaterial({ color: 0x4477CC, flatShading: true });
+      const bellyMat = new THREE.MeshLambertMaterial({ color: 0x88bbee, flatShading: true });
+      // Body
+      const bodyGeo = new THREE.SphereGeometry(0.7, 8, 6);
+      const body = new THREE.Mesh(bodyGeo, mat);
+      body.scale.set(1.5, 0.75, 0.85); body.position.set(0, 0.7, 0); g.add(body);
+      // Belly
+      const belly = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 6), bellyMat);
+      belly.scale.set(1.3, 0.5, 0.75); belly.position.set(0, 0.55, 0); g.add(belly);
+      // Tail
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.35), mat);
+      tail.position.set(0, 0.65, 0.8); g.add(tail);
+      // Eyes
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const e1 = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 4), eyeMat);
+      e1.position.set(-0.35, 0.8, -0.4); g.add(e1);
+      const e2 = e1.clone(); e2.position.set(0.35, 0.8, -0.4); g.add(e2);
+      // Saddle area
+      const sMat = new THREE.MeshLambertMaterial({ color: accent, flatShading: true });
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.08, 0.3), sMat);
+      saddle.position.set(0, 1.0, 0); g.add(saddle);
+      return { mountGroup: g, animParts: { tail, body } };
+    }
+
+    function buildPanda(accent) {
+      const g = new THREE.Group();
+      const wMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee, flatShading: true });
+      const bMat = new THREE.MeshLambertMaterial({ color: 0x222222, flatShading: true });
+      // Body
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.45, 7, 5), wMat);
+      body.position.set(0, 0.7, 0); g.add(body);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 7, 5), wMat);
+      head.position.set(0, 1.15, -0.3); g.add(head);
+      // Eye patches
+      const ep1 = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 4), bMat);
+      ep1.position.set(-0.12, 1.18, -0.52); g.add(ep1);
+      const ep2 = ep1.clone(); ep2.position.set(0.12, 1.18, -0.52); g.add(ep2);
+      // Ears
+      const ear1 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4), bMat);
+      ear1.position.set(-0.22, 1.38, -0.25); g.add(ear1);
+      const ear2 = ear1.clone(); ear2.position.set(0.22, 1.38, -0.25); g.add(ear2);
+      // Legs
+      const fl = new THREE.Mesh(_thickLegGeo, bMat); fl.position.set(-0.22, 0.25, -0.2); g.add(fl);
+      const fr = new THREE.Mesh(_thickLegGeo, bMat); fr.position.set(0.22, 0.25, -0.2); g.add(fr);
+      const bl = new THREE.Mesh(_thickLegGeo, bMat); bl.position.set(-0.22, 0.25, 0.2); g.add(bl);
+      const br = new THREE.Mesh(_thickLegGeo, bMat); br.position.set(0.22, 0.25, 0.2); g.add(br);
+      // Saddle
+      const sMat = new THREE.MeshLambertMaterial({ color: accent, flatShading: true });
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.25), sMat);
+      saddle.position.set(0, 1.0, 0); g.add(saddle);
+      return { mountGroup: g, animParts: { frontLeftLeg: fl, frontRightLeg: fr, backLeftLeg: bl, backRightLeg: br, head } };
+    }
+
+    function buildBear(accent) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshLambertMaterial({ color: 0x8B6914, flatShading: true });
+      const dMat = new THREE.MeshLambertMaterial({ color: 0x6B4914, flatShading: true });
+      // Body
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 7, 5), mat);
+      body.position.set(0, 0.75, 0); g.add(body);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 7, 5), mat);
+      head.position.set(0, 1.2, -0.3); g.add(head);
+      // Snout
+      const snout = new THREE.Mesh(new THREE.SphereGeometry(0.12, 5, 4), dMat);
+      snout.position.set(0, 1.12, -0.55); g.add(snout);
+      // Ears
+      const ear1 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4), dMat);
+      ear1.position.set(-0.22, 1.42, -0.22); g.add(ear1);
+      const ear2 = ear1.clone(); ear2.position.set(0.22, 1.42, -0.22); g.add(ear2);
+      // Legs
+      const fl = new THREE.Mesh(_thickLegGeo, dMat); fl.position.set(-0.25, 0.25, -0.22); g.add(fl);
+      const fr = new THREE.Mesh(_thickLegGeo, dMat); fr.position.set(0.25, 0.25, -0.22); g.add(fr);
+      const bl = new THREE.Mesh(_thickLegGeo, dMat); bl.position.set(-0.25, 0.25, 0.22); g.add(bl);
+      const br = new THREE.Mesh(_thickLegGeo, dMat); br.position.set(0.25, 0.25, 0.22); g.add(br);
+      // Saddle
+      const sMat = new THREE.MeshLambertMaterial({ color: accent, flatShading: true });
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.25), sMat);
+      saddle.position.set(0, 1.08, 0); g.add(saddle);
+      return { mountGroup: g, animParts: { frontLeftLeg: fl, frontRightLeg: fr, backLeftLeg: bl, backRightLeg: br, head } };
+    }
+
+    function buildDragon(accent) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshLambertMaterial({ color: 0x22AA44, flatShading: true });
+      const dMat = new THREE.MeshLambertMaterial({ color: 0x118833, flatShading: true });
+      // Body
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.45, 0.5), mat);
+      body.position.set(0, 0.85, 0); g.add(body);
+      // Neck
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.4, 5), mat);
+      neck.position.set(0, 1.05, -0.45); neck.rotation.x = -0.4; g.add(neck);
+      // Head
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, 0.3), mat);
+      head.position.set(0, 1.2, -0.65); g.add(head);
+      // Wings
+      const wingMat = new THREE.MeshLambertMaterial({ color: 0x33cc55, flatShading: true, side: THREE.DoubleSide });
+      const wingGeo = new THREE.BoxGeometry(0.7, 0.04, 0.5);
+      const lw = new THREE.Mesh(wingGeo, wingMat); lw.position.set(-0.6, 1.1, 0); g.add(lw);
+      const rw = new THREE.Mesh(wingGeo, wingMat); rw.position.set(0.6, 1.1, 0); g.add(rw);
+      // Tail
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.03, 0.7, 5), dMat);
+      tail.position.set(0, 0.75, 0.7); tail.rotation.x = 0.4; g.add(tail);
+      // Spines
+      for (let i = 0; i < 3; i++) {
+        const spine = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.15, 4), dMat);
+        spine.position.set(0, 1.15, -0.2 + i * 0.25); g.add(spine);
+      }
+      // Legs
+      const fl = new THREE.Mesh(_legGeo, dMat); fl.position.set(-0.2, 0.35, -0.3); g.add(fl);
+      const fr = new THREE.Mesh(_legGeo, dMat); fr.position.set(0.2, 0.35, -0.3); g.add(fr);
+      const bl = new THREE.Mesh(_legGeo, dMat); bl.position.set(-0.2, 0.35, 0.3); g.add(bl);
+      const br = new THREE.Mesh(_legGeo, dMat); br.position.set(0.2, 0.35, 0.3); g.add(br);
+      // Saddle
+      const sMat = new THREE.MeshLambertMaterial({ color: accent, flatShading: true });
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.08, 0.3), sMat);
+      saddle.position.set(0, 1.12, 0); g.add(saddle);
+      return { mountGroup: g, animParts: { leftWing: lw, rightWing: rw, tail, head } };
+    }
+
+    function buildUnicorn(accent) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshLambertMaterial({ color: 0xffeeff, flatShading: true });
+      const pMat = new THREE.MeshLambertMaterial({ color: 0xffaaff, flatShading: true });
+      // Body
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.48, 0.48), mat);
+      body.position.set(0, 0.8, 0); g.add(body);
+      // Neck
+      const neck = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.4, 0.22), mat);
+      neck.position.set(0, 1.02, -0.42); neck.rotation.x = -0.3; g.add(neck);
+      // Head
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.3), mat);
+      head.position.set(0, 1.18, -0.6); g.add(head);
+      // Horn
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 5), new THREE.MeshLambertMaterial({ color: 0xffd700, flatShading: true }));
+      horn.position.set(0, 1.42, -0.6); g.add(horn);
+      // Mane (rainbow blocks)
+      const rainbow = [0xff0000, 0xff8800, 0xffff00, 0x00ff00, 0x0088ff, 0x8800ff];
+      rainbow.forEach((c, i) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.06), new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
+        m.position.set(0, 1.15 - i * 0.06, -0.35 + i * 0.08); g.add(m);
+      });
+      // Legs
+      const fl = new THREE.Mesh(_legGeo, pMat); fl.position.set(-0.17, 0.28, -0.32); g.add(fl);
+      const fr = new THREE.Mesh(_legGeo, pMat); fr.position.set(0.17, 0.28, -0.32); g.add(fr);
+      const bl = new THREE.Mesh(_legGeo, pMat); bl.position.set(-0.17, 0.28, 0.32); g.add(bl);
+      const br = new THREE.Mesh(_legGeo, pMat); br.position.set(0.17, 0.28, 0.32); g.add(br);
+      // Tail
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.02, 0.35, 4), pMat);
+      tail.position.set(0, 0.82, 0.6); tail.rotation.x = 0.5; g.add(tail);
+      // Saddle
+      const sMat = new THREE.MeshLambertMaterial({ color: accent, flatShading: true });
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.08, 0.28), sMat);
+      saddle.position.set(0, 1.08, 0); g.add(saddle);
+      return { mountGroup: g, animParts: { frontLeftLeg: fl, frontRightLeg: fr, backLeftLeg: bl, backRightLeg: br, tail, head } };
+    }
+
+    function buildTiger(accent) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshLambertMaterial({ color: 0xFF8800, flatShading: true });
+      const sMat2 = new THREE.MeshLambertMaterial({ color: 0x332200, flatShading: true });
+      // Body
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.4, 0.45), mat);
+      body.position.set(0, 0.7, 0); g.add(body);
+      // Stripes
+      for (let i = 0; i < 4; i++) {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.42, 0.46), sMat2);
+        stripe.position.set(0, 0.7, -0.3 + i * 0.2); g.add(stripe);
+      }
+      // Head
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.28, 0.3), mat);
+      head.position.set(0, 0.85, -0.6); g.add(head);
+      // Ears
+      const ear1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.06), mat);
+      ear1.position.set(-0.12, 1.02, -0.58); g.add(ear1);
+      const ear2 = ear1.clone(); ear2.position.set(0.12, 1.02, -0.58); g.add(ear2);
+      // Legs
+      const fl = new THREE.Mesh(_legGeo, mat); fl.position.set(-0.18, 0.22, -0.32); g.add(fl);
+      const fr = new THREE.Mesh(_legGeo, mat); fr.position.set(0.18, 0.22, -0.32); g.add(fr);
+      const bl = new THREE.Mesh(_legGeo, mat); bl.position.set(-0.18, 0.22, 0.32); g.add(bl);
+      const br = new THREE.Mesh(_legGeo, mat); br.position.set(0.18, 0.22, 0.32); g.add(br);
+      // Tail
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.02, 0.5, 4), mat);
+      tail.position.set(0, 0.7, 0.7); tail.rotation.x = 0.3; g.add(tail);
+      // Saddle
+      const saMat = new THREE.MeshLambertMaterial({ color: accent, flatShading: true });
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.25), saMat);
+      saddle.position.set(0, 0.95, 0); g.add(saddle);
+      return { mountGroup: g, animParts: { frontLeftLeg: fl, frontRightLeg: fr, backLeftLeg: bl, backRightLeg: br, tail } };
+    }
+
+    function buildBull(accent) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshLambertMaterial({ color: 0x553311, flatShading: true });
+      const dMat = new THREE.MeshLambertMaterial({ color: 0x3a2208, flatShading: true });
+      // Body (wider)
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.55, 0.6), mat);
+      body.position.set(0, 0.8, 0); g.add(body);
+      // Head (thick)
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.3, 0.35), mat);
+      head.position.set(0, 0.95, -0.6); g.add(head);
+      // Horns
+      const hornMat = new THREE.MeshLambertMaterial({ color: 0xccbb88, flatShading: true });
+      const h1 = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.25, 5), hornMat);
+      h1.position.set(-0.22, 1.12, -0.55); h1.rotation.z = 0.5; g.add(h1);
+      const h2 = h1.clone(); h2.position.set(0.22, 1.12, -0.55); h2.rotation.z = -0.5; g.add(h2);
+      // Legs
+      const fl = new THREE.Mesh(_thickLegGeo, dMat); fl.position.set(-0.22, 0.28, -0.32); g.add(fl);
+      const fr = new THREE.Mesh(_thickLegGeo, dMat); fr.position.set(0.22, 0.28, -0.32); g.add(fr);
+      const bl = new THREE.Mesh(_thickLegGeo, dMat); bl.position.set(-0.22, 0.28, 0.32); g.add(bl);
+      const br = new THREE.Mesh(_thickLegGeo, dMat); br.position.set(0.22, 0.28, 0.32); g.add(br);
+      // Tail
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.02, 0.4, 4), dMat);
+      tail.position.set(0, 0.85, 0.65); tail.rotation.x = 0.4; g.add(tail);
+      // Saddle
+      const sMat = new THREE.MeshLambertMaterial({ color: accent, flatShading: true });
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.08, 0.3), sMat);
+      saddle.position.set(0, 1.12, 0); g.add(saddle);
+      return { mountGroup: g, animParts: { frontLeftLeg: fl, frontRightLeg: fr, backLeftLeg: bl, backRightLeg: br, tail, head } };
+    }
+
+    function buildPhoenix(accent) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshBasicMaterial({ color: 0xFF4400 });
+      const gMat = new THREE.MeshBasicMaterial({ color: 0xFFAA00 });
+      // Body
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 7, 5), mat);
+      body.scale.set(1.3, 0.8, 0.9); body.position.set(0, 0.9, 0); g.add(body);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 5), gMat);
+      head.position.set(0, 1.15, -0.4); g.add(head);
+      // Beak
+      const beak = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.15, 4), new THREE.MeshBasicMaterial({ color: 0xffcc00 }));
+      beak.position.set(0, 1.1, -0.58); beak.rotation.x = Math.PI / 2; g.add(beak);
+      // Wings
+      const wingGeo = new THREE.BoxGeometry(0.7, 0.04, 0.45);
+      const lw = new THREE.Mesh(wingGeo, mat); lw.position.set(-0.6, 1.05, 0); g.add(lw);
+      const rw = new THREE.Mesh(wingGeo, mat); rw.position.set(0.6, 1.05, 0); g.add(rw);
+      // Tail feathers
+      for (let i = 0; i < 3; i++) {
+        const f = new THREE.Mesh(new THREE.BoxGeometry(0.08 + i * 0.03, 0.03, 0.4 - i * 0.05), i % 2 === 0 ? mat : gMat);
+        f.position.set((i - 1) * 0.12, 0.85, 0.6 + i * 0.1); g.add(f);
+      }
+      // Saddle
+      const sMat = new THREE.MeshLambertMaterial({ color: accent, flatShading: true });
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.25), sMat);
+      saddle.position.set(0, 1.15, 0); g.add(saddle);
+      return { mountGroup: g, animParts: { leftWing: lw, rightWing: rw, tail: g.children[g.children.length - 4], head } };
+    }
+
+    const MOUNT_TYPES = [
+      { name: 'Horse',      icon: '🐴', color: 0x8B4513, riderY: 1.4, animType: 'gallop', build: buildHorse },
+      { name: 'Motorcycle',  icon: '🏍️', color: 0x333333, riderY: 1.0, animType: 'wheels', build: buildMotorcycle },
+      { name: 'Whale',      icon: '🐋', color: 0x4477CC, riderY: 1.5, animType: 'bob',    build: buildWhale },
+      { name: 'Panda',      icon: '🐼', color: 0xEEEEEE, riderY: 1.4, animType: 'waddle', build: buildPanda },
+      { name: 'Bear',       icon: '🐻', color: 0x8B6914, riderY: 1.4, animType: 'waddle', build: buildBear },
+      { name: 'Dragon',     icon: '🐉', color: 0x22AA44, riderY: 1.6, animType: 'fly',    build: buildDragon },
+      { name: 'Unicorn',    icon: '🦄', color: 0xFFAAFF, riderY: 1.4, animType: 'gallop', build: buildUnicorn },
+      { name: 'Tiger',      icon: '🐯', color: 0xFF8800, riderY: 1.2, animType: 'prowl',  build: buildTiger },
+      { name: 'Bull',       icon: '🐂', color: 0x553311, riderY: 1.4, animType: 'gallop', build: buildBull },
+      { name: 'Phoenix',    icon: '🔥', color: 0xFF4400, riderY: 1.5, animType: 'fly',    build: buildPhoenix },
+    ];
+
+    // Mount animation dispatcher
+    function animateMount(ud, phase, swing, dt) {
+      const mountDef = MOUNT_TYPES[ud.mountTypeIndex];
+      const ap = ud.mountAnimParts;
+      if (!ap || !mountDef) return;
+      switch (mountDef.animType) {
+        case 'gallop':
+          if (ap.frontLeftLeg) ap.frontLeftLeg.rotation.x = swing;
+          if (ap.frontRightLeg) ap.frontRightLeg.rotation.x = -swing;
+          if (ap.backLeftLeg) ap.backLeftLeg.rotation.x = -swing * 0.8;
+          if (ap.backRightLeg) ap.backRightLeg.rotation.x = swing * 0.8;
+          if (ap.tail) ap.tail.rotation.x = 0.5 + Math.sin(phase * 1.5) * 0.2;
+          if (ap.head) ap.head.rotation.x = Math.sin(phase * 0.7) * 0.05;
+          if (ud.mountGroup) ud.mountGroup.position.y = Math.abs(Math.sin(phase)) * 0.08;
+          break;
+        case 'wheels':
+          if (ap.frontWheel) ap.frontWheel.rotation.x += dt * 15;
+          if (ap.backWheel) ap.backWheel.rotation.x += dt * 15;
+          if (ud.mountGroup) ud.mountGroup.rotation.z = Math.sin(phase * 0.3) * 0.03;
+          break;
+        case 'bob':
+          if (ud.mountGroup) ud.mountGroup.position.y = Math.sin(phase * 0.8) * 0.15;
+          if (ap.tail) ap.tail.rotation.z = Math.sin(phase) * 0.3;
+          break;
+        case 'waddle':
+          if (ud.mountGroup) ud.mountGroup.rotation.z = Math.sin(phase) * 0.06;
+          if (ap.frontLeftLeg) ap.frontLeftLeg.rotation.x = swing * 0.6;
+          if (ap.frontRightLeg) ap.frontRightLeg.rotation.x = -swing * 0.6;
+          if (ap.backLeftLeg) ap.backLeftLeg.rotation.x = -swing * 0.5;
+          if (ap.backRightLeg) ap.backRightLeg.rotation.x = swing * 0.5;
+          if (ap.head) ap.head.rotation.y = Math.sin(phase * 0.4) * 0.1;
+          break;
+        case 'fly':
+          if (ud.mountGroup) ud.mountGroup.position.y = 0.3 + Math.sin(phase * 0.6) * 0.2;
+          if (ap.leftWing) ap.leftWing.rotation.z = Math.sin(phase * 2) * 0.4;
+          if (ap.rightWing) ap.rightWing.rotation.z = -Math.sin(phase * 2) * 0.4;
+          if (ap.tail) ap.tail.rotation.y = Math.sin(phase) * 0.2;
+          break;
+        case 'prowl':
+          if (ap.frontLeftLeg) ap.frontLeftLeg.rotation.x = swing * 1.2;
+          if (ap.frontRightLeg) ap.frontRightLeg.rotation.x = -swing * 1.2;
+          if (ap.backLeftLeg) ap.backLeftLeg.rotation.x = -swing;
+          if (ap.backRightLeg) ap.backRightLeg.rotation.x = swing;
+          if (ap.tail) ap.tail.rotation.y = Math.sin(phase * 1.5) * 0.3;
+          if (ud.mountGroup) ud.mountGroup.position.y = Math.abs(Math.sin(phase * 1.5)) * 0.05;
+          break;
+      }
+    }
+
+    // Swap mount on gift
+    function swapMount(p, newTypeIndex) {
+      const ud = p.mesh.userData;
+      if (newTypeIndex === ud.mountTypeIndex) {
+        newTypeIndex = (newTypeIndex + 1 + Math.floor(Math.random() * (MOUNT_TYPES.length - 1))) % MOUNT_TYPES.length;
+      }
+      // Remove old mount
+      if (ud.mountGroup) {
+        p.mesh.remove(ud.mountGroup);
+        ud.mountGroup.traverse(child => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
+      }
+      // Build new mount
+      const color = hashColor(p.id);
+      const mountDef = MOUNT_TYPES[newTypeIndex];
+      const { mountGroup, animParts } = mountDef.build(color);
+      p.mesh.add(mountGroup);
+      // Reposition rider
+      ud.riderGroup.position.y = mountDef.riderY;
+      ud.mountGroup = mountGroup;
+      ud.mountAnimParts = animParts;
+      ud.mountTypeIndex = newTypeIndex;
+      p.mountType = newTypeIndex;
+      // Particles
+      spawnGiftParticles(p.mesh.position.x, p.mesh.position.y + 1, p.mesh.position.z, mountDef.color, 20);
+      return newTypeIndex;
+    }
     const powerupMeshPool = [];
     let lastPowerupTile = 10;
 
@@ -1083,7 +1486,7 @@
       const ud = p.mesh.userData;
       // Remove old inventory sprites
       if (ud.inventorySprites) {
-        ud.inventorySprites.forEach(s => p.mesh.remove(s));
+        ud.inventorySprites.forEach(s => (ud.riderGroup || p.mesh).remove(s));
         ud.inventorySprites = null;
       }
       if (p.inventory.length === 0) return;
@@ -1133,7 +1536,7 @@
         // Float to the right side of character, stacked vertically
         sprite.position.set(0.9, 0.8 + i * 0.75, 0);
         sprite.userData = { bobOffset: i * 1.2 }; // for floating animation
-        p.mesh.add(sprite);
+        (ud.riderGroup || p.mesh).add(sprite);
         ud.inventorySprites.push(sprite);
       });
     }
@@ -1299,56 +1702,55 @@
     function createCharacter(id, name, profilePic) {
       const color = hashColor(id);
       const mat = new THREE.MeshLambertMaterial({ color, flatShading: true });
-      const skinMat = new THREE.MeshLambertMaterial({ color: 0xffcc99, flatShading: true });
 
       const group = new THREE.Group();
 
+      // === RIDER SUB-GROUP (body + arms, no legs — they're riding) ===
+      const riderGroup = new THREE.Group();
+
       // Body
-      const bodyGeo = new THREE.BoxGeometry(0.6, 0.8, 0.4);
+      const bodyGeo = new THREE.BoxGeometry(0.6, 0.7, 0.4);
       const body = new THREE.Mesh(bodyGeo, mat);
-      body.position.y = 1.2;
-      group.add(body);
-
-      // Head — hidden, replaced by profile photo sprite
-      const head = null;
-
-      // Profile photo sprite on top of head (faces camera automatically)
-      const profileSprite = createProfileSprite(color);
-      profileSprite.position.y = 1.9;
-      profileSprite.position.z = -0.05; // slightly behind center
-      group.add(profileSprite);
-
-      // Load actual profile photo if available
-      if (profilePic) {
-        loadProfilePhoto(profileSprite, profilePic);
-      }
+      body.position.y = 0;
+      riderGroup.add(body);
 
       // Arms
-      const armGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 5);
+      const armGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.45, 5);
       const leftArm = new THREE.Mesh(armGeo, mat);
-      leftArm.position.set(-0.4, 1.1, 0);
-      group.add(leftArm);
+      leftArm.position.set(-0.38, -0.05, 0);
+      riderGroup.add(leftArm);
       const rightArm = new THREE.Mesh(armGeo.clone(), mat);
-      rightArm.position.set(0.4, 1.1, 0);
-      group.add(rightArm);
+      rightArm.position.set(0.38, -0.05, 0);
+      riderGroup.add(rightArm);
 
-      // Legs
-      const legGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.5, 5);
-      const leftLeg = new THREE.Mesh(legGeo, mat);
-      leftLeg.position.set(-0.13, 0.45, 0);
-      group.add(leftLeg);
-      const rightLeg = new THREE.Mesh(legGeo.clone(), mat);
-      rightLeg.position.set(0.13, 0.45, 0);
-      group.add(rightLeg);
+      // Profile photo sprite
+      const profileSprite = createProfileSprite(color);
+      profileSprite.position.set(0, 0.65, -0.05);
+      riderGroup.add(profileSprite);
+      if (profilePic) loadProfilePhoto(profileSprite, profilePic);
 
       // Name label
       const nameSprite = createNameSprite(name);
-      nameSprite.position.y = 2.5;
-      group.add(nameSprite);
+      nameSprite.position.y = 1.2;
+      riderGroup.add(nameSprite);
+
+      // === MOUNT SUB-GROUP ===
+      const mountDef = MOUNT_TYPES[DEFAULT_MOUNT_INDEX];
+      const { mountGroup, animParts } = mountDef.build(color);
+      group.add(mountGroup);
+
+      // Position rider on mount
+      riderGroup.position.y = mountDef.riderY;
+      group.add(riderGroup);
 
       group.userData = {
-        leftArm, rightArm, leftLeg, rightLeg, body, head,
+        leftArm, rightArm, body,
+        head: null, leftLeg: null, rightLeg: null,
         profileSprite,
+        riderGroup,
+        mountGroup,
+        mountAnimParts: animParts,
+        mountTypeIndex: DEFAULT_MOUNT_INDEX,
         chatBubble: null,
         chatTimer: null,
         animPhase: Math.random() * Math.PI * 2
@@ -1386,7 +1788,7 @@
       const mesh = createCharacter(id, data.nickname || data.uniqueId || 'Viewer', data.profilePic || '');
       // New joiners start well behind the leader — they must earn their position
       const leader = getLeaderTile();
-      const startTile = Math.max(0, leader - 30);
+      const startTile = Math.max(0, leader - 15);
 
       const lane = Math.floor(Math.random() * LANE_COUNT);
       mesh.position.x = getLaneX(lane);
@@ -1411,6 +1813,7 @@
         inventory: [], // power-up type indices, max 3
         isPushedOut: false,
         hasProfilePic: !!data.profilePic,
+        mountType: DEFAULT_MOUNT_INDEX,
         // Rate limiting for likes (anti-spam)
         lastLikeTime: 0,
         likeBank: 0,       // accumulated tiles from rapid likes
@@ -1473,10 +1876,16 @@
         const p = players.get(id);
         if (p) {
           playersGroup.remove(p.mesh);
-          // Clean up inventory sprites
           const ud = p.mesh.userData;
-          if (ud.inventorySprites) ud.inventorySprites.forEach(s => p.mesh.remove(s));
-          if (ud.chatBubble) p.mesh.remove(ud.chatBubble);
+          // Dispose mount geometry
+          if (ud.mountGroup) {
+            ud.mountGroup.traverse(child => {
+              if (child.geometry) child.geometry.dispose();
+              if (child.material) child.material.dispose();
+            });
+          }
+          if (ud.inventorySprites) ud.inventorySprites.forEach(s => (ud.riderGroup || p.mesh).remove(s));
+          if (ud.chatBubble) (ud.riderGroup || p.mesh).remove(ud.chatBubble);
           players.delete(id);
         }
       }
@@ -1617,21 +2026,21 @@
       // Run animation — speed varies with actual movement speed
       const moveSpeed = Math.abs(p.targetTile - p.tilePos);
       if (isMoving || p.isJumping) {
-        const animSpeed = 3 + Math.min(moveSpeed, 5) * 2; // slow jog to fast sprint
+        const animSpeed = 3 + Math.min(moveSpeed, 5) * 2;
         ud.animPhase += dt * animSpeed;
         const swing = Math.sin(ud.animPhase) * (0.3 + Math.min(moveSpeed, 3) * 0.15);
-        ud.leftArm.rotation.x = swing;
-        ud.rightArm.rotation.x = -swing;
-        ud.leftLeg.rotation.x = -swing;
-        ud.rightLeg.rotation.x = swing;
+        // Rider arms sway gently (holding reins)
+        ud.leftArm.rotation.x = swing * 0.4;
+        ud.rightArm.rotation.x = -swing * 0.4;
+        // Mount animation
+        animateMount(ud, ud.animPhase, swing, dt);
       } else {
         // Idle breathing
         ud.animPhase += dt * 1.5;
         const idle = Math.sin(ud.animPhase) * 0.05;
         ud.leftArm.rotation.x = idle;
         ud.rightArm.rotation.x = -idle;
-        ud.leftLeg.rotation.x = 0;
-        ud.rightLeg.rotation.x = 0;
+        animateMount(ud, ud.animPhase, idle * 0.3, dt);
       }
 
       // Jump arc
@@ -1667,7 +2076,7 @@
 
       // Chat bubble float animation
       if (ud.chatBubble) {
-        ud.chatBubble.position.y = 3.2 + Math.sin(now * 0.003) * 0.1;
+        ud.chatBubble.position.y = 1.8 + Math.sin(now * 0.003) * 0.1;
       }
 
       // Smooth movement toward target position
@@ -1824,6 +2233,11 @@
       { icon: '🏆', text: 'Race to the <strong>top 3</strong> podium! Like, Gift & Chat to climb!' },
       { icon: '🏃', text: 'Everyone auto-walks slowly — <strong>Like</strong> to sprint ahead of the pack!' },
       { icon: '💎', text: 'Your runner joins automatically when you <strong>interact</strong> — like, chat, or gift!' },
+      // Mounts
+      { icon: '🐴', text: 'Everyone starts on a <strong>Horse</strong>! Send a gift to get a random mount!' },
+      { icon: '🎁', text: '10 mounts to collect: Horse, Motorcycle, Whale, Panda, Bear, Dragon, Unicorn, Tiger, Bull, Phoenix!' },
+      { icon: '🐉', text: 'Send a <strong>Gift</strong> to ride a <strong>Dragon</strong>, <strong>Phoenix</strong>, or other epic mount!' },
+      { icon: '🏍️', text: 'Each mount has unique animation — watch the <strong>Dragon</strong> flap its wings!' },
     ];
     let lastTipIndex = -1;
     const TIP_INTERVAL = 15000; // show a tip every 15 seconds
@@ -1863,6 +2277,11 @@
       sfxGift(diamonds);
       const flashColors = ['#fe2c55', '#25f4ee', '#ffd700', '#ff6600', '#a855f7'];
       triggerGiftFlash(flashColors[Math.floor(Math.random() * flashColors.length)]);
+
+      // Gift gives a random mount!
+      const newIdx = swapMount(p, Math.floor(Math.random() * MOUNT_TYPES.length));
+      const mountDef = MOUNT_TYPES[newIdx];
+      showNotif(`<strong>${p.nickname}</strong> rides a ${mountDef.icon} <strong>${mountDef.name}</strong>! (${data.giftName})`, 'gift');
 
       if (p.inventory.length > 0 && !p.isStunned) {
         // Use first power in inventory
@@ -2006,9 +2425,10 @@
       }
 
       // Show chat bubble for non-command messages (or all messages)
+      const chatParent = ud.riderGroup || p.mesh;
       // Remove old chat bubble
       if (ud.chatBubble) {
-        p.mesh.remove(ud.chatBubble);
+        chatParent.remove(ud.chatBubble);
         ud.chatBubble = null;
       }
       if (ud.chatTimer) clearTimeout(ud.chatTimer);
@@ -2016,14 +2436,14 @@
       const displayComment = data.comment || '';
       if (displayComment && !isCommand) {
         const bubble = createChatBubble(displayComment);
-        bubble.position.y = 3.2;
-        p.mesh.add(bubble);
+        bubble.position.y = 1.8;
+        chatParent.add(bubble);
         ud.chatBubble = bubble;
 
         // Auto-remove after 4 seconds
         ud.chatTimer = setTimeout(() => {
           if (ud.chatBubble) {
-            p.mesh.remove(ud.chatBubble);
+            chatParent.remove(ud.chatBubble);
             ud.chatBubble = null;
           }
         }, 4000);
@@ -2162,19 +2582,22 @@
         if (!tileGroups.has(key)) tileGroups.set(key, []);
         tileGroups.get(key).push(p);
       });
+      function findNameSprite(mesh) {
+        let ns = null;
+        mesh.traverse(c => { if (c.isSprite && c.scale.x > 2) ns = c; });
+        return ns;
+      }
       tileGroups.forEach(group => {
         if (group.length <= 1) {
-          // Reset to default
           if (group[0]) {
-            const ns = group[0].mesh.children.find(c => c.isSprite && c.scale.x > 2);
-            if (ns) ns.position.y = 2.5;
+            const ns = findNameSprite(group[0].mesh);
+            if (ns) ns.position.y = 1.2;
           }
           return;
         }
-        // Stack names vertically
         group.forEach((p, i) => {
-          const ns = p.mesh.children.find(c => c.isSprite && c.scale.x > 2);
-          if (ns) ns.position.y = 2.5 + i * 0.7;
+          const ns = findNameSprite(p.mesh);
+          if (ns) ns.position.y = 1.2 + i * 0.7;
         });
       });
 
