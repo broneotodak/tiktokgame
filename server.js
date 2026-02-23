@@ -59,15 +59,26 @@ function connectToTikTok(username) {
     enableExtendedGiftInfo: true,
   });
 
+  // Grace period: ignore historical replay events for 3 seconds after connect
+  let connectionReadyAt = Infinity;
+
   connection.connect().then(state => {
     console.log(`✅ Connected to @${username} (Room ID: ${state.roomId})`);
     connectionState = { connected: true, roomId: state.roomId, error: null };
     io.emit('connection-status', connectionState);
+    // Start grace period — events before this are historical replay
+    connectionReadyAt = Date.now() + 3000;
+    console.log('⏳ Grace period: ignoring replay events for 3 seconds...');
+    setTimeout(() => console.log('✅ Grace period ended — processing live events'), 3000);
   }).catch(err => {
     console.error('❌ Connection failed:', err.message);
     connectionState = { connected: false, roomId: null, error: err.message };
     io.emit('connection-status', connectionState);
   });
+
+  function isLiveEvent() {
+    return Date.now() >= connectionReadyAt;
+  }
 
   // Helper to extract user info from event data
   function extractUser(data) {
@@ -109,6 +120,7 @@ function connectToTikTok(username) {
   connection.on('member', (data) => {
     const user = extractUser(data);
     trackViewer(user);
+    if (!isLiveEvent()) return; // skip replay
     console.log(`👋 ${user.nickname} (@${user.uniqueId}) joined`);
     io.emit('viewer-join', { ...user, joinedAt: Date.now() });
   });
@@ -117,6 +129,7 @@ function connectToTikTok(username) {
   connection.on('chat', (data) => {
     const user = extractUser(data);
     trackViewer(user);
+    if (!isLiveEvent()) return; // skip replay
     const msg = { ...user, comment: data.comment || '', timestamp: Date.now() };
     console.log(`💬 ${msg.nickname}: ${msg.comment}`);
     io.emit('chat', msg);
@@ -129,6 +142,7 @@ function connectToTikTok(username) {
 
     const user = extractUser(data);
     trackViewer(user);
+    if (!isLiveEvent()) return; // skip replay
     const gift = {
       ...user,
       giftName: data.giftName || 'Gift',
@@ -146,6 +160,7 @@ function connectToTikTok(username) {
   connection.on('like', (data) => {
     const user = extractUser(data);
     trackViewer(user);
+    if (!isLiveEvent()) return; // skip replay
     io.emit('like', {
       ...user,
       likeCount: data.likeCount || 1,
@@ -158,6 +173,7 @@ function connectToTikTok(username) {
   connection.on('follow', (data) => {
     const user = extractUser(data);
     trackViewer(user);
+    if (!isLiveEvent()) return; // skip replay
     console.log(`⭐ ${user.nickname} followed!`);
     io.emit('follow', { ...user, timestamp: Date.now() });
   });
@@ -165,12 +181,14 @@ function connectToTikTok(username) {
   // Share (v2 has separate event)
   connection.on('share', (data) => {
     const user = extractUser(data);
+    if (!isLiveEvent()) return; // skip replay
     io.emit('share', user);
   });
 
   // Social (fallback for older API)
   connection.on('social', (data) => {
     const user = extractUser(data);
+    if (!isLiveEvent()) return; // skip replay
     if (data.displayType?.includes('follow')) {
       io.emit('follow', { ...user, timestamp: Date.now() });
     }

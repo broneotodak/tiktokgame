@@ -2698,10 +2698,13 @@
       const co = getCameraOffset();
       const targetZ = leader + co.z;
       const hillOffset = getHillHeight(leader);
-      const targetY = co.y + players.size * 0.05 + hillOffset; // rise slightly with more players + follow hills
+      const targetY = co.y + players.size * 0.05 + hillOffset;
 
-      camera.position.z += (targetZ - camera.position.z) * Math.min(1, dt * 2);
-      camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 2);
+      // If camera is way ahead of the leader (e.g. after reset), snap faster
+      const zGap = Math.abs(camera.position.z - targetZ);
+      const lerpSpeed = zGap > 80 ? 10 : zGap > 30 ? 5 : 2;
+      camera.position.z += (targetZ - camera.position.z) * Math.min(1, dt * lerpSpeed);
+      camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * lerpSpeed);
 
       // Earthquake camera shake
       if (cameraShakeAmount > 0) {
