@@ -957,6 +957,11 @@
           showNotif(`🔄 Host <strong>reset</strong> all positions to 0!`, 'gift');
           break;
         }
+        case 'change-env': {
+          applyEnvironment(data.envIdx);
+          showNotif(`🌍 Environment changed to <strong>${ENVIRONMENTS[envIndex].name}</strong>!`, 'event');
+          break;
+        }
       }
     }
 
@@ -2178,7 +2183,12 @@
     }
 
     window.nextEnvironment = function() {
-      applyEnvironment(envIndex + 1);
+      const nextIdx = (envIndex + 1) % ENVIRONMENTS.length;
+      if (typeof socket !== 'undefined') {
+        socket.emit('host-command', { action: 'change-env', data: { envIdx: nextIdx } });
+      } else {
+        applyEnvironment(nextIdx);
+      }
     };
 
     // ===== ANIMATION =====
