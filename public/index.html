@@ -11,15 +11,19 @@
       background: #0a0a0a;
       color: #fff;
       min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
     .header {
       background: linear-gradient(135deg, #25f4ee, #fe2c55);
-      padding: 20px 30px;
+      padding: 15px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
     }
-    .header h1 { font-size: 24px; font-weight: 700; }
+    .header h1 { font-size: clamp(16px, 4vw, 24px); font-weight: 700; }
     .status {
       display: flex;
       align-items: center;
@@ -38,74 +42,81 @@
       50% { opacity: 0.5; }
     }
     .connect-bar {
-      padding: 20px 30px;
+      padding: 12px 15px;
       background: #111;
       display: flex;
-      gap: 12px;
+      gap: 8px;
       align-items: center;
       border-bottom: 1px solid #222;
+      flex-wrap: wrap;
     }
     .connect-bar input {
       flex: 1;
-      padding: 12px 16px;
+      min-width: 120px;
+      padding: 10px 14px;
       border-radius: 8px;
       border: 1px solid #333;
       background: #1a1a1a;
       color: #fff;
-      font-size: 16px;
+      font-size: 14px;
       outline: none;
     }
     .connect-bar input:focus { border-color: #25f4ee; }
     .connect-bar button {
-      padding: 12px 24px;
+      padding: 10px 18px;
       border-radius: 8px;
       border: none;
       background: linear-gradient(135deg, #25f4ee, #fe2c55);
       color: #fff;
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       transition: opacity 0.2s;
+      white-space: nowrap;
     }
     .connect-bar button:hover { opacity: 0.9; }
     .connect-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .stats-bar {
-      padding: 15px 30px;
+      padding: 12px 15px;
       background: #111;
       display: flex;
-      gap: 30px;
+      gap: 15px;
       border-bottom: 1px solid #222;
+      flex-wrap: wrap;
+      justify-content: center;
     }
     .stat {
       display: flex;
       flex-direction: column;
       align-items: center;
+      min-width: 50px;
     }
-    .stat-value { font-size: 28px; font-weight: 700; color: #25f4ee; }
-    .stat-label { font-size: 12px; color: #888; text-transform: uppercase; }
+    .stat-value { font-size: clamp(18px, 4vw, 28px); font-weight: 700; color: #25f4ee; }
+    .stat-label { font-size: 11px; color: #888; text-transform: uppercase; }
 
-    .content { display: flex; height: calc(100vh - 200px); }
+    .content { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 
     .viewers-panel {
       flex: 1;
-      padding: 20px;
+      padding: 15px;
       overflow-y: auto;
+      min-height: 200px;
     }
     .viewers-panel h2 {
-      font-size: 18px;
-      margin-bottom: 15px;
+      font-size: 16px;
+      margin-bottom: 12px;
       color: #888;
     }
     .viewer-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-      gap: 15px;
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+      gap: 10px;
     }
     .viewer-card {
       background: #1a1a1a;
       border-radius: 12px;
-      padding: 15px;
+      padding: 10px;
       text-align: center;
       animation: slideIn 0.5s ease-out;
       border: 1px solid #222;
@@ -118,7 +129,7 @@
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
     .viewer-avatar {
-      width: 64px; height: 64px;
+      width: 48px; height: 48px;
       border-radius: 50%;
       margin: 0 auto 8px;
       overflow: hidden;
@@ -157,17 +168,40 @@
     }
 
     .feed-panel {
-      width: 380px;
+      width: 100%;
+      max-height: 40vh;
       background: #111;
-      border-left: 1px solid #222;
+      border-top: 1px solid #222;
       display: flex;
       flex-direction: column;
     }
     .feed-panel h2 {
-      font-size: 18px;
-      padding: 15px 20px;
+      font-size: 16px;
+      padding: 12px 15px;
       color: #888;
       border-bottom: 1px solid #222;
+    }
+
+    /* Desktop: side-by-side layout */
+    @media (min-width: 768px) {
+      .content { flex-direction: row; }
+      .feed-panel {
+        width: 350px;
+        max-height: none;
+        border-top: none;
+        border-left: 1px solid #222;
+      }
+      .viewer-grid {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        gap: 12px;
+      }
+    }
+    @media (min-width: 1024px) {
+      .feed-panel { width: 380px; }
+      .viewer-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 15px;
+      }
     }
     .feed-list {
       flex: 1;
@@ -204,31 +238,33 @@
     .feed-item .feed-time { font-size: 10px; color: #555; flex-shrink: 0; }
 
     .overlay-link {
-      padding: 15px 20px;
+      padding: 10px 15px;
       border-top: 1px solid #222;
       display: flex;
-      gap: 10px;
+      gap: 8px;
       align-items: center;
     }
     .overlay-link input {
       flex: 1;
-      padding: 8px 12px;
+      min-width: 0;
+      padding: 7px 10px;
       background: #1a1a1a;
       border: 1px solid #333;
       border-radius: 6px;
       color: #25f4ee;
-      font-size: 13px;
+      font-size: 11px;
       font-family: monospace;
     }
     .overlay-link button {
-      padding: 8px 16px;
+      padding: 7px 12px;
       background: #25f4ee;
       color: #000;
       border: none;
       border-radius: 6px;
       font-weight: 600;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12px;
+      white-space: nowrap;
     }
   </style>
 </head>
@@ -287,10 +323,16 @@
           <button onclick="window.open(document.getElementById('overlayUrl').value,'_blank')">Open</button>
         </div>
         <div style="display:flex;gap:8px;align-items:center;width:100%">
-          <span style="color:#fe2c55;font-size:12px;width:55px;font-weight:700">Game:</span>
+          <span style="color:#fe2c55;font-size:11px;width:55px;font-weight:700">Game:</span>
           <input type="text" id="gameUrl" readonly style="flex:1;border-color:#fe2c55;color:#fe2c55">
           <button onclick="copyUrl('gameUrl')" style="background:#fe2c55">Copy</button>
           <button onclick="window.open(document.getElementById('gameUrl').value,'_blank')" style="background:#fe2c55">Open</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;width:100%">
+          <span style="color:#a855f7;font-size:11px;width:55px;font-weight:700">3D:</span>
+          <input type="text" id="marathonUrl" readonly style="flex:1;border-color:#a855f7;color:#a855f7">
+          <button onclick="copyUrl('marathonUrl')" style="background:#a855f7">Copy</button>
+          <button onclick="window.open(document.getElementById('marathonUrl').value,'_blank')" style="background:#a855f7">Open</button>
         </div>
       </div>
     </div>
@@ -437,8 +479,9 @@
       updateStats();
     });
 
-    // Set game URL
+    // Set game URLs
     document.getElementById('gameUrl').value = `${window.location.origin}/game`;
+    document.getElementById('marathonUrl').value = `${window.location.origin}/marathon`;
 
     function copyUrl(id) {
       const url = document.getElementById(id).value;
