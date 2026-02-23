@@ -67,6 +67,24 @@
     .host-btn:hover { background: rgba(37,244,238,0.2); border-color: #25f4ee; }
     .host-btn.active { background: rgba(254,44,85,0.3); border-color: #fe2c55; }
 
+    /* Portrait mode (TikTok Live 9:16) */
+    @media (max-aspect-ratio: 3/4) {
+      .hud { padding: 8px 10px; }
+      .hud-badge { font-size: 12px; padding: 5px 10px; }
+      .podium { min-width: 130px; }
+      .podium-row { padding: 3px 8px; font-size: 11px; }
+      .podium-title { font-size: 10px; padding: 3px 8px; }
+      .env-badge { font-size: 11px; padding: 4px 12px; top: 8px; }
+      .notif-area { top: 50px; left: 8px; max-width: 220px; }
+      .notif { font-size: 10px; padding: 4px 10px; }
+      .host-controls { bottom: 55px; gap: 4px; }
+      .host-btn { padding: 6px 12px; font-size: 11px; }
+      .guide-bar { flex-direction: column; align-items: center; padding: 4px 6px; }
+      .guide-section { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.08); padding: 2px 8px; }
+      .guide-section:last-child { border-bottom: none; }
+      .powerup-notif { font-size: 22px; }
+    }
+
     /* TikTok connect modal */
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 500; align-items: center; justify-content: center; }
     .modal-overlay.visible { display: flex; }
@@ -354,9 +372,15 @@
     scene.background = new THREE.Color(env.sky);
     scene.fog = new THREE.Fog(env.fog, FOG_NEAR, FOG_FAR);
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 300);
-    camera.position.set(0, 8, -12);
-    camera.lookAt(0, 0, 20);
+    // Portrait-aware camera: higher FOV and closer for narrow screens
+    function isPortrait() { return window.innerHeight > window.innerWidth * 1.2; }
+    function getCameraFOV() { return isPortrait() ? 75 : 60; }
+    function getCameraOffset() { return isPortrait() ? { y: 10, z: -8, lookY: 0.5, lookZ: 18 } : { y: 8, z: -12, lookY: 1, lookZ: 25 }; }
+
+    const camera = new THREE.PerspectiveCamera(getCameraFOV(), window.innerWidth / window.innerHeight, 0.5, 300);
+    const camOff = getCameraOffset();
+    camera.position.set(0, camOff.y, camOff.z);
+    camera.lookAt(0, camOff.lookY, camOff.lookZ);
 
     // ===== LIGHTS =====
     const ambientLight = new THREE.AmbientLight(0x666666);
@@ -1502,13 +1526,14 @@
       positions.sort((a, b) => a - b);
       const median = positions[Math.floor(positions.length / 2)] * TILE;
 
-      // Target: look at median, positioned behind
-      const targetZ = median - 12;
-      const targetY = 8 + positions.length * 0.05; // rise slightly with more players
+      // Target: look at median, positioned behind (portrait-aware)
+      const co = getCameraOffset();
+      const targetZ = median + co.z;
+      const targetY = co.y + positions.length * 0.05; // rise slightly with more players
 
       camera.position.z += (targetZ - camera.position.z) * Math.min(1, dt * 2);
       camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 2);
-      camera.lookAt(0, 1, camera.position.z + 25);
+      camera.lookAt(0, co.lookY, camera.position.z + co.lookZ);
 
       cameraTargetZ = camera.position.z;
     }
@@ -1833,6 +1858,7 @@
     // ===== RESIZE =====
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
+      camera.fov = getCameraFOV();
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
