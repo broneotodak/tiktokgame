@@ -110,10 +110,10 @@
   <!-- Guide bar (auto-hides after 8s) -->
   <div class="game-guide" id="gameGuide">
     <div class="guide-bar">
-      <div class="guide-section guide-highlight"><span class="g-emoji">🎁</span><span class="g-label">Gift = Run</span><span class="g-sub">forward</span></div>
-      <div class="guide-section"><span class="g-emoji">❤️</span><span class="g-label">Like = Jump</span><span class="g-sub">dodge</span></div>
+      <div class="guide-section guide-highlight"><span class="g-emoji">❤️</span><span class="g-label">Like = Run</span><span class="g-sub">1 tile</span></div>
+      <div class="guide-section"><span class="g-emoji">💬</span><span class="g-label">Chat: jump/left/right</span><span class="g-sub">dodge & move</span></div>
+      <div class="guide-section"><span class="g-emoji">🎁</span><span class="g-label">Gift = Power</span><span class="g-sub">use or get</span></div>
       <div class="guide-section"><span class="g-emoji">⭐</span><span class="g-label">Follow = +3</span><span class="g-sub">boost</span></div>
-      <div class="guide-section"><span class="g-emoji">⚡</span><span class="g-label">Power-ups</span><span class="g-sub">run over!</span></div>
     </div>
   </div>
   <button class="guide-show-btn" id="guideShowBtn" onclick="toggleGuide()">?</button>
@@ -303,12 +303,19 @@
     }
 
     // ===== POWER-UP SYSTEM =====
+    // Road pickup powers (first 4, collectible on track)
+    // Gift-exclusive powers (last 2, only from gifts)
     const POWERUP_TYPES = [
-      { name: 'Speed Boost', icon: 'bolt', color: 0xffaa00, effect: 'speed', desc: '+5 tiles forward!' },
-      { name: 'Shield', icon: 'shield', color: 0x44aaff, effect: 'shield', desc: 'Block next obstacle!' },
-      { name: 'Lightning', icon: 'zap', color: 0xaa44ff, effect: 'lightning', desc: 'Stuns nearby runner!' },
-      { name: 'Magnet', icon: 'magnet', color: 0xff44aa, effect: 'magnet', desc: 'Pulls to best lane!' },
+      { name: 'Speed Boost', icon: '⚡', color: 0xffaa00, effect: 'speed' },
+      { name: 'Shield', icon: '🛡', color: 0x44aaff, effect: 'shield' },
+      { name: 'Lightning', icon: '🔮', color: 0xaa44ff, effect: 'lightning' },
+      { name: 'Magnet', icon: '🧲', color: 0xff44aa, effect: 'magnet' },
+      // Gift-exclusive (cannot be picked up on road)
+      { name: 'Mega Kick', icon: '🦵', color: 0xff2222, effect: 'kick' },
+      { name: 'Push Out', icon: '💨', color: 0xff8800, effect: 'pushout' },
     ];
+    const ROAD_POWERUP_COUNT = 4; // only first 4 spawn on road
+    const MAX_INVENTORY = 3;
     const MAX_POWERUPS = 15;
     const activePowerups = []; // { tile, lane, typeIndex, mesh }
     const powerupMeshPool = [];
@@ -768,7 +775,7 @@
         lastPowerupTile += 8 + Math.floor(Math.random() * 12); // every 8-20 tiles
         if (lastPowerupTile < 10) continue;
         const lane = Math.floor(Math.random() * LANE_COUNT);
-        const typeIdx = Math.floor(Math.random() * POWERUP_TYPES.length);
+        const typeIdx = Math.floor(Math.random() * ROAD_POWERUP_COUNT); // only road-pickup types
         activePowerups.push({ tile: lastPowerupTile, lane, typeIndex: typeIdx, poolIndex: -1 });
       }
     }
@@ -816,8 +823,15 @@
           const pu = activePowerups[i];
           if (Math.abs(pu.tile - p.tilePos) < 0.8 && pu.lane === p.lane) {
             const type = POWERUP_TYPES[pu.typeIndex];
-            applyPowerup(p, type, now);
-            // Remove powerup
+            // Store in inventory (max 3)
+            if (p.inventory.length < MAX_INVENTORY) {
+              p.inventory.push(pu.typeIndex);
+              sfxPowerup();
+              spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, type.color, 15);
+              showNotif(`<strong>${p.nickname}</strong> picked up ${type.icon} ${type.name}!`);
+              updateInventorySprite(p);
+            }
+            // Remove powerup from road
             if (pu.poolIndex >= 0) {
               powerupMeshPool[pu.poolIndex].mesh.visible = false;
               powerupMeshPool[pu.poolIndex].inUse = false;
@@ -829,45 +843,51 @@
       });
     }
 
-    function applyPowerup(p, type, now) {
+    // Use a power from inventory
+    function usePower(p, slotIndex, now) {
+      if (slotIndex >= p.inventory.length) return;
+      const typeIdx = p.inventory[slotIndex];
+      const type = POWERUP_TYPES[typeIdx];
+      p.inventory.splice(slotIndex, 1);
+      updateInventorySprite(p);
+      activatePower(p, type, now);
+    }
+
+    // Activate a power effect (works for both inventory and gift-given powers)
+    function activatePower(p, type, now) {
       sfxPowerup();
       spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, type.color, 25);
 
-      // Show center notification
       const notifEl = document.getElementById('powerupNotif');
-      notifEl.textContent = `${p.nickname}: ${type.name}!`;
+      notifEl.textContent = `${type.icon} ${p.nickname}: ${type.name}!`;
       notifEl.classList.remove('show');
       void notifEl.offsetWidth;
       notifEl.classList.add('show');
 
       if (type.effect === 'speed') {
         p.targetTile += 5;
-        showNotif(`<strong>${p.nickname}</strong> got Speed Boost! +5 tiles!`, 'gift');
+        showNotif(`<strong>${p.nickname}</strong> ${type.icon} Speed Boost! +5 tiles!`, 'gift');
       } else if (type.effect === 'shield') {
         p.hasShield = true;
-        showNotif(`<strong>${p.nickname}</strong> got Shield! Protected from next hit!`);
+        showNotif(`<strong>${p.nickname}</strong> ${type.icon} Shield activated!`);
       } else if (type.effect === 'lightning') {
-        // Stun the nearest other player ahead or behind
-        let target = null;
-        let minDist = Infinity;
+        let target = null, minDist = Infinity;
         players.forEach(other => {
           if (other.id === p.id || other.isStunned) return;
           const dist = Math.abs(other.tilePos - p.tilePos);
-          if (dist < 10 && dist < minDist) { minDist = dist; target = other; }
+          if (dist < 15 && dist < minDist) { minDist = dist; target = other; }
         });
         if (target) {
           target.isStunned = true;
           target.stunStart = now;
           spawnStunParticles(target.mesh.position.x, target.mesh.position.y, target.mesh.position.z);
           sfxHit();
-          showNotif(`<strong>${p.nickname}</strong> zapped <strong>${target.nickname}</strong>!`, 'gift');
+          showNotif(`<strong>${p.nickname}</strong> ${type.icon} zapped <strong>${target.nickname}</strong>!`, 'gift');
         } else {
-          // No target: give speed instead
           p.targetTile += 3;
-          showNotif(`<strong>${p.nickname}</strong> Lightning! No target, +3 tiles!`, 'gift');
+          showNotif(`<strong>${p.nickname}</strong> ${type.icon} No target, +3 tiles!`, 'gift');
         }
       } else if (type.effect === 'magnet') {
-        // Move to least-obstructed lane ahead
         const ahead = activeObstacles.filter(o => o.tile > p.tilePos && o.tile < p.tilePos + 10);
         const blocked = new Set(ahead.map(o => o.lane));
         let bestLane = p.lane;
@@ -876,8 +896,95 @@
         }
         p.lane = bestLane;
         p.targetTile += 2;
-        showNotif(`<strong>${p.nickname}</strong> Magnet! Pulled to safe lane +2!`, 'gift');
+        showNotif(`<strong>${p.nickname}</strong> ${type.icon} Magnet! Safe lane +2!`, 'gift');
+      } else if (type.effect === 'kick') {
+        // Mega Kick: send nearest player back 15 tiles!
+        let target = null, minDist = Infinity;
+        players.forEach(other => {
+          if (other.id === p.id || other.isStunned) return;
+          const dist = Math.abs(other.tilePos - p.tilePos);
+          if (dist < 20 && dist < minDist) { minDist = dist; target = other; }
+        });
+        if (target) {
+          target.targetTile = Math.max(0, target.tilePos - 15);
+          target.tilePos = target.targetTile;
+          target.isStunned = true;
+          target.stunStart = now;
+          spawnStunParticles(target.mesh.position.x, target.mesh.position.y, target.mesh.position.z);
+          triggerGiftFlash('#ff2222');
+          sfxHit();
+          showNotif(`<strong>${p.nickname}</strong> ${type.icon} KICKED <strong>${target.nickname}</strong> back 15 tiles!`, 'gift');
+        } else {
+          p.targetTile += 5;
+          showNotif(`<strong>${p.nickname}</strong> ${type.icon} No target! +5 tiles instead!`, 'gift');
+        }
+      } else if (type.effect === 'pushout') {
+        // Push Out: push nearest player to random lane + stun 3s
+        let target = null, minDist = Infinity;
+        players.forEach(other => {
+          if (other.id === p.id || other.isStunned) return;
+          const dist = Math.abs(other.tilePos - p.tilePos);
+          if (dist < 15 && dist < minDist) { minDist = dist; target = other; }
+        });
+        if (target) {
+          // Push to a different lane
+          let newLane;
+          do { newLane = Math.floor(Math.random() * LANE_COUNT); } while (newLane === target.lane);
+          target.lane = newLane;
+          target.isStunned = true;
+          target.stunStart = now - (STUN_DURATION - 3000); // 3 second stun
+          spawnStunParticles(target.mesh.position.x, target.mesh.position.y, target.mesh.position.z);
+          triggerGiftFlash('#ff8800');
+          sfxHit();
+          showNotif(`<strong>${p.nickname}</strong> ${type.icon} PUSHED <strong>${target.nickname}</strong> off-lane!`, 'gift');
+        } else {
+          p.targetTile += 3;
+          showNotif(`<strong>${p.nickname}</strong> ${type.icon} No target! +3 tiles instead!`, 'gift');
+        }
       }
+    }
+
+    // Visual inventory indicator above character
+    function updateInventorySprite(p) {
+      const ud = p.mesh.userData;
+      // Remove old inventory sprite
+      if (ud.inventorySprite) {
+        p.mesh.remove(ud.inventorySprite);
+        ud.inventorySprite = null;
+      }
+      if (p.inventory.length === 0) return;
+
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 48;
+      const ctx = c.getContext('2d');
+      // Draw power icons
+      const iconSize = 32;
+      const startX = (256 - p.inventory.length * (iconSize + 4)) / 2;
+      p.inventory.forEach((typeIdx, i) => {
+        const type = POWERUP_TYPES[typeIdx];
+        // Background circle
+        ctx.fillStyle = '#' + type.color.toString(16).padStart(6, '0') + 'aa';
+        ctx.beginPath();
+        ctx.arc(startX + i * (iconSize + 4) + iconSize / 2, 24, 16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Icon
+        ctx.font = '20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(type.icon, startX + i * (iconSize + 4) + iconSize / 2, 24);
+      });
+
+      const tex = new THREE.CanvasTexture(c);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(2.2, 0.45, 1);
+      sprite.position.y = 2.85;
+      p.mesh.add(sprite);
+      ud.inventorySprite = sprite;
     }
 
     // ===== CHARACTER FACTORY =====
@@ -1132,6 +1239,8 @@
         stunStart: 0,
         totalDiamonds: 0,
         hasShield: false,
+        inventory: [], // power-up type indices, max 3
+        isPushedOut: false,
         hasProfilePic: !!data.profilePic,
       };
       players.set(id, p);
@@ -1459,53 +1568,56 @@
 
       const diamonds = (data.diamondCount || 1) * (data.repeatCount || 1);
       p.totalDiamonds += diamonds;
+      const now = Date.now();
 
-      // Calculate steps (same formula as original)
-      let steps;
-      if (diamonds <= 5) steps = 1;
-      else if (diamonds <= 20) steps = 2 + Math.floor(diamonds / 10);
-      else if (diamonds <= 50) steps = 4 + Math.floor((diamonds - 20) / 10);
-      else if (diamonds <= 100) steps = 7 + Math.floor((diamonds - 50) / 15);
-      else steps = 10 + Math.min(5, Math.floor((diamonds - 100) / 50));
-
-      steps += 1; // base 1
-
-      if (!p.isStunned) {
-        p.targetTile += steps;
-        // Random lane switch occasionally
-        if (Math.random() < 0.3) {
-          p.lane = Math.floor(Math.random() * LANE_COUNT);
-        }
-      }
-
-      // Sound
       sfxGift(diamonds);
-
-      // Gift particle burst (bigger burst for bigger gifts)
-      const particleCount = Math.min(40, 8 + steps * 3);
-      const pColor = hashColor(p.id);
-      spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, pColor, particleCount);
-
-      // Screen flash for gifts
       const flashColors = ['#fe2c55', '#25f4ee', '#ffd700', '#ff6600', '#a855f7'];
       triggerGiftFlash(flashColors[Math.floor(Math.random() * flashColors.length)]);
 
-      showNotif(`<strong>${p.nickname}</strong> sprints ${steps} steps! (${data.giftName} x${data.repeatCount || 1})`, 'gift');
+      if (p.inventory.length > 0 && !p.isStunned) {
+        // Use first power in inventory
+        usePower(p, 0, now);
+        showNotif(`<strong>${p.nickname}</strong> used a power! (${data.giftName} x${data.repeatCount || 1})`, 'gift');
+      } else {
+        // No inventory: gift gives a random gift-exclusive power (Kick or Push Out)
+        const exclusiveIdx = ROAD_POWERUP_COUNT + Math.floor(Math.random() * (POWERUP_TYPES.length - ROAD_POWERUP_COUNT));
+        const type = POWERUP_TYPES[exclusiveIdx];
+
+        if (p.inventory.length < MAX_INVENTORY) {
+          // Store in inventory for next gift use
+          p.inventory.push(exclusiveIdx);
+          updateInventorySprite(p);
+          sfxPowerup();
+          spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, type.color, 20);
+          showNotif(`<strong>${p.nickname}</strong> received ${type.icon} ${type.name}! (${data.giftName})`, 'gift');
+        } else {
+          // Inventory full — activate immediately
+          activatePower(p, type, now);
+          showNotif(`<strong>${p.nickname}</strong> got ${type.icon} ${type.name}! (${data.giftName})`, 'gift');
+        }
+      }
+
       checkEnvironmentChange();
       updateHUD();
     });
 
     socket.on('like', (data) => {
-      const p = players.get((data.id || '').toString());
+      const p = addPlayer(data);
       if (!p || p.isStunned) return;
 
-      if (!p.isJumping) {
-        p.isJumping = true;
-        p.jumpStart = Date.now();
-        p.targetTile += 0.5;
-        sfxJump();
-        spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffee44, 6);
+      // Like = Run forward 1 tile per tap
+      const likes = data.likeCount || 1;
+      const tiles = Math.min(likes, 5); // cap at 5 tiles per event
+      p.targetTile += tiles;
+      // Random lane switch occasionally
+      if (Math.random() < 0.15) {
+        p.lane = Math.floor(Math.random() * LANE_COUNT);
       }
+
+      const pColor = hashColor(p.id);
+      spawnTrail(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, pColor);
+      checkEnvironmentChange();
+      updateHUD();
     });
 
     socket.on('follow', (data) => {
@@ -1531,7 +1643,44 @@
       if (!p) return;
 
       const ud = p.mesh.userData;
+      const comment = (data.comment || '').trim().toLowerCase();
+      const now = Date.now();
 
+      // Parse commands from chat
+      let isCommand = false;
+      if (!p.isStunned) {
+        if (comment === 'jump' || comment === 'j' || comment === 'lompat') {
+          // Jump command
+          if (!p.isJumping) {
+            p.isJumping = true;
+            p.jumpStart = now;
+            p.targetTile += 0.5; // slight forward nudge
+            sfxJump();
+            spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffee44, 6);
+            isCommand = true;
+          }
+        } else if (comment === 'left' || comment === 'l' || comment === 'kiri') {
+          // Move left
+          if (p.lane > 0) {
+            p.lane--;
+            isCommand = true;
+          }
+        } else if (comment === 'right' || comment === 'r' || comment === 'kanan') {
+          // Move right
+          if (p.lane < LANE_COUNT - 1) {
+            p.lane++;
+            isCommand = true;
+          }
+        } else if (comment === 'use' || comment === 'power' || comment === 'guna') {
+          // Use first power in inventory
+          if (p.inventory.length > 0) {
+            usePower(p, 0, now);
+            isCommand = true;
+          }
+        }
+      }
+
+      // Show chat bubble for non-command messages (or all messages)
       // Remove old chat bubble
       if (ud.chatBubble) {
         p.mesh.remove(ud.chatBubble);
@@ -1539,10 +1688,9 @@
       }
       if (ud.chatTimer) clearTimeout(ud.chatTimer);
 
-      // Create new chat bubble
-      const comment = data.comment || '';
-      if (comment) {
-        const bubble = createChatBubble(comment);
+      const displayComment = data.comment || '';
+      if (displayComment && !isCommand) {
+        const bubble = createChatBubble(displayComment);
         bubble.position.y = 3.2;
         p.mesh.add(bubble);
         ud.chatBubble = bubble;
@@ -1679,6 +1827,20 @@
           if (ns) ns.position.y = 2.5 + i * 0.7;
         });
       });
+
+      // Auto-nudge stragglers: keep everyone visible within camera range
+      if (players.size > 1) {
+        const leaderPos = getLeaderTile();
+        const minVisible = leaderPos - 25; // max 25 tiles behind leader
+        players.forEach(p => {
+          if (p.tilePos < minVisible && !p.isStunned) {
+            // Gently push forward so they stay in frame
+            const nudge = (minVisible - p.tilePos) * 0.05; // gradual catch-up
+            p.targetTile += Math.max(0.1, nudge);
+            p.tilePos += Math.max(0.05, nudge * 0.5);
+          }
+        });
+      }
 
       // Camera
       updateCamera(dt);
