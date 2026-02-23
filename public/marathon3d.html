@@ -45,8 +45,15 @@
     .guide-section .g-sub { font-size: 10px; color: #888; }
     .guide-section.guide-highlight { background: linear-gradient(135deg, rgba(254,44,85,0.25), rgba(37,244,238,0.15)); border-radius: 12px; border-right: none; margin: 0 4px; }
 
-    /* Host controls */
+    /* Host controls - hidden for viewers via ?view param */
     .host-controls { position: absolute; bottom: 55px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; gap: 8px; }
+    body.viewer-mode .host-controls { display: none; }
+    body.viewer-mode .game-guide .guide-bar { padding: 6px 12px; }
+
+    /* Gift burst overlay flash */
+    .gift-flash { position: fixed; inset: 0; pointer-events: none; z-index: 50; opacity: 0; transition: opacity 0.1s; }
+    .gift-flash.active { opacity: 1; animation: flashOut 0.6s ease-out forwards; }
+    @keyframes flashOut { from { opacity: 0.3; } to { opacity: 0; } }
     .host-btn { padding: 8px 18px; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); border: 1px solid #444; border-radius: 20px; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
     .host-btn:hover { background: rgba(37,244,238,0.2); border-color: #25f4ee; }
     .host-btn.active { background: rgba(254,44,85,0.3); border-color: #fe2c55; }
@@ -66,6 +73,7 @@
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
+  <div class="gift-flash" id="giftFlash"></div>
 
   <!-- HUD -->
   <div class="hud">
@@ -169,6 +177,11 @@
       { name: 'bomb', color: 0x333333, height: 0.5, width: 0.5 },
     ];
 
+    // ===== VIEWER MODE =====
+    // ?view=1 hides host controls so viewers see a clean game
+    const isViewerMode = new URLSearchParams(window.location.search).has('view');
+    if (isViewerMode) document.body.classList.add('viewer-mode');
+
     // ===== STATE =====
     const players = new Map();
     let envIndex = 0;
@@ -179,6 +192,42 @@
     const sceneryPool = [];
     const roadChunks = [];
     let cameraTargetZ = 0;
+
+    // ===== PARTICLE SYSTEM =====
+    const MAX_PARTICLES = 200;
+    const particlePositions = new Float32Array(MAX_PARTICLES * 3);
+    const particleColors = new Float32Array(MAX_PARTICLES * 3);
+    const particleSizes = new Float32Array(MAX_PARTICLES);
+    const particleVelocities = []; // { vx, vy, vz, life, maxLife }
+    for (let i = 0; i < MAX_PARTICLES; i++) {
+      particlePositions[i * 3] = 0;
+      particlePositions[i * 3 + 1] = -100; // hidden below
+      particlePositions[i * 3 + 2] = 0;
+      particleColors[i * 3] = 1;
+      particleColors[i * 3 + 1] = 1;
+      particleColors[i * 3 + 2] = 1;
+      particleSizes[i] = 0;
+      particleVelocities.push({ vx: 0, vy: 0, vz: 0, life: 0, maxLife: 0 });
+    }
+    let nextParticle = 0;
+
+    // ===== TRAIL SYSTEM =====
+    const MAX_TRAILS = 600;
+    const trailPositions = new Float32Array(MAX_TRAILS * 3);
+    const trailColors = new Float32Array(MAX_TRAILS * 3);
+    const trailSizes = new Float32Array(MAX_TRAILS);
+    const trailMeta = []; // { life, maxLife }
+    for (let i = 0; i < MAX_TRAILS; i++) {
+      trailPositions[i * 3] = 0;
+      trailPositions[i * 3 + 1] = -100;
+      trailPositions[i * 3 + 2] = 0;
+      trailColors[i * 3] = 1;
+      trailColors[i * 3 + 1] = 1;
+      trailColors[i * 3 + 2] = 1;
+      trailSizes[i] = 0;
+      trailMeta.push({ life: 0, maxLife: 0 });
+    }
+    let nextTrail = 0;
 
     // ===== THREE.JS SETUP =====
     const canvas = document.getElementById('game-canvas');
@@ -204,6 +253,142 @@
     scene.add(dirLight);
     const hemiLight = new THREE.HemisphereLight(0x88aaff, 0x445522, 0.5);
     scene.add(hemiLight);
+
+    // ===== PARTICLE POINTS =====
+    const particleGeo = new THREE.BufferGeometry();
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    particleGeo.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+    particleGeo.setAttribute('size', new THREE.BufferAttribute(particleSizes, 1));
+    const particleMat = new THREE.PointsMaterial({
+      size: 0.3, vertexColors: true, transparent: true, opacity: 0.9,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    });
+    const particlePoints = new THREE.Points(particleGeo, particleMat);
+    scene.add(particlePoints);
+
+    // ===== TRAIL POINTS =====
+    const trailGeo = new THREE.BufferGeometry();
+    trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    trailGeo.setAttribute('color', new THREE.BufferAttribute(trailColors, 3));
+    trailGeo.setAttribute('size', new THREE.BufferAttribute(trailSizes, 1));
+    const trailMat = new THREE.PointsMaterial({
+      size: 0.15, vertexColors: true, transparent: true, opacity: 0.6,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    });
+    const trailPoints = new THREE.Points(trailGeo, trailMat);
+    scene.add(trailPoints);
+
+    // ===== PARTICLE HELPERS =====
+    function spawnGiftParticles(x, y, z, color, count) {
+      const r = ((color >> 16) & 0xff) / 255;
+      const g = ((color >> 8) & 0xff) / 255;
+      const b = (color & 0xff) / 255;
+      for (let i = 0; i < count; i++) {
+        const idx = nextParticle % MAX_PARTICLES;
+        nextParticle++;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1.5 + Math.random() * 4;
+        const upSpeed = 3 + Math.random() * 5;
+        particlePositions[idx * 3] = x + (Math.random() - 0.5) * 0.5;
+        particlePositions[idx * 3 + 1] = y + 1.5;
+        particlePositions[idx * 3 + 2] = z + (Math.random() - 0.5) * 0.5;
+        // Mix gift color with white/gold for sparkle
+        const mix = Math.random() * 0.4;
+        particleColors[idx * 3] = r * (1 - mix) + mix;
+        particleColors[idx * 3 + 1] = g * (1 - mix) + mix * 0.85;
+        particleColors[idx * 3 + 2] = b * (1 - mix) + mix * 0.2;
+        particleSizes[idx] = 0.2 + Math.random() * 0.4;
+        particleVelocities[idx] = {
+          vx: Math.cos(angle) * speed * 0.5,
+          vy: upSpeed,
+          vz: Math.sin(angle) * speed * 0.5,
+          life: 1.0,
+          maxLife: 0.8 + Math.random() * 0.7
+        };
+      }
+    }
+
+    function spawnStunParticles(x, y, z) {
+      for (let i = 0; i < 15; i++) {
+        const idx = nextParticle % MAX_PARTICLES;
+        nextParticle++;
+        const angle = Math.random() * Math.PI * 2;
+        particlePositions[idx * 3] = x;
+        particlePositions[idx * 3 + 1] = y + 1;
+        particlePositions[idx * 3 + 2] = z;
+        particleColors[idx * 3] = 1;
+        particleColors[idx * 3 + 1] = 0.3;
+        particleColors[idx * 3 + 2] = 0.2;
+        particleSizes[idx] = 0.3;
+        particleVelocities[idx] = {
+          vx: Math.cos(angle) * 3, vy: 2 + Math.random() * 3, vz: Math.sin(angle) * 3,
+          life: 1.0, maxLife: 0.6 + Math.random() * 0.4
+        };
+      }
+    }
+
+    function spawnTrail(x, y, z, color) {
+      const idx = nextTrail % MAX_TRAILS;
+      nextTrail++;
+      const r = ((color >> 16) & 0xff) / 255;
+      const g = ((color >> 8) & 0xff) / 255;
+      const b = (color & 0xff) / 255;
+      trailPositions[idx * 3] = x + (Math.random() - 0.5) * 0.3;
+      trailPositions[idx * 3 + 1] = y + 0.15;
+      trailPositions[idx * 3 + 2] = z + (Math.random() - 0.5) * 0.2;
+      trailColors[idx * 3] = r;
+      trailColors[idx * 3 + 1] = g;
+      trailColors[idx * 3 + 2] = b;
+      trailSizes[idx] = 0.1 + Math.random() * 0.15;
+      trailMeta[idx] = { life: 1.0, maxLife: 0.5 + Math.random() * 0.5 };
+    }
+
+    function updateParticles(dt) {
+      for (let i = 0; i < MAX_PARTICLES; i++) {
+        const v = particleVelocities[i];
+        if (v.life <= 0) continue;
+        v.life -= dt / v.maxLife;
+        if (v.life <= 0) {
+          particlePositions[i * 3 + 1] = -100;
+          particleSizes[i] = 0;
+          continue;
+        }
+        particlePositions[i * 3] += v.vx * dt;
+        particlePositions[i * 3 + 1] += v.vy * dt;
+        particlePositions[i * 3 + 2] += v.vz * dt;
+        v.vy -= 9.8 * dt; // gravity
+        particleSizes[i] *= (1 - dt * 1.5); // shrink
+      }
+      particleGeo.attributes.position.needsUpdate = true;
+      particleGeo.attributes.color.needsUpdate = true;
+      particleGeo.attributes.size.needsUpdate = true;
+    }
+
+    function updateTrails(dt) {
+      for (let i = 0; i < MAX_TRAILS; i++) {
+        const m = trailMeta[i];
+        if (m.life <= 0) continue;
+        m.life -= dt / m.maxLife;
+        if (m.life <= 0) {
+          trailPositions[i * 3 + 1] = -100;
+          trailSizes[i] = 0;
+          continue;
+        }
+        trailSizes[i] *= (1 - dt * 2);
+        trailPositions[i * 3 + 1] += dt * 0.3; // slight float up
+      }
+      trailGeo.attributes.position.needsUpdate = true;
+      trailGeo.attributes.color.needsUpdate = true;
+      trailGeo.attributes.size.needsUpdate = true;
+    }
+
+    function triggerGiftFlash(color) {
+      const flash = document.getElementById('giftFlash');
+      flash.style.background = `radial-gradient(ellipse at center, ${color}44 0%, transparent 70%)`;
+      flash.classList.remove('active');
+      void flash.offsetWidth; // force reflow
+      flash.classList.add('active');
+    }
 
     // ===== SUN =====
     const sunGeo = new THREE.SphereGeometry(8, 12, 8);
@@ -775,6 +960,7 @@
             // Hit!
             p.isStunned = true;
             p.stunStart = now;
+            spawnStunParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z);
             p.tilePos = Math.max(0, p.tilePos - 2); // pushback
             p.targetTile = p.tilePos;
             showNotif(`${p.nickname} hit a ${OBSTACLE_TYPES[obs.typeIndex].name}!`);
@@ -883,8 +1069,19 @@
       // Smooth movement toward target position
       const targetZ = p.targetTile * TILE;
       const targetX = getLaneX(p.lane);
+      const prevZ = p.mesh.position.z;
       p.mesh.position.z += (targetZ - p.mesh.position.z) * Math.min(1, dt * 5);
       p.mesh.position.x += (targetX - p.mesh.position.x) * Math.min(1, dt * 8);
+
+      // Trail effect when running
+      const speed = Math.abs(p.mesh.position.z - prevZ);
+      if (speed > 0.05 && !p.isStunned) {
+        // Spawn trail particles behind the character
+        if (Math.random() < Math.min(speed * 3, 0.8)) {
+          const color = hashColor(p.id);
+          spawnTrail(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z - 0.5, color);
+        }
+      }
 
       // Update logical tile position (for collision)
       p.tilePos += (p.targetTile - p.tilePos) * Math.min(1, dt * 5);
@@ -1019,6 +1216,15 @@
         }
       }
 
+      // Gift particle burst (bigger burst for bigger gifts)
+      const particleCount = Math.min(40, 8 + steps * 3);
+      const pColor = hashColor(p.id);
+      spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, pColor, particleCount);
+
+      // Screen flash for gifts
+      const flashColors = ['#fe2c55', '#25f4ee', '#ffd700', '#ff6600', '#a855f7'];
+      triggerGiftFlash(flashColors[Math.floor(Math.random() * flashColors.length)]);
+
       showNotif(`<strong>${p.nickname}</strong> sprints ${steps} steps! (${data.giftName} x${data.repeatCount || 1})`, 'gift');
       checkEnvironmentChange();
       updateHUD();
@@ -1032,6 +1238,8 @@
         p.isJumping = true;
         p.jumpStart = Date.now();
         p.targetTile += 0.5; // tiny forward nudge
+        // Jump sparkle
+        spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffee44, 6);
       }
     });
 
@@ -1040,6 +1248,8 @@
       if (!p) return;
 
       p.targetTile += 3;
+      spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0x25f4ee, 20);
+      triggerGiftFlash('#25f4ee');
       showNotif(`<strong>${p.nickname}</strong> followed! +3 boost!`, 'gift');
       updateHUD();
     });
@@ -1175,6 +1385,10 @@
       recycleRoads();
       recycleScenery();
       updateTerrain();
+
+      // Update particles and trails
+      updateParticles(dt);
+      updateTrails(dt);
 
       // Animate clouds
       cloudGroup.children.forEach((c, i) => {
