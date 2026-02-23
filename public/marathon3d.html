@@ -1960,13 +1960,19 @@
       // Auto-nudge stragglers: keep everyone visible within camera range
       if (players.size > 1) {
         const leaderPos = getLeaderTile();
-        const minVisible = leaderPos - 25; // max 25 tiles behind leader
+        const softLimit = leaderPos - 15; // start nudging at 15 tiles behind
+        const hardLimit = leaderPos - 25; // teleport at 25 tiles behind
         players.forEach(p => {
-          if (p.tilePos < minVisible && !p.isStunned) {
-            // Gently push forward so they stay in frame
-            const nudge = (minVisible - p.tilePos) * 0.05; // gradual catch-up
-            p.targetTile += Math.max(0.1, nudge);
-            p.tilePos += Math.max(0.05, nudge * 0.5);
+          if (p.isStunned) return;
+          if (p.tilePos < hardLimit) {
+            // Too far behind — teleport near the back of the pack
+            p.tilePos = softLimit + 2;
+            p.targetTile = softLimit + 2;
+          } else if (p.tilePos < softLimit) {
+            // Falling behind — strong pull forward
+            const gap = softLimit - p.tilePos;
+            p.targetTile += gap * 0.3;
+            p.tilePos += gap * 0.15;
           }
         });
       }
