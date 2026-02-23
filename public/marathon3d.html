@@ -1306,8 +1306,8 @@
     }
 
     // ===== INACTIVE PLAYER CLEANUP =====
-    const INACTIVE_FADE_START = 45000;  // start fading after 45s inactive
-    const INACTIVE_REMOVE = 60000;      // remove after 60s inactive
+    const INACTIVE_FADE_START = 20000;  // start fading after 20s inactive
+    const INACTIVE_REMOVE = 30000;      // remove after 30s inactive
 
     function cleanupInactivePlayers(now) {
       const toRemove = [];
@@ -1471,12 +1471,14 @@
     // ===== ANIMATION =====
     function animateCharacter(p, now, dt) {
       const ud = p.mesh.userData;
-      const isMoving = Math.abs(p.targetTile - p.tilePos) > 0.1;
+      const isMoving = !p.isStunned; // always animate running (auto-walk keeps everyone moving)
 
-      // Run animation
+      // Run animation — speed varies with actual movement speed
+      const moveSpeed = Math.abs(p.targetTile - p.tilePos);
       if (isMoving || p.isJumping) {
-        ud.animPhase += dt * 8;
-        const swing = Math.sin(ud.animPhase) * 0.6;
+        const animSpeed = 3 + Math.min(moveSpeed, 5) * 2; // slow jog to fast sprint
+        ud.animPhase += dt * animSpeed;
+        const swing = Math.sin(ud.animPhase) * (0.3 + Math.min(moveSpeed, 3) * 0.15);
         ud.leftArm.rotation.x = swing;
         ud.rightArm.rotation.x = -swing;
         ud.leftLeg.rotation.x = -swing;
