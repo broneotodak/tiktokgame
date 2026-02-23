@@ -332,7 +332,10 @@ const BOT_CHATS = [
   'wahh pro!', 'lajunyaaa', 'sikit lagi!', 'terbaik bro!',
 ];
 
+const BOT_COMMANDS = ['jump', 'left', 'right'];
+
 let botInterval = null;
+let botActionInterval = null;
 let botJoinTimer = null;
 let botActive = false;
 let botJoinIdx = 0;
@@ -358,7 +361,7 @@ function startBots() {
   }
   scheduleNextBot();
 
-  // Bots do random actions every 2-5 seconds
+  // Bots chat/like/gift every 3-6 seconds (vibes)
   botInterval = setInterval(() => {
     if (!botActive) return;
     const bots = BOT_USERS.filter(b => viewers.has(b.id));
@@ -368,24 +371,42 @@ function startBots() {
     const roll = Math.random();
 
     if (roll < 0.5) {
-      // Chat
+      // Casual chat (shows bubble)
       const comment = BOT_CHATS[Math.floor(Math.random() * BOT_CHATS.length)];
       io.emit('chat', { ...bot, profilePic: '', comment, timestamp: Date.now() });
     } else if (roll < 0.85) {
-      // Like
+      // Like (speed boost)
       io.emit('like', { ...bot, profilePic: '', likeCount: Math.floor(Math.random() * 3) + 1, totalLikes: Math.floor(Math.random() * 200), timestamp: Date.now() });
     } else {
-      // Gift
+      // Gift (mount)
       const giftName = DEMO_GIFTS[Math.floor(Math.random() * DEMO_GIFTS.length)];
       io.emit('gift', { ...bot, profilePic: '', giftName, giftId: Date.now(), diamondCount: Math.floor(Math.random() * 50) + 1, repeatCount: 1, giftPictureUrl: '', timestamp: Date.now() });
     }
-  }, 2000 + Math.random() * 3000);
+  }, 3000 + Math.random() * 3000);
+
+  // Bots dodge obstacles every 1-2 seconds (survival)
+  botActionInterval = setInterval(() => {
+    if (!botActive) return;
+    const bots = BOT_USERS.filter(b => viewers.has(b.id));
+    if (bots.length === 0) return;
+
+    // Pick 1-3 random bots to act this tick
+    const actCount = 1 + Math.floor(Math.random() * Math.min(3, bots.length));
+    const shuffled = bots.sort(() => Math.random() - 0.5);
+    for (let i = 0; i < actCount; i++) {
+      const bot = shuffled[i];
+      const cmd = BOT_COMMANDS[Math.floor(Math.random() * BOT_COMMANDS.length)];
+      io.emit('chat', { ...bot, profilePic: '', comment: cmd, timestamp: Date.now() });
+    }
+  }, 1000 + Math.random() * 1000);
 }
 
 function stopBots() {
   botActive = false;
   if (botInterval) clearInterval(botInterval);
   botInterval = null;
+  if (botActionInterval) clearInterval(botActionInterval);
+  botActionInterval = null;
   if (botJoinTimer) clearTimeout(botJoinTimer);
   botJoinTimer = null;
   // Remove only bot viewers from server tracking
