@@ -96,6 +96,11 @@
     .guide-show-btn { position: absolute; bottom: 8px; right: 8px; z-index: 101; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.6); border: 1px solid #444; color: #fff; font-size: 14px; cursor: pointer; display: none; align-items: center; justify-content: center; pointer-events: auto; }
     .guide-show-btn.visible { display: flex; }
 
+    /* Race progress bar */
+    .race-progress { display: none; position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 100; width: 200px; height: 8px; background: rgba(0,0,0,0.6); border-radius: 4px; pointer-events: none; border: 1px solid rgba(255,255,255,0.15); }
+    .race-bar { height: 100%; background: linear-gradient(90deg, #25f4ee, #ffd700); border-radius: 3px; transition: width 0.3s ease; width: 0%; }
+    .race-label { position: absolute; top: -16px; right: 0; color: #fff; font-size: 10px; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+
     /* Stragglers panel — players behind camera */
     .stragglers { position: absolute; bottom: 60px; left: 8px; z-index: 100; pointer-events: none; display: flex; flex-direction: column; gap: 2px; max-width: 200px; }
     .straggler-row { display: flex; align-items: center; gap: 6px; padding: 3px 10px; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); border-radius: 8px; border-left: 2px solid rgba(255,255,255,0.2); }
@@ -184,6 +189,7 @@
     </div>
 
     <div class="env-badge" id="envBadge">Grasslands</div>
+    <div class="race-progress" id="raceProgress"><div class="race-bar" id="raceBar"></div><span class="race-label" id="raceLabel">0%</span></div>
 
     <div class="banner-area" id="bannerArea"></div>
     <div class="stragglers" id="stragglersPanel"></div>
@@ -201,6 +207,22 @@
       <div class="dash-header">
         <h3>Host Dashboard</h3>
         <button class="dash-close" onclick="toggleDashboard()">&times;</button>
+      </div>
+      <div class="dash-section">
+        <h4>Game Mode</h4>
+        <div style="display:flex;gap:4px;margin-bottom:6px;">
+          <button class="dash-action-btn" id="modeEndless" style="flex:1;justify-content:center;background:rgba(37,244,238,0.2);border-color:#25f4ee;" onclick="dashSetGameMode('endless')"><span class="action-icon">&#8734;</span> Endless</button>
+          <button class="dash-action-btn" id="modeLevel" style="flex:1;justify-content:center;" onclick="dashSetGameMode('level')"><span class="action-icon">&#127942;</span> Level</button>
+          <button class="dash-action-btn" id="modeRace" style="flex:1;justify-content:center;" onclick="dashSetGameMode('race')"><span class="action-icon">&#127937;</span> Race</button>
+        </div>
+        <div id="raceDist" style="display:none;">
+          <select id="raceDistSelect" onchange="dashSetRaceDistance(+this.value)" style="width:100%;padding:8px;background:#0a0a1a;border:1px solid #444;border-radius:8px;color:#fff;font-size:12px;">
+            <option value="250">500m (Short)</option>
+            <option value="500" selected>1000m (Medium)</option>
+            <option value="1000">2000m (Long)</option>
+            <option value="2500">5000m (Marathon)</option>
+          </select>
+        </div>
       </div>
       <div class="dash-section">
         <h4>Change ALL Mounts</h4>
@@ -337,6 +359,16 @@
     const sceneryPool = [];
     const roadChunks = [];
     let cameraTargetZ = 0;
+
+    // ===== GAME MODES =====
+    const GAME_MODES = { ENDLESS: 'endless', LEVEL: 'level', RACE: 'race' };
+    let gameMode = GAME_MODES.ENDLESS;
+    let gameModeConfig = {
+      currentLevel: 1, levelGoalTile: 200, levelMultiplier: 1.5,
+      levelComplete: false, levelTransitioning: false, levelTransitionStart: 0, levelPauseMs: 5000,
+      raceDistanceTiles: 500, raceFinished: false, raceWinner: null,
+      obstacleMultiplier: 1.0
+    };
 
     // ===== RANDOM EVENTS =====
     const RANDOM_EVENTS = [
@@ -915,6 +947,22 @@
     window.dashShuffleAll = function() { emitHostCmd('shuffle-all', {}); };
     window.dashResetPositions = function() { emitHostCmd('reset-positions', {}); };
 
+    // Game mode dashboard controls
+    window.dashSetGameMode = function(mode) {
+      emitHostCmd('set-game-mode', { mode });
+      // Update UI highlight
+      ['modeEndless', 'modeLevel', 'modeRace'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.style.background = 'rgba(255,255,255,0.06)'; el.style.borderColor = 'rgba(255,255,255,0.1)'; }
+      });
+      const activeId = mode === 'endless' ? 'modeEndless' : mode === 'level' ? 'modeLevel' : 'modeRace';
+      const el = document.getElementById(activeId);
+      if (el) { el.style.background = 'rgba(37,244,238,0.2)'; el.style.borderColor = '#25f4ee'; }
+      const rd = document.getElementById('raceDist');
+      if (rd) rd.style.display = mode === 'race' ? 'block' : 'none';
+    };
+    window.dashSetRaceDistance = function(tiles) { emitHostCmd('set-race-distance', { tiles }); };
+
     // Execute host commands locally (called by socket listener for ALL clients)
     function executeHostCommand(cmd) {
       const { action, data } = cmd;
@@ -975,7 +1023,157 @@
           showNotif(`🌍 Environment changed to <strong>${ENVIRONMENTS[envIndex].name}</strong>!`, 'event');
           break;
         }
+        case 'set-game-mode': {
+          gameMode = data.mode;
+          resetGameForMode();
+          const modeNames = { endless: 'Endless Marathon', level: 'Level Mode', race: 'Race Mode' };
+          showNotif(`🎮 <strong>${modeNames[data.mode] || data.mode}</strong> activated!`, 'event');
+          // Sync UI on viewer side too
+          const rd = document.getElementById('raceDist');
+          if (rd) rd.style.display = data.mode === 'race' ? 'block' : 'none';
+          document.getElementById('raceProgress').style.display = data.mode === 'race' ? 'block' : 'none';
+          break;
+        }
+        case 'set-race-distance': {
+          gameModeConfig.raceDistanceTiles = data.tiles;
+          gameModeConfig.raceFinished = false;
+          gameModeConfig.raceWinner = null;
+          showNotif(`🏁 Race distance: <strong>${data.tiles * 2}m</strong>`, 'event');
+          break;
+        }
       }
+    }
+
+    // ===== GAME MODE FUNCTIONS =====
+    function resetGameForMode() {
+      // Reset all players
+      players.forEach(p => {
+        p.tilePos = 0;
+        p.targetTile = 3;
+        p.isStunned = false;
+        p.isJumping = false;
+        p.hasShield = false;
+        p.inventory = [];
+      });
+      // Clear obstacles
+      activeObstacles.forEach(obs => {
+        if (obs.poolIndex >= 0 && obstaclePool[obs.poolIndex]) {
+          obstaclePool[obs.poolIndex].mesh.visible = false;
+          obstaclePool[obs.poolIndex].inUse = false;
+        }
+      });
+      activeObstacles.length = 0;
+      activePowerups.forEach(pu => {
+        if (pu.poolIndex >= 0) { powerupMeshPool[pu.poolIndex].mesh.visible = false; powerupMeshPool[pu.poolIndex].inUse = false; }
+      });
+      activePowerups.length = 0;
+      lastObstacleTile = 0;
+      lastPowerupTile = 10;
+      lastEventTile = 0;
+      activeEvent = null;
+      cameraShakeAmount = 0;
+      // Reset road chunks
+      nextChunkIndex = CHUNK_COUNT;
+      roadChunks.forEach((chunk, i) => {
+        chunk.position.z = i * CHUNK_LENGTH + CHUNK_LENGTH / 2;
+        chunk.userData.chunkIndex = i;
+      });
+      // Mode-specific
+      if (gameMode === GAME_MODES.LEVEL) {
+        gameModeConfig.currentLevel = 1;
+        gameModeConfig.levelGoalTile = 200;
+        gameModeConfig.levelComplete = false;
+        gameModeConfig.levelTransitioning = false;
+        gameModeConfig.obstacleMultiplier = 1.0;
+        applyEnvironment(0);
+      } else if (gameMode === GAME_MODES.RACE) {
+        gameModeConfig.raceFinished = false;
+        gameModeConfig.raceWinner = null;
+      }
+      updateHUD();
+    }
+
+    function checkGameModeConditions(now) {
+      if (players.size === 0) return;
+
+      if (gameMode === GAME_MODES.LEVEL) {
+        if (gameModeConfig.levelTransitioning) {
+          if (now - gameModeConfig.levelTransitionStart > gameModeConfig.levelPauseMs) {
+            gameModeConfig.levelTransitioning = false;
+            gameModeConfig.levelComplete = false;
+            startNextLevel();
+          }
+          return;
+        }
+        const leaderTile = getLeaderTile();
+        if (!gameModeConfig.levelComplete && leaderTile >= gameModeConfig.levelGoalTile) {
+          gameModeConfig.levelComplete = true;
+          gameModeConfig.levelTransitioning = true;
+          gameModeConfig.levelTransitionStart = now;
+          showLevelComplete(gameModeConfig.currentLevel);
+        }
+      }
+
+      if (gameMode === GAME_MODES.RACE && !gameModeConfig.raceFinished) {
+        let winner = null;
+        players.forEach(p => {
+          if (p.tilePos >= gameModeConfig.raceDistanceTiles && (!winner || p.tilePos > winner.tilePos)) winner = p;
+        });
+        if (winner) {
+          gameModeConfig.raceFinished = true;
+          gameModeConfig.raceWinner = winner;
+          showRaceWinner(winner);
+        }
+      }
+    }
+
+    function showLevelComplete(level) {
+      showNotif(`🏆 <strong>LEVEL ${level} COMPLETE!</strong> Get ready for Level ${level + 1}...`, 'event');
+      const leaderZ = getLeaderTile() * TILE;
+      for (let i = 0; i < 8; i++) {
+        spawnGiftParticles((Math.random() - 0.5) * ROAD_WIDTH * 2, 2, leaderZ + Math.random() * 20, 0xffd700, 8);
+      }
+      triggerGiftFlash('#ffd700');
+    }
+
+    function showRaceWinner(winner) {
+      showNotif(`🏁 <strong>${winner.nickname} WINS THE RACE!</strong> ${Math.floor(winner.tilePos * 2)}m`, 'event');
+      if (winner.mesh) {
+        for (let i = 0; i < 8; i++) {
+          spawnGiftParticles(winner.mesh.position.x, winner.mesh.position.y + 2, winner.mesh.position.z, 0xffd700, 8);
+        }
+      }
+      triggerGiftFlash('#ffd700');
+    }
+
+    function startNextLevel() {
+      gameModeConfig.currentLevel++;
+      gameModeConfig.levelGoalTile = Math.floor(200 * Math.pow(gameModeConfig.levelMultiplier, gameModeConfig.currentLevel - 1));
+      gameModeConfig.obstacleMultiplier = 1 + (gameModeConfig.currentLevel - 1) * 0.2;
+      // Reset positions
+      players.forEach(p => { p.tilePos = 0; p.targetTile = 3; });
+      activeObstacles.forEach(obs => {
+        if (obs.poolIndex >= 0 && obstaclePool[obs.poolIndex]) {
+          obstaclePool[obs.poolIndex].mesh.visible = false;
+          obstaclePool[obs.poolIndex].inUse = false;
+        }
+      });
+      activeObstacles.length = 0;
+      activePowerups.forEach(pu => {
+        if (pu.poolIndex >= 0) { powerupMeshPool[pu.poolIndex].mesh.visible = false; powerupMeshPool[pu.poolIndex].inUse = false; }
+      });
+      activePowerups.length = 0;
+      lastObstacleTile = 0;
+      lastPowerupTile = 10;
+      // Reset road
+      nextChunkIndex = CHUNK_COUNT;
+      roadChunks.forEach((chunk, i) => {
+        chunk.position.z = i * CHUNK_LENGTH + CHUNK_LENGTH / 2;
+        chunk.userData.chunkIndex = i;
+      });
+      // Change environment per level
+      applyEnvironment((gameModeConfig.currentLevel - 1) % ENVIRONMENTS.length);
+      showNotif(`⬆️ <strong>LEVEL ${gameModeConfig.currentLevel}</strong> — ${ENVIRONMENTS[envIndex].name}! Goal: ${gameModeConfig.levelGoalTile * 2}m`, 'event');
     }
 
     // ===== THREE.JS SETUP =====
@@ -2078,7 +2276,8 @@
     function generateObstacles(upToTile) {
       while (lastObstacleTile < upToTile) {
         lastObstacleTile += 3 + Math.floor(Math.random() * 4); // every 3-6 tiles
-        if (Math.random() > OBSTACLE_CHANCE) continue;
+        const effectiveChance = OBSTACLE_CHANCE * gameModeConfig.obstacleMultiplier;
+        if (Math.random() > Math.min(effectiveChance, 0.6)) continue;
         if (lastObstacleTile < 5) continue; // safe zone at start
 
         // Pick 1-3 lanes to block (never all 5)
@@ -2352,9 +2551,26 @@
     function updateHUD() {
       document.getElementById('runnerCount').textContent = players.size;
 
-      // Leader distance
+      // Leader distance — mode-specific display
       const leader = getLeaderTile();
-      document.getElementById('leaderDist').textContent = Math.floor(leader * 2);
+      if (gameMode === GAME_MODES.LEVEL) {
+        const pct = Math.min(100, Math.floor((leader / gameModeConfig.levelGoalTile) * 100));
+        document.getElementById('leaderDist').textContent = `Lv${gameModeConfig.currentLevel} ${pct}%`;
+        document.getElementById('envBadge').textContent = `Level ${gameModeConfig.currentLevel} - ${ENVIRONMENTS[envIndex].name}`;
+        document.getElementById('raceProgress').style.display = 'none';
+      } else if (gameMode === GAME_MODES.RACE) {
+        const remaining = Math.max(0, Math.floor((gameModeConfig.raceDistanceTiles - leader) * 2));
+        document.getElementById('leaderDist').textContent = `${remaining}m left`;
+        const pct = Math.min(100, Math.floor((leader / gameModeConfig.raceDistanceTiles) * 100));
+        const rp = document.getElementById('raceProgress');
+        rp.style.display = 'block';
+        document.getElementById('raceBar').style.width = pct + '%';
+        document.getElementById('raceLabel').textContent = pct + '%';
+      } else {
+        document.getElementById('leaderDist').textContent = Math.floor(leader * 2);
+        document.getElementById('raceProgress').style.display = 'none';
+        document.getElementById('envBadge').textContent = ENVIRONMENTS[envIndex].name;
+      }
 
       // Podium
       const sorted = [...players.values()].sort((a, b) => b.tilePos - a.tilePos);
@@ -2762,6 +2978,9 @@
       lastTime = time;
       const now = Date.now();
 
+      // Check game mode conditions (level complete, race winner)
+      checkGameModeConditions(now);
+
       // Generate obstacles and powerups ahead of leader
       const leaderTile = getLeaderTile();
       generateObstacles(leaderTile + 50);
@@ -2822,12 +3041,16 @@
       });
 
       // Slow auto-walk: everyone drifts forward so game looks alive
-      // Likes/gifts give bursts on top of this base speed
-      players.forEach(p => {
-        if (!p.isStunned) {
-          p.targetTile += dt * 0.4; // ~0.4 tiles/sec base drift
-        }
-      });
+      // Frozen during level transitions or after race finishes
+      const frozen = (gameMode === GAME_MODES.LEVEL && gameModeConfig.levelTransitioning)
+                  || (gameMode === GAME_MODES.RACE && gameModeConfig.raceFinished);
+      if (!frozen) {
+        players.forEach(p => {
+          if (!p.isStunned) {
+            p.targetTile += dt * 0.4; // ~0.4 tiles/sec base drift
+          }
+        });
+      }
 
       // Auto-nudge stragglers: keep everyone visible within camera range
       // But give new joiners room — only nudge after they've been idle too long
