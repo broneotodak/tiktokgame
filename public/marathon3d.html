@@ -15,7 +15,7 @@
     body.portrait-mode #game-canvas { width: 100%; height: 100%; }
     body.portrait-mode .hud { left: 0; right: 0; }
     body.portrait-mode .env-badge { left: 50%; }
-    body.portrait-mode .notif-area { left: 8px; max-width: 90%; }
+    body.portrait-mode .banner-area { left: 0; right: 0; }
     body.portrait-mode .host-controls { left: 50%; }
     body.portrait-mode .game-guide { left: 0; right: 0; }
     body.portrait-mode .guide-show-btn { right: 8px; }
@@ -43,15 +43,19 @@
     .podium-avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid #fff; flex-shrink: 0; }
     .podium-dist { font-weight: 700; color: #25f4ee; font-variant-numeric: tabular-nums; }
 
-    /* Notification feed */
-    .notif-area { position: absolute; top: 60px; left: 15px; display: flex; flex-direction: column; gap: 4px; z-index: 100; pointer-events: none; max-width: 320px; }
-    .notif { padding: 6px 14px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border-radius: 20px; color: #fff; font-size: 12px; animation: slideIn 0.3s ease-out, fadeOut 0.4s ease-in 3s forwards; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .notif strong { color: #25f4ee; }
-    .notif.gift strong { color: #fe2c55; }
-    .notif.tip { background: rgba(37,244,238,0.15); border: 1px solid rgba(37,244,238,0.3); animation: slideIn 0.3s ease-out, fadeOut 0.4s ease-in 5s forwards; }
-    .notif.tip strong { color: #ffd700; }
-    @keyframes slideIn { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } }
-    @keyframes fadeOut { to { opacity: 0; transform: translateX(-20px); } }
+    /* Full-width banner notification — below HUD */
+    .banner-area { position: absolute; top: 58px; left: 0; right: 0; z-index: 100; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .banner { width: 96%; max-width: 600px; padding: 10px 18px; background: rgba(0,0,0,0.8); backdrop-filter: blur(12px); border-radius: 12px; color: #fff; font-size: 16px; font-weight: 600; text-align: center; line-height: 1.4; animation: bannerIn 0.35s ease-out, bannerOut 0.5s ease-in 3.2s forwards; border: 1px solid rgba(255,255,255,0.12); }
+    .banner strong { color: #25f4ee; }
+    .banner.gift { border-color: rgba(254,44,85,0.5); background: linear-gradient(135deg, rgba(254,44,85,0.25), rgba(0,0,0,0.8)); }
+    .banner.gift strong { color: #fe2c55; }
+    .banner.tip { border-color: rgba(37,244,238,0.4); background: linear-gradient(135deg, rgba(37,244,238,0.12), rgba(0,0,0,0.8)); animation: bannerIn 0.35s ease-out, bannerOut 0.5s ease-in 5.5s forwards; }
+    .banner.tip strong { color: #ffd700; }
+    .banner.event { border-color: rgba(255,200,0,0.5); background: linear-gradient(135deg, rgba(255,200,0,0.2), rgba(0,0,0,0.85)); font-size: 18px; }
+    .banner.event strong { color: #ffd700; }
+    .banner-icon { font-size: 22px; vertical-align: middle; margin-right: 6px; }
+    @keyframes bannerIn { from { opacity: 0; transform: translateY(-15px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes bannerOut { to { opacity: 0; transform: translateY(-10px) scale(0.97); } }
 
     /* Game guide bar - auto-hides after 8s, tap to toggle */
     .game-guide { position: absolute; bottom: 0; left: 0; right: 0; z-index: 100; pointer-events: auto; transition: transform 0.4s ease, opacity 0.4s ease; }
@@ -101,8 +105,8 @@
       .podium-row { padding: 3px 8px; font-size: 11px; }
       .podium-title { font-size: 10px; padding: 3px 8px; }
       .env-badge { font-size: 11px; padding: 4px 12px; top: 8px; }
-      .notif-area { top: 50px; left: 8px; max-width: 220px; }
-      .notif { font-size: 10px; padding: 4px 10px; }
+      .banner-area { top: 48px; }
+      .banner { font-size: 14px; padding: 8px 14px; }
       .host-controls { bottom: 55px; gap: 4px; }
       .host-btn { padding: 6px 12px; font-size: 11px; }
       .guide-bar { flex-direction: column; align-items: center; padding: 4px 6px; }
@@ -143,7 +147,7 @@
 
     <div class="env-badge" id="envBadge">Grasslands</div>
 
-    <div class="notif-area" id="notifArea"></div>
+    <div class="banner-area" id="bannerArea"></div>
 
     <!-- Host controls -->
     <div class="host-controls">
@@ -2193,15 +2197,16 @@
     }
 
     function showNotif(html, cls = '') {
-      const area = document.getElementById('notifArea');
+      const area = document.getElementById('bannerArea');
       const div = document.createElement('div');
-      div.className = `notif ${cls}`;
+      div.className = `banner ${cls}`;
       div.innerHTML = html;
       area.appendChild(div);
-      // Remove after animation
-      setTimeout(() => div.remove(), 3500);
-      // Keep max 6
-      while (area.children.length > 6) area.firstChild.remove();
+      // Remove after animation (tips stay longer)
+      const dur = cls === 'tip' ? 6200 : 3800;
+      setTimeout(() => div.remove(), dur);
+      // Keep max 3 banners visible at a time
+      while (area.children.length > 3) area.firstChild.remove();
     }
 
     // ===== RANDOM TIPS / HOW-TO REMINDERS =====
