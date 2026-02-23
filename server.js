@@ -200,6 +200,8 @@ const DEMO_CHATS = [
 const DEMO_GIFTS = ['Rose', 'Ice Cream Cone', 'GG', 'Doughnut', 'TikTok'];
 
 let demoInterval = null;
+let demoJoinTimer = null;
+let demoStopped = false;
 let demoViewerIdx = 0;
 let demoViewerCount = 0;
 
@@ -209,12 +211,14 @@ function startDemo() {
   io.emit('connection-status', connectionState);
   demoViewerIdx = 0;
   demoViewerCount = 0;
+  demoStopped = false;
 
   // Stagger viewer joins every 2-5 seconds
   function scheduleNextJoin() {
-    if (demoViewerIdx >= DEMO_USERS.length) return;
+    if (demoStopped || demoViewerIdx >= DEMO_USERS.length) return;
     const delay = 2000 + Math.random() * 3000;
-    setTimeout(() => {
+    demoJoinTimer = setTimeout(() => {
+      if (demoStopped) return;
       const user = DEMO_USERS[demoViewerIdx++];
       const viewer = { ...user, profilePic: '', joinedAt: Date.now() };
       viewers.set(viewer.id, viewer);
@@ -228,6 +232,7 @@ function startDemo() {
 
   // Random chats every 3-6 seconds
   demoInterval = setInterval(() => {
+    if (demoStopped) return;
     const activeViewers = Array.from(viewers.values());
     if (activeViewers.length === 0) return;
 
@@ -253,11 +258,15 @@ function startDemo() {
 }
 
 function stopDemo() {
+  demoStopped = true;
   if (demoInterval) clearInterval(demoInterval);
   demoInterval = null;
+  if (demoJoinTimer) clearTimeout(demoJoinTimer);
+  demoJoinTimer = null;
   viewers.clear();
   connectionState = { connected: false, roomId: null, error: null };
   io.emit('connection-status', connectionState);
+  console.log('🛑 Demo mode stopped');
 }
 
 // Socket.IO connection handling
