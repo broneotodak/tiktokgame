@@ -101,13 +101,13 @@
     .race-bar { height: 100%; background: linear-gradient(90deg, #25f4ee, #ffd700); border-radius: 3px; transition: width 0.3s ease; width: 0%; }
     .race-label { position: absolute; top: -16px; right: 0; color: #fff; font-size: 10px; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
 
-    /* Stragglers panel — players behind camera */
-    .stragglers { position: absolute; bottom: 60px; left: 8px; z-index: 100; pointer-events: none; display: flex; flex-direction: column; gap: 2px; max-width: 200px; }
-    .straggler-row { display: flex; align-items: center; gap: 6px; padding: 3px 10px; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); border-radius: 8px; border-left: 2px solid rgba(255,255,255,0.2); }
-    .straggler-name { color: rgba(255,255,255,0.7); font-size: 11px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Stragglers panel — players behind camera, shown under HUD stats */
+    .stragglers { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; max-width: 220px; pointer-events: none; }
+    .stragglers-title { color: rgba(255,255,255,0.5); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px; }
+    .straggler-row { display: flex; align-items: center; gap: 5px; padding: 3px 8px; background: rgba(0,0,0,0.5); backdrop-filter: blur(6px); border-radius: 6px; border-left: 2px solid rgba(254,44,85,0.5); }
+    .straggler-name { color: rgba(255,255,255,0.8); font-size: 11px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .straggler-dist { color: #fe2c55; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .straggler-mount { font-size: 12px; }
-    body.viewer-mode .stragglers { bottom: 12px; }
 
     /* Host controls - hidden for viewers via ?view param */
     .host-controls { position: absolute; bottom: 45px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
@@ -146,8 +146,8 @@
       .banner { font-size: 16px; padding: 12px 18px; }
       .host-dashboard { width: 240px; }
       .host-dash-toggle.shifted { right: 240px; }
-      .stragglers { bottom: 50px; max-width: 160px; }
-      .straggler-row { padding: 2px 8px; }
+      .stragglers { max-width: 170px; }
+      .straggler-row { padding: 2px 6px; }
       .straggler-name { font-size: 10px; }
       .straggler-dist { font-size: 9px; }
       .host-controls { bottom: 55px; gap: 4px; }
@@ -181,6 +181,7 @@
       <div class="hud-left">
         <div class="hud-badge"><div class="live-dot"></div> <span id="runnerCount">0</span> runners</div>
         <div class="hud-badge">Leader: <span id="leaderDist">0</span>m</div>
+        <div class="stragglers" id="stragglersPanel"></div>
       </div>
       <div class="hud-right podium">
         <div class="podium-title">Top 3</div>
@@ -192,7 +193,6 @@
     <div class="race-progress" id="raceProgress"><div class="race-bar" id="raceBar"></div><span class="race-label" id="raceLabel">0%</span></div>
 
     <div class="banner-area" id="bannerArea"></div>
-    <div class="stragglers" id="stragglersPanel"></div>
 
     <!-- Host controls -->
     <div class="host-controls">
@@ -2812,7 +2812,7 @@
         const camZ = camera.position.z;
         const stragglers = sorted.filter(p => p.tilePos * TILE < camZ - 5).slice(-8).reverse();
         if (stragglers.length > 0) {
-          stragPanel.innerHTML = stragglers.map(p => {
+          stragPanel.innerHTML = `<div class="stragglers-title">Behind (${stragglers.length})</div>` + stragglers.map(p => {
             const behind = Math.floor((leader - p.tilePos) * 2);
             const mountIcon = MOUNT_TYPES[p.mountType || 0]?.icon || '🐴';
             return `<div class="straggler-row">
