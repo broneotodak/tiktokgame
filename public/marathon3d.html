@@ -1792,39 +1792,46 @@
       if (!p) return;
 
       const ud = p.mesh.userData;
-      const comment = (data.comment || '').trim().toLowerCase();
+      const raw = data.comment || '';
+      const comment = raw.trim().toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
       const now = Date.now();
 
-      // Parse commands from chat
+      console.log(`💬 Chat from ${p.nickname}: "${raw}" → parsed: "${comment}"`);
+
+      // Parse commands from chat (uses includes for flexibility)
       let isCommand = false;
       if (!p.isStunned) {
-        if (comment === 'jump' || comment === 'j' || comment === 'lompat') {
+        if (comment.includes('jump') || comment === 'j' || comment.includes('lompat')) {
           // Jump command
           if (!p.isJumping) {
             p.isJumping = true;
             p.jumpStart = now;
-            p.targetTile += 0.5; // slight forward nudge
+            p.targetTile += 0.5;
             sfxJump();
             spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffee44, 6);
             isCommand = true;
+            console.log(`🦘 ${p.nickname} JUMP!`);
           }
-        } else if (comment === 'left' || comment === 'l' || comment === 'kiri') {
-          // Move left
-          if (p.lane > 0) {
-            p.lane--;
-            isCommand = true;
-          }
-        } else if (comment === 'right' || comment === 'r' || comment === 'kanan') {
-          // Move right
+        } else if (comment.includes('left') || comment === 'l' || comment.includes('kiri')) {
+          // Move left (from viewer's perspective = increase lane index)
           if (p.lane < LANE_COUNT - 1) {
             p.lane++;
             isCommand = true;
+            console.log(`⬅️ ${p.nickname} LEFT → lane ${p.lane}`);
           }
-        } else if (comment === 'use' || comment === 'power' || comment === 'guna') {
+        } else if (comment.includes('right') || comment === 'r' || comment.includes('kanan')) {
+          // Move right (from viewer's perspective = decrease lane index)
+          if (p.lane > 0) {
+            p.lane--;
+            isCommand = true;
+            console.log(`➡️ ${p.nickname} RIGHT → lane ${p.lane}`);
+          }
+        } else if (comment.includes('use') || comment.includes('power') || comment.includes('guna')) {
           // Use first power in inventory
           if (p.inventory.length > 0) {
             usePower(p, 0, now);
             isCommand = true;
+            console.log(`⚡ ${p.nickname} USED POWER!`);
           }
         }
       }
