@@ -15,7 +15,9 @@
     body.portrait-mode #game-canvas { width: 100%; height: 100%; }
     body.portrait-mode .hud { left: 0; right: 0; }
     body.portrait-mode .env-badge { left: 50%; }
-    body.portrait-mode .banner-area { left: 0; right: 0; }
+    body.portrait-mode .banner-area { left: 0; right: 0; top: 110px; }
+    body.portrait-mode .host-dashboard { width: 260px; }
+    body.portrait-mode .host-dash-toggle.shifted { right: 260px; }
     body.portrait-mode .host-controls { left: 50%; }
     body.portrait-mode .game-guide { left: 0; right: 0; }
     body.portrait-mode .guide-show-btn { right: 8px; }
@@ -43,19 +45,42 @@
     .podium-avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid #fff; flex-shrink: 0; }
     .podium-dist { font-weight: 700; color: #25f4ee; font-variant-numeric: tabular-nums; }
 
-    /* Full-width banner notification — below HUD */
-    .banner-area { position: absolute; top: 58px; left: 0; right: 0; z-index: 100; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
-    .banner { width: 96%; max-width: 600px; padding: 10px 18px; background: rgba(0,0,0,0.8); backdrop-filter: blur(12px); border-radius: 12px; color: #fff; font-size: 16px; font-weight: 600; text-align: center; line-height: 1.4; animation: bannerIn 0.35s ease-out, bannerOut 0.5s ease-in 3.2s forwards; border: 1px solid rgba(255,255,255,0.12); }
+    /* Full-width banner notification — below podium */
+    .banner-area { position: absolute; top: 120px; left: 0; right: 0; z-index: 99; pointer-events: none; display: flex; flex-direction: column; align-items: stretch; gap: 0; }
+    .banner { width: 100%; padding: 10px 20px; background: rgba(0,0,0,0.85); backdrop-filter: blur(12px); color: #fff; font-size: 16px; font-weight: 600; text-align: center; line-height: 1.4; animation: bannerIn 0.35s ease-out, bannerOut 0.5s ease-in 3.2s forwards; border-bottom: 2px solid rgba(255,255,255,0.08); }
     .banner strong { color: #25f4ee; }
-    .banner.gift { border-color: rgba(254,44,85,0.5); background: linear-gradient(135deg, rgba(254,44,85,0.25), rgba(0,0,0,0.8)); }
+    .banner.gift { background: linear-gradient(90deg, rgba(254,44,85,0.3), rgba(0,0,0,0.85), rgba(254,44,85,0.3)); border-bottom-color: rgba(254,44,85,0.4); }
     .banner.gift strong { color: #fe2c55; }
-    .banner.tip { border-color: rgba(37,244,238,0.4); background: linear-gradient(135deg, rgba(37,244,238,0.12), rgba(0,0,0,0.8)); animation: bannerIn 0.35s ease-out, bannerOut 0.5s ease-in 5.5s forwards; }
+    .banner.tip { background: linear-gradient(90deg, rgba(37,244,238,0.15), rgba(0,0,0,0.85), rgba(37,244,238,0.15)); border-bottom-color: rgba(37,244,238,0.3); animation: bannerIn 0.35s ease-out, bannerOut 0.5s ease-in 5.5s forwards; }
     .banner.tip strong { color: #ffd700; }
-    .banner.event { border-color: rgba(255,200,0,0.5); background: linear-gradient(135deg, rgba(255,200,0,0.2), rgba(0,0,0,0.85)); font-size: 18px; }
+    .banner.event { background: linear-gradient(90deg, rgba(255,200,0,0.25), rgba(0,0,0,0.85), rgba(255,200,0,0.25)); border-bottom-color: rgba(255,200,0,0.4); font-size: 18px; }
     .banner.event strong { color: #ffd700; }
-    .banner-icon { font-size: 22px; vertical-align: middle; margin-right: 6px; }
-    @keyframes bannerIn { from { opacity: 0; transform: translateY(-15px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
-    @keyframes bannerOut { to { opacity: 0; transform: translateY(-10px) scale(0.97); } }
+    @keyframes bannerIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes bannerOut { to { opacity: 0; } }
+
+    /* Host Dashboard Panel */
+    .host-dashboard { position: absolute; top: 0; right: 0; bottom: 0; width: 280px; z-index: 300; background: rgba(10,10,30,0.95); backdrop-filter: blur(16px); border-left: 1px solid rgba(255,255,255,0.1); transform: translateX(100%); transition: transform 0.3s ease; overflow-y: auto; pointer-events: auto; }
+    .host-dashboard.open { transform: translateX(0); }
+    body.viewer-mode .host-dashboard, body.viewer-mode .host-dash-toggle { display: none; }
+    .host-dash-toggle { position: absolute; top: 50%; right: 0; z-index: 301; transform: translateY(-50%); width: 36px; height: 72px; background: rgba(0,0,0,0.8); border: 1px solid #444; border-right: none; border-radius: 10px 0 0 10px; color: #fff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; pointer-events: auto; transition: right 0.3s ease; }
+    .host-dash-toggle.shifted { right: 280px; }
+    .dash-header { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; }
+    .dash-header h3 { color: #fff; font-size: 14px; margin: 0; }
+    .dash-close { background: none; border: none; color: #888; font-size: 18px; cursor: pointer; }
+    .dash-section { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .dash-section h4 { color: #25f4ee; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .dash-mount-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .dash-mount-btn { padding: 8px 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; font-size: 11px; cursor: pointer; text-align: center; transition: all 0.2s; }
+    .dash-mount-btn:hover { background: rgba(37,244,238,0.15); border-color: #25f4ee; }
+    .dash-mount-btn:active { transform: scale(0.95); }
+    .dash-mount-btn .mount-icon { font-size: 22px; display: block; margin-bottom: 2px; }
+    .dash-action-list { display: flex; flex-direction: column; gap: 6px; }
+    .dash-action-btn { padding: 10px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; text-align: left; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
+    .dash-action-btn:hover { background: rgba(37,244,238,0.15); border-color: #25f4ee; }
+    .dash-action-btn:active { transform: scale(0.97); }
+    .dash-action-btn .action-icon { font-size: 18px; }
+    .dash-action-btn.danger { border-color: rgba(254,44,85,0.3); }
+    .dash-action-btn.danger:hover { background: rgba(254,44,85,0.2); border-color: #fe2c55; }
 
     /* Game guide bar - auto-hides after 8s, tap to toggle */
     .game-guide { position: absolute; bottom: 0; left: 0; right: 0; z-index: 100; pointer-events: auto; transition: transform 0.4s ease, opacity 0.4s ease; }
@@ -105,8 +130,10 @@
       .podium-row { padding: 3px 8px; font-size: 11px; }
       .podium-title { font-size: 10px; padding: 3px 8px; }
       .env-badge { font-size: 11px; padding: 4px 12px; top: 8px; }
-      .banner-area { top: 48px; }
+      .banner-area { top: 100px; }
       .banner { font-size: 14px; padding: 8px 14px; }
+      .host-dashboard { width: 240px; }
+      .host-dash-toggle.shifted { right: 240px; }
       .host-controls { bottom: 55px; gap: 4px; }
       .host-btn { padding: 6px 12px; font-size: 11px; }
       .guide-bar { flex-direction: column; align-items: center; padding: 4px 6px; }
@@ -154,6 +181,45 @@
       <button class="host-btn" id="btnDemo" onclick="toggleDemo()">Demo Mode</button>
       <button class="host-btn" onclick="nextEnvironment()">Change Env</button>
       <button class="host-btn" onclick="showConnectModal()">Connect TikTok</button>
+    </div>
+
+    <!-- Host Dashboard (side panel) -->
+    <button class="host-dash-toggle" id="dashToggle" onclick="toggleDashboard()">&#9776;</button>
+    <div class="host-dashboard" id="hostDashboard">
+      <div class="dash-header">
+        <h3>Host Dashboard</h3>
+        <button class="dash-close" onclick="toggleDashboard()">&times;</button>
+      </div>
+      <div class="dash-section">
+        <h4>Change ALL Mounts</h4>
+        <div class="dash-mount-grid" id="dashMountGrid"></div>
+      </div>
+      <div class="dash-section">
+        <h4>Random Mount</h4>
+        <div class="dash-action-list">
+          <button class="dash-action-btn" onclick="dashRandomMountAll()"><span class="action-icon">🎲</span> Random Mount for ALL</button>
+          <button class="dash-action-btn" onclick="dashRandomMountLeader()"><span class="action-icon">🏆</span> Random Mount for Leader</button>
+        </div>
+      </div>
+      <div class="dash-section">
+        <h4>Game Events</h4>
+        <div class="dash-action-list">
+          <button class="dash-action-btn" onclick="dashTriggerEvent('dragon')"><span class="action-icon">🐉</span> Dragon Attack</button>
+          <button class="dash-action-btn" onclick="dashTriggerEvent('meteor')"><span class="action-icon">☄️</span> Meteor Shower</button>
+          <button class="dash-action-btn" onclick="dashTriggerEvent('speed')"><span class="action-icon">🌊</span> Speed Wave</button>
+          <button class="dash-action-btn" onclick="dashTriggerEvent('quake')"><span class="action-icon">🌋</span> Earthquake</button>
+        </div>
+      </div>
+      <div class="dash-section">
+        <h4>Game Controls</h4>
+        <div class="dash-action-list">
+          <button class="dash-action-btn" onclick="dashBoostAll()"><span class="action-icon">⚡</span> Boost ALL +10 tiles</button>
+          <button class="dash-action-btn" onclick="dashShuffleAll()"><span class="action-icon">🔀</span> Shuffle All Lanes</button>
+          <button class="dash-action-btn" onclick="toggleDemo()"><span class="action-icon">🤖</span> Toggle Demo Mode</button>
+          <button class="dash-action-btn" onclick="nextEnvironment()"><span class="action-icon">🌍</span> Change Environment</button>
+          <button class="dash-action-btn danger" onclick="dashResetPositions()"><span class="action-icon">🔄</span> Reset All Positions</button>
+        </div>
+      </div>
     </div>
 
     <!-- Guide bar -->
@@ -799,6 +865,89 @@
       guideVisible = !guideVisible;
       document.getElementById('gameGuide').classList.toggle('hidden', !guideVisible);
       document.getElementById('guideShowBtn').classList.toggle('visible', !guideVisible);
+    };
+
+    // ===== HOST DASHBOARD =====
+    let dashOpen = false;
+    window.toggleDashboard = function() {
+      dashOpen = !dashOpen;
+      document.getElementById('hostDashboard').classList.toggle('open', dashOpen);
+      document.getElementById('dashToggle').classList.toggle('shifted', dashOpen);
+      document.getElementById('dashToggle').innerHTML = dashOpen ? '&times;' : '&#9776;';
+    };
+
+    // Populate mount grid buttons
+    (function buildMountGrid() {
+      const grid = document.getElementById('dashMountGrid');
+      if (!grid) return;
+      MOUNT_TYPES.forEach((mt, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'dash-mount-btn';
+        btn.innerHTML = `<span class="mount-icon">${mt.icon}</span>${mt.name}`;
+        btn.onclick = () => dashSetMountAll(idx);
+        grid.appendChild(btn);
+      });
+    })();
+
+    window.dashSetMountAll = function(mountIdx) {
+      let count = 0;
+      players.forEach(p => {
+        if (p.mesh && p.mesh.userData.mountTypeIndex !== mountIdx) {
+          swapMount(p, mountIdx);
+          count++;
+        }
+      });
+      const mt = MOUNT_TYPES[mountIdx];
+      showNotif(`${mt.icon} Host changed ALL ${count} riders to <strong>${mt.name}</strong>!`, 'event');
+    };
+
+    window.dashRandomMountAll = function() {
+      let count = 0;
+      players.forEach(p => {
+        if (p.mesh) {
+          swapMount(p, Math.floor(Math.random() * MOUNT_TYPES.length));
+          count++;
+        }
+      });
+      showNotif(`🎲 Host gave <strong>${count} riders</strong> random mounts!`, 'event');
+    };
+
+    window.dashRandomMountLeader = function() {
+      let leader = null, best = -1;
+      players.forEach(p => { if (p.tilePos > best) { best = p.tilePos; leader = p; } });
+      if (leader && leader.mesh) {
+        const idx = swapMount(leader, Math.floor(Math.random() * MOUNT_TYPES.length));
+        const mt = MOUNT_TYPES[idx];
+        showNotif(`🏆 Host gave leader <strong>${leader.nickname}</strong> a ${mt.icon} <strong>${mt.name}</strong>!`, 'event');
+      }
+    };
+
+    window.dashTriggerEvent = function(evtKey) {
+      const map = { dragon: 0, meteor: 1, speed: 2, quake: 3 };
+      const evt = RANDOM_EVENTS[map[evtKey] || 0];
+      triggerRandomEvent(evt, 'Host');
+    };
+
+    window.dashBoostAll = function() {
+      let count = 0;
+      players.forEach(p => { p.tilePos += 10; count++; });
+      showNotif(`⚡ Host boosted ALL <strong>${count} runners</strong> +10 tiles!`, 'event');
+    };
+
+    window.dashShuffleAll = function() {
+      players.forEach(p => {
+        if (p.mesh) {
+          const lane = Math.floor(Math.random() * LANE_COUNT);
+          p.lane = lane;
+          p.mesh.position.x = getLaneX(lane);
+        }
+      });
+      showNotif(`🔀 Host shuffled all runners to random lanes!`, 'event');
+    };
+
+    window.dashResetPositions = function() {
+      players.forEach(p => { p.tilePos = 0; });
+      showNotif(`🔄 Host <strong>reset</strong> all positions to 0!`, 'gift');
     };
 
     // ===== THREE.JS SETUP =====
