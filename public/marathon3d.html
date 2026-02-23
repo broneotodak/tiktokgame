@@ -1257,9 +1257,10 @@
       }
 
       const mesh = createCharacter(id, data.nickname || data.uniqueId || 'Viewer', data.profilePic || '');
-      // Place at the back of the pack (slightly behind everyone)
-      let backPos = 0;
+      // Place near the back of the pack but give initial forward movement
+      let backPos = Infinity;
       players.forEach(pp => { if (pp.tilePos < backPos) backPos = pp.tilePos; });
+      if (backPos === Infinity) backPos = 0;
       const startTile = Math.max(0, backPos);
 
       const lane = Math.floor(Math.random() * LANE_COUNT);
@@ -1293,6 +1294,8 @@
         lastActive: Date.now(),
         fadeOut: 0, // 0 = visible, 1 = fully faded
       };
+      // Initial forward burst so they don't just stand still
+      p.targetTile += 3;
       players.set(id, p);
       updateHUD();
       return p;
@@ -1942,6 +1945,14 @@
           const ns = p.mesh.children.find(c => c.isSprite && c.scale.x > 2);
           if (ns) ns.position.y = 2.5 + i * 0.7;
         });
+      });
+
+      // Slow auto-walk: everyone drifts forward so game looks alive
+      // Likes/gifts give bursts on top of this base speed
+      players.forEach(p => {
+        if (!p.isStunned) {
+          p.targetTile += dt * 0.4; // ~0.4 tiles/sec base drift
+        }
       });
 
       // Auto-nudge stragglers: keep everyone visible within camera range
