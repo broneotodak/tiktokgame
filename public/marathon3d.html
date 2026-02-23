@@ -1382,11 +1382,9 @@
       }
 
       const mesh = createCharacter(id, data.nickname || data.uniqueId || 'Viewer', data.profilePic || '');
-      // Place near the back of the pack but give initial forward movement
-      let backPos = Infinity;
-      players.forEach(pp => { if (pp.tilePos < backPos) backPos = pp.tilePos; });
-      if (backPos === Infinity) backPos = 0;
-      const startTile = Math.max(0, backPos);
+      // New joiners start well behind the leader — they must earn their position
+      const leader = getLeaderTile();
+      const startTile = Math.max(0, leader - 30);
 
       const lane = Math.floor(Math.random() * LANE_COUNT);
       mesh.position.x = getLaneX(lane);
@@ -2143,21 +2141,22 @@
       });
 
       // Auto-nudge stragglers: keep everyone visible within camera range
+      // But give new joiners room — only nudge after they've been idle too long
       if (players.size > 1) {
         const leaderPos = getLeaderTile();
-        const softLimit = leaderPos - 15; // start nudging at 15 tiles behind
-        const hardLimit = leaderPos - 25; // teleport at 25 tiles behind
+        const softLimit = leaderPos - 25; // start gentle nudging at 25 tiles behind
+        const hardLimit = leaderPos - 40; // teleport at 40 tiles behind (off-screen)
         players.forEach(p => {
           if (p.isStunned) return;
           if (p.tilePos < hardLimit) {
-            // Too far behind — teleport near the back of the pack
+            // Way too far behind — teleport to back of visible area
             p.tilePos = softLimit + 2;
             p.targetTile = softLimit + 2;
           } else if (p.tilePos < softLimit) {
-            // Falling behind — strong pull forward
+            // Falling behind — gentle pull forward
             const gap = softLimit - p.tilePos;
-            p.targetTile += gap * 0.3;
-            p.tilePos += gap * 0.15;
+            p.targetTile += gap * 0.1;
+            p.tilePos += gap * 0.05;
           }
         });
       }
