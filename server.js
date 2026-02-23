@@ -83,18 +83,29 @@ function connectToTikTok(username) {
     };
   }
 
+  // Track user from any event (so viewer-list works after page refresh)
+  function trackViewer(user) {
+    if (!user.id) return;
+    const existing = viewers.get(user.id);
+    if (!existing) {
+      viewers.set(user.id, { ...user, joinedAt: Date.now() });
+    } else {
+      existing.lastSeen = Date.now();
+    }
+  }
+
   // Viewer joins
   connection.on('member', (data) => {
     const user = extractUser(data);
-    const viewer = { ...user, joinedAt: Date.now() };
-    viewers.set(viewer.id, viewer);
-    console.log(`👋 ${viewer.nickname} (@${viewer.uniqueId}) joined`);
-    io.emit('viewer-join', viewer);
+    trackViewer(user);
+    console.log(`👋 ${user.nickname} (@${user.uniqueId}) joined`);
+    io.emit('viewer-join', { ...user, joinedAt: Date.now() });
   });
 
   // Chat messages
   connection.on('chat', (data) => {
     const user = extractUser(data);
+    trackViewer(user);
     const msg = { ...user, comment: data.comment || '', timestamp: Date.now() };
     console.log(`💬 ${msg.nickname}: ${msg.comment}`);
     io.emit('chat', msg);
@@ -106,6 +117,7 @@ function connectToTikTok(username) {
     if (data.giftType === 1 && !data.repeatEnd) return;
 
     const user = extractUser(data);
+    trackViewer(user);
     const gift = {
       ...user,
       giftName: data.giftName || 'Gift',
@@ -122,6 +134,7 @@ function connectToTikTok(username) {
   // Likes
   connection.on('like', (data) => {
     const user = extractUser(data);
+    trackViewer(user);
     io.emit('like', {
       ...user,
       likeCount: data.likeCount || 1,
@@ -133,6 +146,7 @@ function connectToTikTok(username) {
   // Follow (v2 has separate event)
   connection.on('follow', (data) => {
     const user = extractUser(data);
+    trackViewer(user);
     console.log(`⭐ ${user.nickname} followed!`);
     io.emit('follow', { ...user, timestamp: Date.now() });
   });
