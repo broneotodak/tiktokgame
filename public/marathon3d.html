@@ -1269,6 +1269,11 @@
         inventory: [], // power-up type indices, max 3
         isPushedOut: false,
         hasProfilePic: !!data.profilePic,
+        // Rate limiting for likes (anti-spam)
+        lastLikeTime: 0,
+        likeBank: 0,       // accumulated tiles from rapid likes
+        likeBankMax: 8,     // max tiles queued from likes
+        likeCooldown: 400,  // ms between like movements
       };
       players.set(id, p);
       updateHUD();
@@ -1635,10 +1640,33 @@
       const p = addPlayer(data);
       if (!p || p.isStunned) return;
 
-      // Like = Run forward 1 tile per tap
-      const likes = data.likeCount || 1;
-      const tiles = Math.min(likes, 5); // cap at 5 tiles per event
-      p.targetTile += tiles;
+      const now = Date.now();
+      const likes = Math.min(data.likeCount || 1, 10);
+
+      // Rate-limited movement: likes add to a "bank" that drains over time
+      // This prevents auto-tappers from zooming 500 tiles ahead
+      const timeSinceLast = now - p.lastLikeTime;
+      p.lastLikeTime = now;
+
+      // Drain bank over time (1 tile per cooldown period naturally)
+      if (timeSinceLast > p.likeCooldown) {
+        const drained = Math.floor(timeSinceLast / p.likeCooldown);
+        p.likeBank = Math.max(0, p.likeBank - drained);
+      }
+
+      // Diminishing returns: the more banked, the less each new like gives
+      let tilesEarned;
+      if (p.likeBank < 3) {
+        tilesEarned = Math.min(likes, 2); // normal: up to 2 tiles
+      } else if (p.likeBank < 6) {
+        tilesEarned = 1; // slowing down
+      } else {
+        tilesEarned = 0.3; // spam penalty: tiny movement
+      }
+
+      p.likeBank = Math.min(p.likeBankMax, p.likeBank + tilesEarned);
+      p.targetTile += tilesEarned;
+
       // Random lane switch occasionally
       if (Math.random() < 0.15) {
         p.lane = Math.floor(Math.random() * LANE_COUNT);
