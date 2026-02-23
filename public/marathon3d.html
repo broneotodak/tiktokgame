@@ -251,6 +251,7 @@
           <button class="dash-action-btn" onclick="dashShuffleAll()"><span class="action-icon">🔀</span> Shuffle All Lanes</button>
           <button class="dash-action-btn" onclick="toggleDemo()"><span class="action-icon">🤖</span> Toggle Demo Mode</button>
           <button class="dash-action-btn" onclick="nextEnvironment()"><span class="action-icon">🌍</span> Change Environment</button>
+          <button class="dash-action-btn" id="hillsToggleBtn" onclick="dashToggleHills()">🛣️ Hills: OFF</button>
           <button class="dash-action-btn danger" onclick="dashResetPositions()"><span class="action-icon">🔄</span> Reset All Positions</button>
         </div>
       </div>
@@ -310,6 +311,18 @@
     let hillsEnabled = false;
     const HILL_AMPLITUDE = 2.5;
     const HILL_FREQUENCY = 0.015;
+    // Hill height: composite sine wave for natural terrain
+    function getHillHeight(worldZ) {
+      if (!hillsEnabled) return 0;
+      return Math.sin(worldZ * HILL_FREQUENCY) * HILL_AMPLITUDE
+           + Math.sin(worldZ * HILL_FREQUENCY * 2.3) * (HILL_AMPLITUDE * 0.4)
+           + Math.sin(worldZ * HILL_FREQUENCY * 0.5) * (HILL_AMPLITUDE * 0.6);
+    }
+    function getHillSlope(worldZ) {
+      if (!hillsEnabled) return 0;
+      const dz = 0.5;
+      return (getHillHeight(worldZ + dz) - getHillHeight(worldZ - dz)) / (dz * 2);
+    }
     const MAX_VISIBLE_OBSTACLES = 40;
     const MAX_SCENERY = 60;
 
@@ -965,6 +978,7 @@
       if (rd) rd.style.display = mode === 'race' ? 'block' : 'none';
     };
     window.dashSetRaceDistance = function(tiles) { emitHostCmd('set-race-distance', { tiles }); };
+    window.dashToggleHills = function() { emitHostCmd('toggle-hills', { enabled: !hillsEnabled }); };
 
     // Execute host commands locally (called by socket listener for ALL clients)
     function executeHostCommand(cmd) {
@@ -1042,6 +1056,24 @@
           gameModeConfig.raceFinished = false;
           gameModeConfig.raceWinner = null;
           showNotif(`🏁 Race distance: <strong>${data.tiles * 2}m</strong>`, 'event');
+          break;
+        }
+        case 'toggle-hills': {
+          hillsEnabled = !!data.enabled;
+          // Re-apply geometry on all existing road chunks
+          for (const chunk of roadChunks) {
+            const ud = chunk.userData;
+            const cz = chunk.position.z;
+            if (ud.roadGeo) applyHillGeometry(ud.roadGeo, cz);
+            if (ud.rumbleGeos) ud.rumbleGeos.forEach(g => applyHillGeometry(g, cz));
+            if (ud.dashes) ud.dashes.forEach(dash => {
+              dash.position.y = 0.03 + getHillHeight(cz + dash.userData.localZ);
+            });
+          }
+          showNotif(hillsEnabled ? `⛰️ <strong>Hills enabled!</strong> Terrain is now hilly!` : `🛣️ <strong>Hills disabled!</strong> Flat road ahead.`, 'event');
+          // Update button state
+          const btn = document.getElementById('hillsToggleBtn');
+          if (btn) btn.textContent = hillsEnabled ? '⛰️ Hills: ON' : '🛣️ Hills: OFF';
           break;
         }
       }
@@ -1176,6 +1208,12 @@
       });
       // Change environment per level
       applyEnvironment((gameModeConfig.currentLevel - 1) % ENVIRONMENTS.length);
+      // Auto-enable hills at Level 2+
+      if (gameModeConfig.currentLevel >= 2 && !hillsEnabled) {
+        hillsEnabled = true;
+        const btn = document.getElementById('hillsToggleBtn');
+        if (btn) btn.textContent = '⛰️ Hills: ON';
+      }
       showNotif(`⬆️ <strong>LEVEL ${gameModeConfig.currentLevel}</strong> — ${ENVIRONMENTS[envIndex].name}! Goal: ${gameModeConfig.levelGoalTile * 2}m`, 'event');
     }
 
@@ -1503,30 +1541,50 @@
     const rumbleMatAlt = new THREE.MeshLambertMaterial({ color: env.rumbleAlt });
     const laneMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
+    function applyHillGeometry(geometry, chunkWorldZ) {
+      const pos = geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        // PlaneGeometry rotated -PI/2: vertex Y becomes world-Z relative to group, vertex Z (original) becomes Y
+        // But since we rotate the mesh, we work with the local coords pre-rotation
+        // For a PlaneGeometry(w, h) rotated -PI/2: local y → world z offset, local z → world y (unused before rotation)
+        // Actually: PlaneGeometry lies in XY plane. After rotation.x = -PI/2, local Y → -worldZ, local Z → worldY
+        // We set local Z to hill height so it becomes Y after rotation
+        const localY = pos.getY(i); // this is the Z-direction offset from chunk center
+        const worldZ = chunkWorldZ + localY; // localY spans -CHUNK_LENGTH/2 to +CHUNK_LENGTH/2
+        pos.setZ(i, getHillHeight(worldZ)); // this becomes Y after -PI/2 rotation
+      }
+      pos.needsUpdate = true;
+      geometry.computeVertexNormals();
+    }
+
+    const ROAD_SEGS = 20; // Z subdivisions for hill geometry
+
     function createRoadChunk(index) {
       const group = new THREE.Group();
       const isEven = index % 2 === 0;
 
-      // Road surface
-      const roadGeo = new THREE.PlaneGeometry(ROAD_WIDTH, CHUNK_LENGTH);
+      // Road surface — subdivided along Z for hills
+      const roadGeo = new THREE.PlaneGeometry(ROAD_WIDTH, CHUNK_LENGTH, 1, ROAD_SEGS);
       const road = new THREE.Mesh(roadGeo, isEven ? roadMat : roadMatAlt);
       road.rotation.x = -Math.PI / 2;
       road.position.y = 0.01;
       group.add(road);
 
-      // Rumble strips
-      const rumbleGeo = new THREE.PlaneGeometry(0.5, CHUNK_LENGTH);
+      // Rumble strips — also subdivided
+      const rumbleGeo = new THREE.PlaneGeometry(0.5, CHUNK_LENGTH, 1, ROAD_SEGS);
       const leftRumble = new THREE.Mesh(rumbleGeo, isEven ? rumbleMat : rumbleMatAlt);
       leftRumble.rotation.x = -Math.PI / 2;
       leftRumble.position.set(-ROAD_WIDTH / 2 - 0.25, 0.02, 0);
       group.add(leftRumble);
 
-      const rightRumble = new THREE.Mesh(rumbleGeo.clone(), isEven ? rumbleMat : rumbleMatAlt);
+      const rumbleGeo2 = new THREE.PlaneGeometry(0.5, CHUNK_LENGTH, 1, ROAD_SEGS);
+      const rightRumble = new THREE.Mesh(rumbleGeo2, isEven ? rumbleMat : rumbleMatAlt);
       rightRumble.rotation.x = -Math.PI / 2;
       rightRumble.position.set(ROAD_WIDTH / 2 + 0.25, 0.02, 0);
       group.add(rightRumble);
 
-      // Lane dividers (dashed)
+      // Lane dividers (dashed) — individual dashes follow hill height
+      const dashes = [];
       for (let l = 1; l < LANE_COUNT; l++) {
         const lx = -ROAD_WIDTH / 2 + l * LANE_WIDTH;
         for (let d = -CHUNK_LENGTH / 2; d < CHUNK_LENGTH / 2; d += 4) {
@@ -1534,12 +1592,24 @@
           const dash = new THREE.Mesh(dashGeo, laneMat);
           dash.rotation.x = -Math.PI / 2;
           dash.position.set(lx, 0.03, d);
+          dash.userData.localZ = d;
+          dashes.push(dash);
           group.add(dash);
         }
       }
 
-      group.position.z = index * CHUNK_LENGTH + CHUNK_LENGTH / 2;
-      group.userData = { chunkIndex: index };
+      const chunkWorldZ = index * CHUNK_LENGTH + CHUNK_LENGTH / 2;
+      group.position.z = chunkWorldZ;
+      group.userData = { chunkIndex: index, roadGeo, rumbleGeos: [rumbleGeo, rumbleGeo2], dashes };
+
+      // Apply hill geometry on creation
+      applyHillGeometry(roadGeo, chunkWorldZ);
+      applyHillGeometry(rumbleGeo, chunkWorldZ);
+      applyHillGeometry(rumbleGeo2, chunkWorldZ);
+      dashes.forEach(dash => {
+        dash.position.y = 0.03 + getHillHeight(chunkWorldZ + dash.userData.localZ);
+      });
+
       roadGroup.add(group);
       return group;
     }
@@ -1726,6 +1796,7 @@
         pm.mesh.visible = true;
         pm.mesh.position.x = getLaneX(pu.lane);
         pm.mesh.position.z = worldZ;
+        pm.mesh.position.y = getHillHeight(worldZ);
         // Floating bob + spin
         const ud = pm.mesh.userData;
         ud.gem.rotation.y = now * 0.003;
@@ -2330,7 +2401,7 @@
         pm.mesh.visible = true;
         pm.mesh.position.x = getLaneX(obs.lane);
         pm.mesh.position.z = worldZ;
-        pm.mesh.position.y = 0;
+        pm.mesh.position.y = getHillHeight(worldZ);
       }
     }
 
@@ -2427,16 +2498,21 @@
         animateMount(ud, ud.animPhase, idle * 0.3, dt);
       }
 
+      // Base Y from hills
+      const hillY = getHillHeight(p.mesh.position.z);
+
       // Jump arc
       if (p.isJumping) {
         const elapsed = now - p.jumpStart;
         if (elapsed >= JUMP_DURATION) {
           p.isJumping = false;
-          p.mesh.position.y = 0;
+          p.mesh.position.y = hillY;
         } else {
           const t = elapsed / JUMP_DURATION;
-          p.mesh.position.y = Math.sin(t * Math.PI) * 2.5;
+          p.mesh.position.y = hillY + Math.sin(t * Math.PI) * 2.5;
         }
+      } else if (!p.isStunned) {
+        p.mesh.position.y = hillY;
       }
 
       // Stun wobble
@@ -2497,7 +2573,8 @@
       // Target: look at leader, positioned behind (portrait-aware)
       const co = getCameraOffset();
       const targetZ = leader + co.z;
-      const targetY = co.y + players.size * 0.05; // rise slightly with more players
+      const hillOffset = getHillHeight(leader);
+      const targetY = co.y + players.size * 0.05 + hillOffset; // rise slightly with more players + follow hills
 
       camera.position.z += (targetZ - camera.position.z) * Math.min(1, dt * 2);
       camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 2);
@@ -2508,7 +2585,8 @@
         camera.position.y += (Math.random() - 0.5) * cameraShakeAmount * 0.3;
       }
 
-      camera.lookAt(0, co.lookY, camera.position.z + co.lookZ);
+      const lookHillY = getHillHeight(camera.position.z + co.lookZ);
+      camera.lookAt(0, co.lookY + lookHillY, camera.position.z + co.lookZ);
 
       cameraTargetZ = camera.position.z;
     }
@@ -2521,9 +2599,17 @@
       for (const chunk of roadChunks) {
         const chunkZ = chunk.position.z;
         if (chunkZ < camZ - CHUNK_LENGTH * 2) {
-          chunk.position.z = nextChunkIndex * CHUNK_LENGTH + CHUNK_LENGTH / 2;
+          const newZ = nextChunkIndex * CHUNK_LENGTH + CHUNK_LENGTH / 2;
+          chunk.position.z = newZ;
           chunk.userData.chunkIndex = nextChunkIndex;
           nextChunkIndex++;
+          // Re-apply hill geometry for new position
+          const ud = chunk.userData;
+          if (ud.roadGeo) applyHillGeometry(ud.roadGeo, newZ);
+          if (ud.rumbleGeos) ud.rumbleGeos.forEach(g => applyHillGeometry(g, newZ));
+          if (ud.dashes) ud.dashes.forEach(dash => {
+            dash.position.y = 0.03 + getHillHeight(newZ + dash.userData.localZ);
+          });
         }
       }
     }
@@ -2536,6 +2622,8 @@
           obj.position.z += MAX_SCENERY * 6;
           obj.userData.baseZ = obj.position.z;
         }
+        // Scenery follows hill height
+        obj.position.y = getHillHeight(obj.position.z);
       }
     }
 
@@ -2809,7 +2897,6 @@
     });
 
     // State sync — viewer applies positions/mounts from host
-    const isViewerMode = document.body.classList.contains('viewer-mode');
     socket.on('state-sync', (state) => {
       if (!isViewerMode) return; // only viewers apply sync
       if (!state || !state.players) return;
@@ -2825,6 +2912,19 @@
           swapMount(p, sp.mountType);
         }
       });
+      // Sync hills state
+      if (state.hillsEnabled !== undefined && state.hillsEnabled !== hillsEnabled) {
+        hillsEnabled = state.hillsEnabled;
+        for (const chunk of roadChunks) {
+          const ud = chunk.userData;
+          const cz = chunk.position.z;
+          if (ud.roadGeo) applyHillGeometry(ud.roadGeo, cz);
+          if (ud.rumbleGeos) ud.rumbleGeos.forEach(g => applyHillGeometry(g, cz));
+          if (ud.dashes) ud.dashes.forEach(dash => {
+            dash.position.y = 0.03 + getHillHeight(cz + dash.userData.localZ);
+          });
+        }
+      }
     });
 
     socket.on('chat', (data) => {
@@ -3071,7 +3171,10 @@
       if (!frozen) {
         players.forEach(p => {
           if (!p.isStunned) {
-            p.targetTile += dt * 0.4; // ~0.4 tiles/sec base drift
+            // Hill slope affects speed: uphill slow, downhill fast
+            const slope = getHillSlope(p.tilePos * TILE);
+            const hillMod = Math.max(0.3, Math.min(2.0, 1.0 - slope * 8));
+            p.targetTile += dt * 0.4 * hillMod; // ~0.4 tiles/sec base drift
           }
         });
       }
@@ -3145,7 +3248,7 @@
         syncTimer = 0;
         const statePayload = [];
         players.forEach(p => statePayload.push({ id: p.id, tilePos: p.tilePos, lane: p.lane, mountType: p.mountType || 0 }));
-        _hostSocket.emit('state-sync', { players: statePayload, envIndex, gameMode });
+        _hostSocket.emit('state-sync', { players: statePayload, envIndex, gameMode, hillsEnabled });
       }
 
       renderer.render(scene, camera);
