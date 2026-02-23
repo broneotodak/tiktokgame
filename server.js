@@ -73,11 +73,22 @@ function connectToTikTok(username) {
   function extractUser(data) {
     // v2 API: user data may be nested under different structures
     const user = data.user || data;
+    // Profile pic can be in many places depending on API version
+    const profilePic = user.profilePicture?.url?.[0]
+      || user.profilePicture?.urls?.[0]
+      || user.profilePictureUrl
+      || user.avatarThumb?.url?.[0]
+      || user.avatarThumb?.urls?.[0]
+      || user.avatarMedium?.url?.[0]
+      || user.avatar_thumb?.url_list?.[0]
+      || user.avatarUrl
+      || '';
+    if (profilePic) console.log(`📷 ${user.uniqueId || user.nickname} pic: ${profilePic.slice(0, 60)}...`);
     return {
       id: (user.userId || user.uniqueId || '')?.toString(),
       uniqueId: user.uniqueId || '',
       nickname: user.nickname || user.uniqueId || 'Unknown',
-      profilePic: user.profilePicture?.url?.[0] || user.profilePictureUrl || '',
+      profilePic,
       isFollower: (user.followRole || 0) >= 1,
       isModerator: user.isModerator || false,
     };

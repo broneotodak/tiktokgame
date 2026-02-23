@@ -1306,8 +1306,8 @@
     }
 
     // ===== INACTIVE PLAYER CLEANUP =====
-    const INACTIVE_FADE_START = 20000;  // start fading after 20s inactive
-    const INACTIVE_REMOVE = 30000;      // remove after 30s inactive
+    const INACTIVE_FADE_START = 180000; // start fading after 3 min inactive
+    const INACTIVE_REMOVE = 300000;     // remove after 5 min inactive
 
     function cleanupInactivePlayers(now) {
       const toRemove = [];
