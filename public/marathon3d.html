@@ -15,7 +15,7 @@
     body.portrait-mode #game-canvas { width: 100%; height: 100%; }
     body.portrait-mode .hud { left: 0; right: 0; }
     body.portrait-mode .env-badge { left: 50%; }
-    body.portrait-mode .banner-area { left: 0; right: 0; top: 110px; }
+    body.portrait-mode .banner-area { left: 0; right: 0; }
     body.portrait-mode .host-dashboard { width: 260px; }
     body.portrait-mode .host-dash-toggle.shifted { right: 260px; }
     body.portrait-mode .host-controls { left: 50%; }
@@ -45,18 +45,18 @@
     .podium-avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid #fff; flex-shrink: 0; }
     .podium-dist { font-weight: 700; color: #25f4ee; font-variant-numeric: tabular-nums; }
 
-    /* Full-width banner notification — below podium */
-    .banner-area { position: absolute; top: 120px; left: 0; right: 0; z-index: 99; pointer-events: none; display: flex; flex-direction: column; align-items: stretch; gap: 0; }
-    .banner { width: 100%; padding: 10px 20px; background: rgba(0,0,0,0.85); backdrop-filter: blur(12px); color: #fff; font-size: 16px; font-weight: 600; text-align: center; line-height: 1.4; animation: bannerIn 0.35s ease-out, bannerOut 0.5s ease-in 3.2s forwards; border-bottom: 2px solid rgba(255,255,255,0.08); }
+    /* Full-width banner notification — center of screen */
+    .banner-area { position: absolute; top: 50%; left: 0; right: 0; z-index: 150; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 6px; transform: translateY(-50%); }
+    .banner { width: 90%; max-width: 500px; padding: 14px 24px; background: rgba(0,0,0,0.88); backdrop-filter: blur(14px); border-radius: 14px; color: #fff; font-size: 18px; font-weight: 700; text-align: center; line-height: 1.4; animation: bannerIn 0.35s ease-out, bannerOut 0.5s ease-in 3.2s forwards; border: 1px solid rgba(255,255,255,0.15); text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
     .banner strong { color: #25f4ee; }
-    .banner.gift { background: linear-gradient(90deg, rgba(254,44,85,0.3), rgba(0,0,0,0.85), rgba(254,44,85,0.3)); border-bottom-color: rgba(254,44,85,0.4); }
+    .banner.gift { border-color: rgba(254,44,85,0.5); background: rgba(254,44,85,0.25); }
     .banner.gift strong { color: #fe2c55; }
-    .banner.tip { background: linear-gradient(90deg, rgba(37,244,238,0.15), rgba(0,0,0,0.85), rgba(37,244,238,0.15)); border-bottom-color: rgba(37,244,238,0.3); animation: bannerIn 0.35s ease-out, bannerOut 0.5s ease-in 5.5s forwards; }
+    .banner.tip { border-color: rgba(37,244,238,0.4); background: rgba(37,244,238,0.15); animation: bannerIn 0.35s ease-out, bannerOut 0.5s ease-in 5.5s forwards; }
     .banner.tip strong { color: #ffd700; }
-    .banner.event { background: linear-gradient(90deg, rgba(255,200,0,0.25), rgba(0,0,0,0.85), rgba(255,200,0,0.25)); border-bottom-color: rgba(255,200,0,0.4); font-size: 18px; }
+    .banner.event { border-color: rgba(255,200,0,0.5); background: rgba(255,200,0,0.2); font-size: 20px; }
     .banner.event strong { color: #ffd700; }
-    @keyframes bannerIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes bannerOut { to { opacity: 0; } }
+    @keyframes bannerIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+    @keyframes bannerOut { to { opacity: 0; transform: scale(0.95); } }
 
     /* Host Dashboard Panel */
     .host-dashboard { position: absolute; top: 0; right: 0; bottom: 0; width: 280px; z-index: 300; background: rgba(10,10,30,0.95); backdrop-filter: blur(16px); border-left: 1px solid rgba(255,255,255,0.1); transform: translateX(100%); transition: transform 0.3s ease; overflow-y: auto; pointer-events: auto; }
@@ -130,8 +130,7 @@
       .podium-row { padding: 3px 8px; font-size: 11px; }
       .podium-title { font-size: 10px; padding: 3px 8px; }
       .env-badge { font-size: 11px; padding: 4px 12px; top: 8px; }
-      .banner-area { top: 100px; }
-      .banner { font-size: 14px; padding: 8px 14px; }
+      .banner { font-size: 16px; padding: 12px 18px; }
       .host-dashboard { width: 240px; }
       .host-dash-toggle.shifted { right: 240px; }
       .host-controls { bottom: 55px; gap: 4px; }
