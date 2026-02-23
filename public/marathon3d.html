@@ -339,25 +339,13 @@
     const powerupMeshPool = [];
     let lastPowerupTile = 10;
 
-    // ===== GUIDE AUTO-HIDE =====
+    // ===== GUIDE (always visible, host can toggle) =====
     let guideVisible = true;
-    setTimeout(() => {
-      document.getElementById('gameGuide').classList.add('hidden');
-      document.getElementById('guideShowBtn').classList.add('visible');
-      guideVisible = false;
-    }, 8000);
 
     window.toggleGuide = function() {
       guideVisible = !guideVisible;
       document.getElementById('gameGuide').classList.toggle('hidden', !guideVisible);
       document.getElementById('guideShowBtn').classList.toggle('visible', !guideVisible);
-      if (guideVisible) {
-        setTimeout(() => {
-          document.getElementById('gameGuide').classList.add('hidden');
-          document.getElementById('guideShowBtn').classList.add('visible');
-          guideVisible = false;
-        }, 6000);
-      }
     };
 
     // ===== THREE.JS SETUP =====
