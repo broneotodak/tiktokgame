@@ -328,7 +328,8 @@ const BOT_USERS = [
 const BOT_CHATS = [
   'lets go!', 'woooo!', 'nice!', 'hahaha', 'gg bro',
   'so cool!', 'faster faster!', 'nooo obstacle!', 'love this game',
-  'jump!', 'left left!', 'right right!', 'I\'m winning!',
+  'gogogogo!', 'semangat!', 'bestnya!', 'I\'m winning!',
+  'wahh pro!', 'lajunyaaa', 'sikit lagi!', 'terbaik bro!',
 ];
 
 let botInterval = null;
