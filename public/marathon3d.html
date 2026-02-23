@@ -249,7 +249,8 @@
         <div class="dash-action-list">
           <button class="dash-action-btn" onclick="dashBoostAll()"><span class="action-icon">⚡</span> Boost ALL +10 tiles</button>
           <button class="dash-action-btn" onclick="dashShuffleAll()"><span class="action-icon">🔀</span> Shuffle All Lanes</button>
-          <button class="dash-action-btn" onclick="toggleDemo()"><span class="action-icon">🤖</span> Toggle Demo Mode</button>
+          <button class="dash-action-btn" id="btnBots" onclick="toggleBots()"><span class="action-icon">🤖</span> Add Bots</button>
+          <button class="dash-action-btn" onclick="toggleDemo()"><span class="action-icon">🎮</span> Demo Mode (offline)</button>
           <button class="dash-action-btn" onclick="nextEnvironment()"><span class="action-icon">🌍</span> Change Environment</button>
           <button class="dash-action-btn" id="hillsToggleBtn" onclick="dashToggleHills()">🛣️ Hills: OFF</button>
           <button class="dash-action-btn danger" onclick="dashResetPositions()"><span class="action-icon">🔄</span> Reset All Positions</button>
@@ -3186,6 +3187,35 @@
         updateHUD();
       }
     };
+
+    let botsActive = false;
+    window.toggleBots = function() {
+      botsActive = !botsActive;
+      const btn = document.getElementById('btnBots');
+      if (botsActive) {
+        socket.emit('start-bots');
+        btn.innerHTML = '<span class="action-icon">🤖</span> Remove Bots';
+        btn.style.borderColor = '#fe2c55';
+        showNotif('🤖 <strong>Bots added!</strong> Extra players joining the race.', 'event');
+      } else {
+        socket.emit('stop-bots');
+        btn.innerHTML = '<span class="action-icon">🤖</span> Add Bots';
+        btn.style.borderColor = '';
+        showNotif('🤖 <strong>Bots removed!</strong>', 'event');
+      }
+    };
+
+    // Remove bot players when server tells us
+    socket.on('bots-removed', (botIds) => {
+      botIds.forEach(id => {
+        const p = players.get(id);
+        if (p) {
+          if (p.mesh) playersGroup.remove(p.mesh);
+          players.delete(id);
+        }
+      });
+      updateHUD();
+    });
 
     window.showConnectModal = function() {
       document.getElementById('connectModal').classList.add('visible');

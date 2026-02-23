@@ -306,10 +306,92 @@ function stopDemo() {
   demoInterval = null;
   if (demoJoinTimer) clearTimeout(demoJoinTimer);
   demoJoinTimer = null;
-  viewers.clear();
+  // Remove only demo users (id starts with 'd'), not bots or real users
+  DEMO_USERS.forEach(u => viewers.delete(u.id));
   connectionState = { connected: false, roomId: null, error: null };
   io.emit('connection-status', connectionState);
   console.log('🛑 Demo mode stopped');
+}
+
+// ===== Bot Mode (runs alongside live) =====
+const BOT_USERS = [
+  { id: 'bot_1', uniqueId: 'bot_gamer99', nickname: '🤖 GamerBot', isFollower: true, isModerator: false },
+  { id: 'bot_2', uniqueId: 'bot_techbro', nickname: '🤖 TechBot', isFollower: false, isModerator: false },
+  { id: 'bot_3', uniqueId: 'bot_todakfan', nickname: '🤖 TodakBot', isFollower: true, isModerator: false },
+  { id: 'bot_4', uniqueId: 'bot_sniper', nickname: '🤖 SniperBot', isFollower: false, isModerator: false },
+  { id: 'bot_5', uniqueId: 'bot_neon', nickname: '🤖 NeonBot', isFollower: true, isModerator: false },
+  { id: 'bot_6', uniqueId: 'bot_foodie', nickname: '🤖 FoodieBot', isFollower: false, isModerator: false },
+  { id: 'bot_7', uniqueId: 'bot_dev', nickname: '🤖 DevBot', isFollower: true, isModerator: false },
+  { id: 'bot_8', uniqueId: 'bot_alumni', nickname: '🤖 AlumniBot', isFollower: true, isModerator: false },
+];
+
+const BOT_CHATS = [
+  'lets go!', 'woooo!', 'nice!', 'hahaha', 'gg bro',
+  'so cool!', 'faster faster!', 'nooo obstacle!', 'love this game',
+  'jump!', 'left left!', 'right right!', 'I\'m winning!',
+];
+
+let botInterval = null;
+let botJoinTimer = null;
+let botActive = false;
+let botJoinIdx = 0;
+
+function startBots() {
+  if (botActive) return;
+  botActive = true;
+  botJoinIdx = 0;
+  console.log('🤖 Bot mode started — adding bots alongside live');
+
+  // Stagger bot joins every 1-3 seconds
+  function scheduleNextBot() {
+    if (!botActive || botJoinIdx >= BOT_USERS.length) return;
+    const delay = 1000 + Math.random() * 2000;
+    botJoinTimer = setTimeout(() => {
+      if (!botActive) return;
+      const user = BOT_USERS[botJoinIdx++];
+      const viewer = { ...user, profilePic: '', joinedAt: Date.now() };
+      viewers.set(viewer.id, viewer);
+      io.emit('viewer-join', viewer);
+      scheduleNextBot();
+    }, delay);
+  }
+  scheduleNextBot();
+
+  // Bots do random actions every 2-5 seconds
+  botInterval = setInterval(() => {
+    if (!botActive) return;
+    const bots = BOT_USERS.filter(b => viewers.has(b.id));
+    if (bots.length === 0) return;
+
+    const bot = bots[Math.floor(Math.random() * bots.length)];
+    const roll = Math.random();
+
+    if (roll < 0.5) {
+      // Chat
+      const comment = BOT_CHATS[Math.floor(Math.random() * BOT_CHATS.length)];
+      io.emit('chat', { ...bot, profilePic: '', comment, timestamp: Date.now() });
+    } else if (roll < 0.85) {
+      // Like
+      io.emit('like', { ...bot, profilePic: '', likeCount: Math.floor(Math.random() * 3) + 1, totalLikes: Math.floor(Math.random() * 200), timestamp: Date.now() });
+    } else {
+      // Gift
+      const giftName = DEMO_GIFTS[Math.floor(Math.random() * DEMO_GIFTS.length)];
+      io.emit('gift', { ...bot, profilePic: '', giftName, giftId: Date.now(), diamondCount: Math.floor(Math.random() * 50) + 1, repeatCount: 1, giftPictureUrl: '', timestamp: Date.now() });
+    }
+  }, 2000 + Math.random() * 3000);
+}
+
+function stopBots() {
+  botActive = false;
+  if (botInterval) clearInterval(botInterval);
+  botInterval = null;
+  if (botJoinTimer) clearTimeout(botJoinTimer);
+  botJoinTimer = null;
+  // Remove only bot viewers from server tracking
+  BOT_USERS.forEach(b => viewers.delete(b.id));
+  // Tell clients to remove bots
+  io.emit('bots-removed', BOT_USERS.map(b => b.id));
+  console.log('🛑 Bots removed');
 }
 
 // Socket.IO connection handling
@@ -323,6 +405,7 @@ io.on('connection', (socket) => {
   // Allow browser to trigger connection with custom username
   socket.on('connect-tiktok', (username) => {
     stopDemo();
+    stopBots();
     if (tiktokConnection) {
       try { tiktokConnection.disconnect(); } catch (e) { /* ignore */ }
     }
@@ -330,9 +413,10 @@ io.on('connection', (socket) => {
     connectToTikTok(username || USERNAME);
   });
 
-  // Demo mode toggle
+  // Demo mode toggle (standalone — disconnects live + removes bots)
   socket.on('start-demo', () => {
     stopDemo();
+    stopBots();
     if (tiktokConnection) {
       try { tiktokConnection.disconnect(); } catch (e) { /* ignore */ }
       tiktokConnection = null;
@@ -343,6 +427,14 @@ io.on('connection', (socket) => {
 
   socket.on('stop-demo', () => {
     stopDemo();
+  });
+
+  // Bot mode — runs alongside live connection
+  socket.on('start-bots', () => {
+    startBots();
+  });
+  socket.on('stop-bots', () => {
+    stopBots();
   });
 
   // Host dashboard commands — broadcast to ALL clients (including viewers)
