@@ -889,66 +889,77 @@
       });
     })();
 
-    window.dashSetMountAll = function(mountIdx) {
-      let count = 0;
-      players.forEach(p => {
-        if (p.mesh && p.mesh.userData.mountTypeIndex !== mountIdx) {
-          swapMount(p, mountIdx);
-          count++;
-        }
-      });
-      const mt = MOUNT_TYPES[mountIdx];
-      showNotif(`${mt.icon} Host changed ALL ${count} riders to <strong>${mt.name}</strong>!`, 'event');
-    };
+    // Dashboard actions — emit via socket so ALL tabs sync
+    function emitHostCmd(action, data) {
+      const sock = typeof socket !== 'undefined' ? socket : null;
+      if (sock) sock.emit('host-command', { action, data });
+    }
 
-    window.dashRandomMountAll = function() {
-      let count = 0;
-      players.forEach(p => {
-        if (p.mesh) {
-          swapMount(p, Math.floor(Math.random() * MOUNT_TYPES.length));
-          count++;
-        }
-      });
-      showNotif(`🎲 Host gave <strong>${count} riders</strong> random mounts!`, 'event');
-    };
+    window.dashSetMountAll = function(mountIdx) { emitHostCmd('mount-all', { mountIdx }); };
+    window.dashRandomMountAll = function() { emitHostCmd('mount-random-all', {}); };
+    window.dashRandomMountLeader = function() { emitHostCmd('mount-random-leader', {}); };
+    window.dashTriggerEvent = function(evtKey) { emitHostCmd('trigger-event', { evtKey }); };
+    window.dashBoostAll = function() { emitHostCmd('boost-all', { amount: 10 }); };
+    window.dashShuffleAll = function() { emitHostCmd('shuffle-all', {}); };
+    window.dashResetPositions = function() { emitHostCmd('reset-positions', {}); };
 
-    window.dashRandomMountLeader = function() {
-      let leader = null, best = -1;
-      players.forEach(p => { if (p.tilePos > best) { best = p.tilePos; leader = p; } });
-      if (leader && leader.mesh) {
-        const idx = swapMount(leader, Math.floor(Math.random() * MOUNT_TYPES.length));
-        const mt = MOUNT_TYPES[idx];
-        showNotif(`🏆 Host gave leader <strong>${leader.nickname}</strong> a ${mt.icon} <strong>${mt.name}</strong>!`, 'event');
+    // Execute host commands locally (called by socket listener for ALL clients)
+    function executeHostCommand(cmd) {
+      const { action, data } = cmd;
+      switch (action) {
+        case 'mount-all': {
+          let count = 0;
+          players.forEach(p => { if (p.mesh) { swapMount(p, data.mountIdx); count++; } });
+          const mt = MOUNT_TYPES[data.mountIdx];
+          showNotif(`${mt.icon} Host changed ALL ${count} riders to <strong>${mt.name}</strong>!`, 'event');
+          break;
+        }
+        case 'mount-random-all': {
+          let count = 0;
+          players.forEach(p => { if (p.mesh) { swapMount(p, Math.floor(Math.random() * MOUNT_TYPES.length)); count++; } });
+          showNotif(`🎲 Host gave <strong>${count} riders</strong> random mounts!`, 'event');
+          break;
+        }
+        case 'mount-random-leader': {
+          let leader = null, best = -1;
+          players.forEach(p => { if (p.tilePos > best) { best = p.tilePos; leader = p; } });
+          if (leader && leader.mesh) {
+            const idx = swapMount(leader, Math.floor(Math.random() * MOUNT_TYPES.length));
+            const mt = MOUNT_TYPES[idx];
+            showNotif(`🏆 Host gave leader <strong>${leader.nickname}</strong> a ${mt.icon} <strong>${mt.name}</strong>!`, 'event');
+          }
+          break;
+        }
+        case 'trigger-event': {
+          const map = { dragon: 0, meteor: 1, speed: 2, quake: 3 };
+          const evt = RANDOM_EVENTS[map[data.evtKey] || 0];
+          triggerRandomEvent(evt, 'Host');
+          break;
+        }
+        case 'boost-all': {
+          let count = 0;
+          players.forEach(p => { p.tilePos += (data.amount || 10); count++; });
+          showNotif(`⚡ Host boosted ALL <strong>${count} runners</strong> +${data.amount || 10} tiles!`, 'event');
+          break;
+        }
+        case 'shuffle-all': {
+          players.forEach(p => {
+            if (p.mesh) {
+              const lane = Math.floor(Math.random() * LANE_COUNT);
+              p.lane = lane;
+              p.mesh.position.x = getLaneX(lane);
+            }
+          });
+          showNotif(`🔀 Host shuffled all runners to random lanes!`, 'event');
+          break;
+        }
+        case 'reset-positions': {
+          players.forEach(p => { p.tilePos = 0; });
+          showNotif(`🔄 Host <strong>reset</strong> all positions to 0!`, 'gift');
+          break;
+        }
       }
-    };
-
-    window.dashTriggerEvent = function(evtKey) {
-      const map = { dragon: 0, meteor: 1, speed: 2, quake: 3 };
-      const evt = RANDOM_EVENTS[map[evtKey] || 0];
-      triggerRandomEvent(evt, 'Host');
-    };
-
-    window.dashBoostAll = function() {
-      let count = 0;
-      players.forEach(p => { p.tilePos += 10; count++; });
-      showNotif(`⚡ Host boosted ALL <strong>${count} runners</strong> +10 tiles!`, 'event');
-    };
-
-    window.dashShuffleAll = function() {
-      players.forEach(p => {
-        if (p.mesh) {
-          const lane = Math.floor(Math.random() * LANE_COUNT);
-          p.lane = lane;
-          p.mesh.position.x = getLaneX(lane);
-        }
-      });
-      showNotif(`🔀 Host shuffled all runners to random lanes!`, 'event');
-    };
-
-    window.dashResetPositions = function() {
-      players.forEach(p => { p.tilePos = 0; });
-      showNotif(`🔄 Host <strong>reset</strong> all positions to 0!`, 'gift');
-    };
+    }
 
     // ===== THREE.JS SETUP =====
     const canvas = document.getElementById('game-canvas');
@@ -2528,6 +2539,11 @@
     });
 
     socket.on('connection-status', () => {});
+
+    // Host dashboard commands — synced across all tabs
+    socket.on('host-command', (cmd) => {
+      executeHostCommand(cmd);
+    });
 
     socket.on('chat', (data) => {
       const p = addPlayer(data);

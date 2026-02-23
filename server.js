@@ -327,6 +327,12 @@ io.on('connection', (socket) => {
     stopDemo();
   });
 
+  // Host dashboard commands — broadcast to ALL clients (including viewers)
+  socket.on('host-command', (cmd) => {
+    console.log(`🎛️ Host command: ${cmd.action}`, cmd.data || '');
+    io.emit('host-command', cmd);
+  });
+
   socket.on('disconnect', () => {
     console.log('🔌 Browser client disconnected');
   });
