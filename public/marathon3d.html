@@ -35,20 +35,29 @@
     @keyframes slideIn { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } }
     @keyframes fadeOut { to { opacity: 0; transform: translateX(-20px); } }
 
-    /* Game guide bar */
-    .game-guide { position: absolute; bottom: 0; left: 0; right: 0; z-index: 100; pointer-events: none; }
-    .guide-bar { display: flex; gap: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; justify-content: center; }
-    .guide-section { display: flex; align-items: center; gap: 6px; padding: 4px 14px; border-right: 1px solid rgba(255,255,255,0.08); white-space: nowrap; }
+    /* Game guide bar - auto-hides after 8s, tap to toggle */
+    .game-guide { position: absolute; bottom: 0; left: 0; right: 0; z-index: 100; pointer-events: auto; transition: transform 0.4s ease, opacity 0.4s ease; }
+    .game-guide.hidden { transform: translateY(100%); opacity: 0; pointer-events: none; }
+    .guide-bar { display: flex; gap: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.1); padding: 6px 8px; justify-content: center; flex-wrap: wrap; }
+    .guide-section { display: flex; align-items: center; gap: 4px; padding: 3px 10px; border-right: 1px solid rgba(255,255,255,0.08); white-space: nowrap; }
     .guide-section:last-child { border-right: none; }
-    .guide-section .g-emoji { font-size: 20px; }
-    .guide-section .g-label { font-size: 12px; color: #fff; font-weight: 600; }
-    .guide-section .g-sub { font-size: 10px; color: #888; }
-    .guide-section.guide-highlight { background: linear-gradient(135deg, rgba(254,44,85,0.25), rgba(37,244,238,0.15)); border-radius: 12px; border-right: none; margin: 0 4px; }
+    .guide-section .g-emoji { font-size: 16px; }
+    .guide-section .g-label { font-size: 11px; color: #fff; font-weight: 600; }
+    .guide-section .g-sub { font-size: 9px; color: #888; display: none; }
+    @media (min-width: 640px) { .guide-section .g-sub { display: inline; } .guide-section .g-emoji { font-size: 20px; } .guide-section .g-label { font-size: 12px; } }
+    .guide-section.guide-highlight { background: linear-gradient(135deg, rgba(254,44,85,0.25), rgba(37,244,238,0.15)); border-radius: 12px; border-right: none; margin: 0 2px; }
+    .guide-show-btn { position: absolute; bottom: 8px; right: 8px; z-index: 101; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.6); border: 1px solid #444; color: #fff; font-size: 14px; cursor: pointer; display: none; align-items: center; justify-content: center; pointer-events: auto; }
+    .guide-show-btn.visible { display: flex; }
 
     /* Host controls - hidden for viewers via ?view param */
-    .host-controls { position: absolute; bottom: 55px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; gap: 8px; }
+    .host-controls { position: absolute; bottom: 45px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
     body.viewer-mode .host-controls { display: none; }
-    body.viewer-mode .game-guide .guide-bar { padding: 6px 12px; }
+    body.viewer-mode .game-guide.hidden + .guide-show-btn { bottom: 8px; }
+
+    /* Power-up notification */
+    .powerup-notif { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; pointer-events: none; font-size: 28px; font-weight: 900; color: #fff; text-shadow: 0 0 20px rgba(255,200,0,0.8), 0 2px 4px rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.2s; }
+    .powerup-notif.show { opacity: 1; animation: powerPop 1.2s ease-out forwards; }
+    @keyframes powerPop { 0% { transform: translate(-50%,-50%) scale(0.5); opacity: 0; } 15% { transform: translate(-50%,-50%) scale(1.2); opacity: 1; } 30% { transform: translate(-50%,-50%) scale(1); } 100% { transform: translate(-50%,-70%) scale(1); opacity: 0; } }
 
     /* Gift burst overlay flash */
     .gift-flash { position: fixed; inset: 0; pointer-events: none; z-index: 50; opacity: 0; transition: opacity 0.1s; }
@@ -98,15 +107,17 @@
     <button class="host-btn" onclick="showConnectModal()">Connect TikTok</button>
   </div>
 
-  <!-- Guide bar -->
-  <div class="game-guide">
+  <!-- Guide bar (auto-hides after 8s) -->
+  <div class="game-guide" id="gameGuide">
     <div class="guide-bar">
-      <div class="guide-section guide-highlight"><span class="g-emoji">🎁</span><span class="g-label">Gift = Run</span><span class="g-sub">forward steps</span></div>
-      <div class="guide-section"><span class="g-emoji">❤️</span><span class="g-label">Like = Jump</span><span class="g-sub">avoid obstacles</span></div>
-      <div class="guide-section"><span class="g-emoji">⭐</span><span class="g-label">Follow = +3</span><span class="g-sub">bonus boost</span></div>
-      <div class="guide-section"><span class="g-emoji">🪨</span><span class="g-label">Obstacles</span><span class="g-sub">dodge or jump!</span></div>
+      <div class="guide-section guide-highlight"><span class="g-emoji">🎁</span><span class="g-label">Gift = Run</span><span class="g-sub">forward</span></div>
+      <div class="guide-section"><span class="g-emoji">❤️</span><span class="g-label">Like = Jump</span><span class="g-sub">dodge</span></div>
+      <div class="guide-section"><span class="g-emoji">⭐</span><span class="g-label">Follow = +3</span><span class="g-sub">boost</span></div>
+      <div class="guide-section"><span class="g-emoji">⚡</span><span class="g-label">Power-ups</span><span class="g-sub">run over!</span></div>
     </div>
   </div>
+  <button class="guide-show-btn" id="guideShowBtn" onclick="toggleGuide()">?</button>
+  <div class="powerup-notif" id="powerupNotif"></div>
 
   <!-- Connect Modal -->
   <div class="modal-overlay" id="connectModal">
@@ -228,6 +239,101 @@
       trailMeta.push({ life: 0, maxLife: 0 });
     }
     let nextTrail = 0;
+
+    // ===== SOUND ENGINE (Web Audio API, no files) =====
+    let audioCtx = null;
+    function getAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }
+    // Unlock audio on first interaction
+    document.addEventListener('click', () => { getAudio(); }, { once: true });
+
+    function playTone(freq, duration, type = 'sine', vol = 0.15) {
+      try {
+        const ctx = getAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      } catch(e) {}
+    }
+
+    function sfxGift(diamonds) {
+      // Rising arpeggio, higher notes for bigger gifts
+      const base = 400 + Math.min(diamonds, 100) * 3;
+      playTone(base, 0.12, 'sine', 0.12);
+      setTimeout(() => playTone(base * 1.25, 0.12, 'sine', 0.10), 60);
+      setTimeout(() => playTone(base * 1.5, 0.15, 'sine', 0.10), 120);
+      if (diamonds > 20) setTimeout(() => playTone(base * 2, 0.2, 'triangle', 0.08), 180);
+    }
+
+    function sfxJump() {
+      playTone(300, 0.08, 'sine', 0.10);
+      setTimeout(() => playTone(500, 0.1, 'sine', 0.08), 50);
+    }
+
+    function sfxHit() {
+      playTone(150, 0.15, 'sawtooth', 0.12);
+      setTimeout(() => playTone(100, 0.2, 'sawtooth', 0.10), 80);
+    }
+
+    function sfxFollow() {
+      playTone(500, 0.1, 'sine', 0.10);
+      setTimeout(() => playTone(600, 0.1, 'sine', 0.10), 80);
+      setTimeout(() => playTone(800, 0.15, 'triangle', 0.08), 160);
+    }
+
+    function sfxPowerup() {
+      playTone(600, 0.08, 'sine', 0.12);
+      setTimeout(() => playTone(800, 0.08, 'sine', 0.10), 70);
+      setTimeout(() => playTone(1000, 0.08, 'sine', 0.10), 140);
+      setTimeout(() => playTone(1200, 0.15, 'triangle', 0.08), 210);
+    }
+
+    function sfxJoin() {
+      playTone(440, 0.1, 'sine', 0.06);
+      setTimeout(() => playTone(550, 0.12, 'sine', 0.05), 100);
+    }
+
+    // ===== POWER-UP SYSTEM =====
+    const POWERUP_TYPES = [
+      { name: 'Speed Boost', icon: 'bolt', color: 0xffaa00, effect: 'speed', desc: '+5 tiles forward!' },
+      { name: 'Shield', icon: 'shield', color: 0x44aaff, effect: 'shield', desc: 'Block next obstacle!' },
+      { name: 'Lightning', icon: 'zap', color: 0xaa44ff, effect: 'lightning', desc: 'Stuns nearby runner!' },
+      { name: 'Magnet', icon: 'magnet', color: 0xff44aa, effect: 'magnet', desc: 'Pulls to best lane!' },
+    ];
+    const MAX_POWERUPS = 15;
+    const activePowerups = []; // { tile, lane, typeIndex, mesh }
+    const powerupMeshPool = [];
+    let lastPowerupTile = 10;
+
+    // ===== GUIDE AUTO-HIDE =====
+    let guideVisible = true;
+    setTimeout(() => {
+      document.getElementById('gameGuide').classList.add('hidden');
+      document.getElementById('guideShowBtn').classList.add('visible');
+      guideVisible = false;
+    }, 8000);
+
+    window.toggleGuide = function() {
+      guideVisible = !guideVisible;
+      document.getElementById('gameGuide').classList.toggle('hidden', !guideVisible);
+      document.getElementById('guideShowBtn').classList.toggle('visible', !guideVisible);
+      if (guideVisible) {
+        setTimeout(() => {
+          document.getElementById('gameGuide').classList.add('hidden');
+          document.getElementById('guideShowBtn').classList.add('visible');
+          guideVisible = false;
+        }, 6000);
+      }
+    };
 
     // ===== THREE.JS SETUP =====
     const canvas = document.getElementById('game-canvas');
@@ -629,6 +735,151 @@
     // ===== ACTIVE OBSTACLES (logical) =====
     const activeObstacles = []; // { tile, lane, typeIndex, poolIndex }
 
+    // ===== POWER-UP MESHES =====
+    const powerupGroup = new THREE.Group();
+    function createPowerupMesh(type) {
+      const g = new THREE.Group();
+      // Glowing gem shape
+      const gemGeo = new THREE.OctahedronGeometry(0.4, 0);
+      const gemMat = new THREE.MeshBasicMaterial({ color: type.color, transparent: true, opacity: 0.9 });
+      const gem = new THREE.Mesh(gemGeo, gemMat);
+      gem.position.y = 0.8;
+      g.add(gem);
+      // Outer glow ring
+      const ringGeo = new THREE.TorusGeometry(0.5, 0.06, 6, 12);
+      const ringMat = new THREE.MeshBasicMaterial({ color: type.color, transparent: true, opacity: 0.5 });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.y = 0.8;
+      ring.rotation.x = Math.PI / 2;
+      g.add(ring);
+      g.visible = false;
+      g.userData = { gem, ring };
+      powerupGroup.add(g);
+      return g;
+    }
+    for (let i = 0; i < MAX_POWERUPS; i++) {
+      const type = POWERUP_TYPES[i % POWERUP_TYPES.length];
+      powerupMeshPool.push({ mesh: createPowerupMesh(type), typeIndex: i % POWERUP_TYPES.length, inUse: false });
+    }
+    scene.add(powerupGroup);
+
+    function generatePowerups(upToTile) {
+      while (lastPowerupTile < upToTile) {
+        lastPowerupTile += 8 + Math.floor(Math.random() * 12); // every 8-20 tiles
+        if (lastPowerupTile < 10) continue;
+        const lane = Math.floor(Math.random() * LANE_COUNT);
+        const typeIdx = Math.floor(Math.random() * POWERUP_TYPES.length);
+        activePowerups.push({ tile: lastPowerupTile, lane, typeIndex: typeIdx, poolIndex: -1 });
+      }
+    }
+
+    function updatePowerups(cameraZ, now) {
+      // Remove passed powerups
+      for (let i = activePowerups.length - 1; i >= 0; i--) {
+        const pu = activePowerups[i];
+        if (pu.tile * TILE < cameraZ - 20) {
+          if (pu.poolIndex >= 0) {
+            powerupMeshPool[pu.poolIndex].mesh.visible = false;
+            powerupMeshPool[pu.poolIndex].inUse = false;
+          }
+          activePowerups.splice(i, 1);
+        }
+      }
+      // Assign meshes and animate
+      for (const pu of activePowerups) {
+        const worldZ = pu.tile * TILE;
+        if (worldZ < cameraZ - 10 || worldZ > cameraZ + FOG_FAR) continue;
+        if (pu.poolIndex < 0) {
+          const slot = powerupMeshPool.findIndex(p => !p.inUse);
+          if (slot < 0) continue;
+          pu.poolIndex = slot;
+          powerupMeshPool[slot].inUse = true;
+          powerupMeshPool[slot].typeIndex = pu.typeIndex;
+        }
+        const pm = powerupMeshPool[pu.poolIndex];
+        pm.mesh.visible = true;
+        pm.mesh.position.x = getLaneX(pu.lane);
+        pm.mesh.position.z = worldZ;
+        // Floating bob + spin
+        const ud = pm.mesh.userData;
+        ud.gem.rotation.y = now * 0.003;
+        ud.gem.position.y = 0.8 + Math.sin(now * 0.004 + pu.tile) * 0.2;
+        ud.ring.rotation.z = now * 0.002;
+        ud.ring.position.y = ud.gem.position.y;
+      }
+    }
+
+    function checkPowerupPickup(now) {
+      players.forEach(p => {
+        if (p.isStunned) return;
+        for (let i = activePowerups.length - 1; i >= 0; i--) {
+          const pu = activePowerups[i];
+          if (Math.abs(pu.tile - p.tilePos) < 0.8 && pu.lane === p.lane) {
+            const type = POWERUP_TYPES[pu.typeIndex];
+            applyPowerup(p, type, now);
+            // Remove powerup
+            if (pu.poolIndex >= 0) {
+              powerupMeshPool[pu.poolIndex].mesh.visible = false;
+              powerupMeshPool[pu.poolIndex].inUse = false;
+            }
+            activePowerups.splice(i, 1);
+            break;
+          }
+        }
+      });
+    }
+
+    function applyPowerup(p, type, now) {
+      sfxPowerup();
+      spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, type.color, 25);
+
+      // Show center notification
+      const notifEl = document.getElementById('powerupNotif');
+      notifEl.textContent = `${p.nickname}: ${type.name}!`;
+      notifEl.classList.remove('show');
+      void notifEl.offsetWidth;
+      notifEl.classList.add('show');
+
+      if (type.effect === 'speed') {
+        p.targetTile += 5;
+        showNotif(`<strong>${p.nickname}</strong> got Speed Boost! +5 tiles!`, 'gift');
+      } else if (type.effect === 'shield') {
+        p.hasShield = true;
+        showNotif(`<strong>${p.nickname}</strong> got Shield! Protected from next hit!`);
+      } else if (type.effect === 'lightning') {
+        // Stun the nearest other player ahead or behind
+        let target = null;
+        let minDist = Infinity;
+        players.forEach(other => {
+          if (other.id === p.id || other.isStunned) return;
+          const dist = Math.abs(other.tilePos - p.tilePos);
+          if (dist < 10 && dist < minDist) { minDist = dist; target = other; }
+        });
+        if (target) {
+          target.isStunned = true;
+          target.stunStart = now;
+          spawnStunParticles(target.mesh.position.x, target.mesh.position.y, target.mesh.position.z);
+          sfxHit();
+          showNotif(`<strong>${p.nickname}</strong> zapped <strong>${target.nickname}</strong>!`, 'gift');
+        } else {
+          // No target: give speed instead
+          p.targetTile += 3;
+          showNotif(`<strong>${p.nickname}</strong> Lightning! No target, +3 tiles!`, 'gift');
+        }
+      } else if (type.effect === 'magnet') {
+        // Move to least-obstructed lane ahead
+        const ahead = activeObstacles.filter(o => o.tile > p.tilePos && o.tile < p.tilePos + 10);
+        const blocked = new Set(ahead.map(o => o.lane));
+        let bestLane = p.lane;
+        for (let l = 0; l < LANE_COUNT; l++) {
+          if (!blocked.has(l)) { bestLane = l; break; }
+        }
+        p.lane = bestLane;
+        p.targetTile += 2;
+        showNotif(`<strong>${p.nickname}</strong> Magnet! Pulled to safe lane +2!`, 'gift');
+      }
+    }
+
     // ===== CHARACTER FACTORY =====
     const playersGroup = new THREE.Group();
     scene.add(playersGroup);
@@ -880,6 +1131,7 @@
         isStunned: false,
         stunStart: 0,
         totalDiamonds: 0,
+        hasShield: false,
         hasProfilePic: !!data.profilePic,
       };
       players.set(id, p);
@@ -957,10 +1209,19 @@
         const pz = p.tilePos;
         for (const obs of activeObstacles) {
           if (Math.abs(obs.tile - pz) < 0.8 && obs.lane === p.lane) {
+            if (p.hasShield) {
+              // Shield absorbs the hit
+              p.hasShield = false;
+              spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0x44aaff, 15);
+              sfxPowerup();
+              showNotif(`${p.nickname}'s shield blocked the ${OBSTACLE_TYPES[obs.typeIndex].name}!`);
+              break;
+            }
             // Hit!
             p.isStunned = true;
             p.stunStart = now;
             spawnStunParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z);
+            sfxHit();
             p.tilePos = Math.max(0, p.tilePos - 2); // pushback
             p.targetTile = p.tilePos;
             showNotif(`${p.nickname} hit a ${OBSTACLE_TYPES[obs.typeIndex].name}!`);
@@ -1184,6 +1445,7 @@
 
     socket.on('viewer-join', (viewer) => {
       addPlayer(viewer);
+      sfxJoin();
       showNotif(`<strong>${viewer.nickname}</strong> joined the marathon!`);
     });
 
@@ -1216,6 +1478,9 @@
         }
       }
 
+      // Sound
+      sfxGift(diamonds);
+
       // Gift particle burst (bigger burst for bigger gifts)
       const particleCount = Math.min(40, 8 + steps * 3);
       const pColor = hashColor(p.id);
@@ -1237,8 +1502,8 @@
       if (!p.isJumping) {
         p.isJumping = true;
         p.jumpStart = Date.now();
-        p.targetTile += 0.5; // tiny forward nudge
-        // Jump sparkle
+        p.targetTile += 0.5;
+        sfxJump();
         spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffee44, 6);
       }
     });
@@ -1248,6 +1513,7 @@
       if (!p) return;
 
       p.targetTile += 3;
+      sfxFollow();
       spawnGiftParticles(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0x25f4ee, 20);
       triggerGiftFlash('#25f4ee');
       showNotif(`<strong>${p.nickname}</strong> followed! +3 boost!`, 'gift');
@@ -1313,7 +1579,12 @@
           }
         });
         activeObstacles.length = 0;
+        activePowerups.forEach(pu => {
+          if (pu.poolIndex >= 0) { powerupMeshPool[pu.poolIndex].mesh.visible = false; powerupMeshPool[pu.poolIndex].inUse = false; }
+        });
+        activePowerups.length = 0;
         lastObstacleTile = 0;
+        lastPowerupTile = 10;
         updateHUD();
       }
     };
@@ -1339,7 +1610,12 @@
           }
         });
         activeObstacles.length = 0;
+        activePowerups.forEach(pu => {
+          if (pu.poolIndex >= 0) { powerupMeshPool[pu.poolIndex].mesh.visible = false; powerupMeshPool[pu.poolIndex].inUse = false; }
+        });
+        activePowerups.length = 0;
         lastObstacleTile = 0;
+        lastPowerupTile = 10;
         demoActive = false;
         document.getElementById('btnDemo').classList.remove('active');
         document.getElementById('btnDemo').textContent = 'Demo Mode';
@@ -1365,18 +1641,44 @@
       lastTime = time;
       const now = Date.now();
 
-      // Generate obstacles ahead of leader
+      // Generate obstacles and powerups ahead of leader
       const leaderTile = getLeaderTile();
       generateObstacles(leaderTile + 50);
+      generatePowerups(leaderTile + 50);
 
-      // Update obstacle visuals
+      // Update obstacle and powerup visuals
       updateObstacles(camera.position.z);
+      updatePowerups(camera.position.z, now);
 
-      // Check collisions
+      // Check collisions and pickups
       checkCollisions(now);
+      checkPowerupPickup(now);
 
       // Animate characters
       players.forEach(p => animateCharacter(p, now, dt));
+
+      // Offset overlapping name labels so they stack vertically
+      const tileGroups = new Map();
+      players.forEach(p => {
+        const key = Math.round(p.tilePos * 2); // bucket by half-tile
+        if (!tileGroups.has(key)) tileGroups.set(key, []);
+        tileGroups.get(key).push(p);
+      });
+      tileGroups.forEach(group => {
+        if (group.length <= 1) {
+          // Reset to default
+          if (group[0]) {
+            const ns = group[0].mesh.children.find(c => c.isSprite && c.scale.x > 2);
+            if (ns) ns.position.y = 2.5;
+          }
+          return;
+        }
+        // Stack names vertically
+        group.forEach((p, i) => {
+          const ns = p.mesh.children.find(c => c.isSprite && c.scale.x > 2);
+          if (ns) ns.position.y = 2.5 + i * 0.7;
+        });
+      });
 
       // Camera
       updateCamera(dt);
