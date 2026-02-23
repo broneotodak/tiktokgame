@@ -1,0 +1,4404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok Live Games</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    canvas { display: block; margin: 0 auto; transform-origin: center center; }
+
+    /* Zoom controls */
+    .zoom-controls {
+      position: absolute;
+      bottom: 50px;
+      right: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 100;
+    }
+    .zoom-btn {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      border: 1px solid #444;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(10px);
+      color: #fff;
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .zoom-btn:hover { background: rgba(37,244,238,0.3); }
+    .zoom-btn:active { background: rgba(254,44,85,0.4); }
+    .zoom-label { text-align: center; color: #888; font-size: 10px; padding: 2px 0; }
+
+    /* HUD overlay */
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+      pointer-events: none;
+    }
+    .hud-left, .hud-right { pointer-events: auto; display: flex; gap: 8px; align-items: center; }
+    .hud-badge {
+      padding: 6px 14px;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hud-badge.timer { background: rgba(254,44,85,0.8); font-variant-numeric: tabular-nums; }
+    .hud-badge.mode-badge { background: rgba(37,244,238,0.2); border: 1px solid rgba(37,244,238,0.4); font-size: 12px; }
+    .live-dot { width: 8px; height: 8px; background: #fe2c55; border-radius: 50%; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* Gift legend */
+    /* Game guide bar */
+    .game-guide {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      z-index: 100;
+      pointer-events: none;
+    }
+    .guide-bar {
+      display: flex;
+      gap: 0;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding: 8px 12px;
+      overflow-x: auto;
+      justify-content: center;
+    }
+    .guide-section {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 14px;
+      border-right: 1px solid rgba(255,255,255,0.08);
+      white-space: nowrap;
+    }
+    .guide-section:last-child { border-right: none; }
+    .guide-section .g-emoji { font-size: 20px; }
+    .guide-section .g-label { font-size: 12px; color: #fff; font-weight: 600; }
+    .guide-section .g-sub { font-size: 10px; color: #888; }
+    .guide-section.guide-highlight {
+      background: linear-gradient(135deg, rgba(254,44,85,0.25), rgba(37,244,238,0.15));
+      border-radius: 12px;
+      border-right: none;
+      margin: 0 4px;
+    }
+    .guide-title {
+      text-align: center;
+      padding: 4px 0 2px;
+      background: rgba(0,0,0,0.9);
+      border-top: 1px solid rgba(37,244,238,0.3);
+      font-size: 11px;
+      font-weight: 700;
+      color: #25f4ee;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .guide-mode-info { display: none; }
+    .guide-mode-info.active { display: block; }
+
+    /* Join notification */
+    .notif-area {
+      position: absolute;
+      top: 60px;
+      left: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 100;
+      pointer-events: none;
+    }
+    .notif {
+      padding: 6px 14px;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      border-radius: 20px;
+      color: #fff;
+      font-size: 12px;
+      animation: slideIn 0.3s ease-out, fadeOut 0.4s ease-in 3s forwards;
+      white-space: nowrap;
+    }
+    .notif strong { color: #25f4ee; }
+    .notif.gift strong { color: #fe2c55; }
+    .notif.elim strong { color: #ff6b6b; }
+    .notif.coin strong { color: #ffd700; }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes fadeOut { to { opacity: 0; transform: translateX(-20px); } }
+
+    /* Scoreboard (Treasure Hunt) */
+    .scoreboard {
+      position: absolute;
+      top: 60px;
+      right: 15px;
+      z-index: 100;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(10px);
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 10px 14px;
+      min-width: 160px;
+      display: none;
+    }
+    .scoreboard.visible { display: block; }
+    .sb-title { font-size: 11px; font-weight: 700; color: #ffd700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .sb-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 12px;
+      color: #fff;
+    }
+    .sb-rank { width: 18px; font-weight: 700; color: #888; }
+    .sb-rank.gold { color: #ffd700; }
+    .sb-rank.silver { color: #c0c0c0; }
+    .sb-rank.bronze { color: #cd7f32; }
+    .sb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sb-score { font-weight: 700; color: #ffd700; font-variant-numeric: tabular-nums; }
+
+    /* Host Control Panel */
+    .host-toggle {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      padding: 8px 20px;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(10px);
+      border: 1px solid #444;
+      border-radius: 25px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s;
+    }
+    .host-toggle:hover { border-color: #25f4ee; background: rgba(37,244,238,0.15); }
+    .host-toggle .arrow { transition: transform 0.3s; font-size: 10px; }
+    .host-toggle.open .arrow { transform: rotate(180deg); }
+
+    .host-panel {
+      position: absolute;
+      top: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      background: rgba(10,10,20,0.95);
+      backdrop-filter: blur(15px);
+      border: 1px solid #333;
+      border-radius: 16px;
+      padding: 16px;
+      width: 380px;
+      max-height: 80vh;
+      overflow-y: auto;
+      display: none;
+      animation: panelIn 0.25s ease-out;
+    }
+    .host-panel.open { display: block; }
+    @keyframes panelIn { from { opacity:0; transform: translateX(-50%) translateY(-10px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+
+    .panel-section { margin-bottom: 14px; }
+    .panel-section:last-child { margin-bottom: 0; }
+    .panel-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .mode-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .mode-card {
+      padding: 14px 8px;
+      background: rgba(255,255,255,0.05);
+      border: 2px solid transparent;
+      border-radius: 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .mode-card:hover { background: rgba(255,255,255,0.1); border-color: #444; }
+    .mode-card.active { border-color: #25f4ee; background: rgba(37,244,238,0.1); }
+    .mode-card .mode-icon { font-size: 30px; margin-bottom: 4px; }
+    .mode-card .mode-name { font-size: 11px; font-weight: 600; color: #fff; }
+
+    .map-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .map-card {
+      padding: 10px 8px;
+      background: rgba(255,255,255,0.05);
+      border: 2px solid transparent;
+      border-radius: 10px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .map-card:hover { background: rgba(255,255,255,0.1); border-color: #444; }
+    .map-card.active { border-color: #25f4ee; background: rgba(37,244,238,0.1); }
+    .map-card .map-icon { font-size: 22px; }
+    .map-card .map-name { font-size: 11px; font-weight: 600; color: #fff; margin-top: 2px; }
+
+    .panel-actions { display: flex; gap: 8px; }
+    .panel-btn {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #333;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .panel-btn:hover { background: rgba(255,255,255,0.1); }
+    .panel-btn.danger { border-color: #fe2c55; color: #fe2c55; }
+    .panel-btn.danger:hover { background: rgba(254,44,85,0.15); }
+    .panel-btn.primary { border-color: #25f4ee; color: #25f4ee; }
+    .panel-btn.primary:hover { background: rgba(37,244,238,0.15); }
+    .panel-btn.go { border-color: #00ff88; color: #00ff88; font-size: 14px; }
+    .panel-btn.go:hover { background: rgba(0,255,136,0.15); }
+
+    .panel-stats { display: flex; gap: 10px; }
+    .panel-stat {
+      flex: 1;
+      text-align: center;
+      padding: 8px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 10px;
+    }
+    .panel-stat .stat-num { font-size: 20px; font-weight: 700; color: #25f4ee; }
+    .panel-stat .stat-label { font-size: 10px; color: #888; margin-top: 2px; }
+
+    /* Celebration overlay */
+    .celebration {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px);
+    }
+    .celebration.visible { display: flex; }
+    .celeb-title {
+      font-size: 48px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #ffd700, #ff6b35, #fe2c55);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: celebPop 0.5s ease-out;
+      text-align: center;
+    }
+    .celeb-subtitle { font-size: 20px; color: #fff; margin-top: 10px; text-align: center; }
+    .celeb-winner {
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .celeb-avatar {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      border: 4px solid #ffd700;
+      object-fit: cover;
+      background: #333;
+    }
+    .celeb-name { font-size: 28px; font-weight: 800; color: #ffd700; }
+    .celeb-score { font-size: 18px; color: #25f4ee; }
+    .celeb-podium {
+      display: flex;
+      gap: 24px;
+      margin-top: 30px;
+      align-items: flex-end;
+    }
+    .podium-entry { text-align: center; }
+    .podium-entry .rank { font-size: 24px; }
+    .podium-entry .p-name { font-size: 13px; color: #fff; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .podium-entry .p-score { font-size: 14px; font-weight: 700; color: #ffd700; }
+    .celeb-close {
+      margin-top: 30px;
+      padding: 12px 30px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid #555;
+      border-radius: 25px;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .celeb-close:hover { background: rgba(255,255,255,0.2); }
+    @keyframes celebPop { from { transform: scale(0.5); opacity:0; } to { transform: scale(1); opacity:1; } }
+
+    /* Firework particles */
+    .firework {
+      position: fixed;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      z-index: 501;
+      pointer-events: none;
+      animation: fw 1s ease-out forwards;
+    }
+    @keyframes fw { from { opacity:1; transform: translate(0,0) scale(1); } to { opacity:0; transform: translate(var(--fx),var(--fy)) scale(0); } }
+
+    /* Countdown overlay */
+    .countdown {
+      position: fixed;
+      inset: 0;
+      z-index: 400;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.6);
+      pointer-events: none;
+    }
+    .countdown.visible { display: flex; }
+    .countdown-num {
+      font-size: 120px;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 0 40px rgba(37,244,238,0.5);
+      animation: cdPop 0.8s ease-out;
+    }
+    @keyframes cdPop { 0% { transform: scale(2); opacity:0; } 50% { transform: scale(1); opacity:1; } 100% { transform: scale(0.8); opacity:0.3; } }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="hud-left">
+      <div class="hud-badge"><div class="live-dot"></div> <span id="playerCount">0</span> players</div>
+      <div class="hud-badge mode-badge" id="modeBadge">🏰 Maze</div>
+    </div>
+    <div class="hud-right">
+      <div class="hud-badge timer" id="timerBadge" style="display:none">⏱ <span id="timerText">0:00</span></div>
+      <div class="hud-badge">👁 <span id="viewerCount">0</span></div>
+    </div>
+  </div>
+
+  <button class="host-toggle" id="hostToggle" onclick="togglePanel()">
+    🎮 Host Controls <span class="arrow">▼</span>
+  </button>
+
+  <div class="host-panel" id="hostPanel">
+    <div class="panel-section">
+      <div class="panel-label">Live Stats</div>
+      <div class="panel-stats">
+        <div class="panel-stat">
+          <div class="stat-num" id="statPlayers">0</div>
+          <div class="stat-label">Players</div>
+        </div>
+        <div class="panel-stat">
+          <div class="stat-num" id="statViewers">0</div>
+          <div class="stat-label">Viewers</div>
+        </div>
+        <div class="panel-stat">
+          <div class="stat-num" id="statAlive">0</div>
+          <div class="stat-label" id="statAliveLabel">Winners</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Game Mode</div>
+      <div class="mode-grid">
+        <div class="mode-card active" data-mode="maze" onclick="selectMode('maze')">
+          <div class="mode-icon">🏰</div>
+          <div class="mode-name">Maze</div>
+        </div>
+        <div class="mode-card" data-mode="br" onclick="selectMode('br')">
+          <div class="mode-icon">⚔️</div>
+          <div class="mode-name">Battle Royale</div>
+        </div>
+        <div class="mode-card" data-mode="th" onclick="selectMode('th')">
+          <div class="mode-icon">💰</div>
+          <div class="mode-name">Treasure Hunt</div>
+        </div>
+        <div class="mode-card" data-mode="tag" onclick="selectMode('tag')">
+          <div class="mode-icon">🧟</div>
+          <div class="mode-name">Tag</div>
+        </div>
+        <div class="mode-card" data-mode="koth" onclick="selectMode('koth')">
+          <div class="mode-icon">👑</div>
+          <div class="mode-name">King of Hill</div>
+        </div>
+        <div class="mode-card" data-mode="marathon" onclick="selectMode('marathon')">
+          <div class="mode-icon">🏃</div>
+          <div class="mode-name">Marathon</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section" id="mazeMapSection">
+      <div class="panel-label">Select Map</div>
+      <div class="map-grid">
+        <div class="map-card active" data-map="garden" onclick="selectMap('garden')">
+          <div class="map-icon">🌸</div>
+          <div class="map-name">Garden</div>
+        </div>
+        <div class="map-card" data-map="beach" onclick="selectMap('beach')">
+          <div class="map-icon">🏖️</div>
+          <div class="map-name">Beach</div>
+        </div>
+        <div class="map-card" data-map="forest" onclick="selectMap('forest')">
+          <div class="map-icon">🌲</div>
+          <div class="map-name">Forest</div>
+        </div>
+        <div class="map-card" data-map="islands" onclick="selectMap('islands')">
+          <div class="map-icon">🏝️</div>
+          <div class="map-name">Islands</div>
+        </div>
+        <div class="map-card" data-map="castle" onclick="selectMap('castle')">
+          <div class="map-icon">🏰</div>
+          <div class="map-name">Castle</div>
+        </div>
+        <div class="map-card" data-map="candy" onclick="selectMap('candy')">
+          <div class="map-icon">🍭</div>
+          <div class="map-name">Candy</div>
+        </div>
+        <div class="map-card" data-map="village" onclick="selectMap('village')">
+          <div class="map-icon">🏘️</div>
+          <div class="map-name">Village</div>
+        </div>
+        <div class="map-card" data-map="snow" onclick="selectMap('snow')">
+          <div class="map-icon">❄️</div>
+          <div class="map-name">Snow</div>
+        </div>
+        <div class="map-card" data-map="maze1" onclick="selectMap('maze1')">
+          <div class="map-icon">🧩</div>
+          <div class="map-name">Maze 1</div>
+        </div>
+        <div class="map-card" data-map="maze2" onclick="selectMap('maze2')">
+          <div class="map-icon">🌀</div>
+          <div class="map-name">Maze 2</div>
+        </div>
+        <div class="map-card" data-map="arena" onclick="selectMap('arena')">
+          <div class="map-icon">🏟️</div>
+          <div class="map-name">Arena</div>
+        </div>
+        <div class="map-card" data-map="race" onclick="selectMap('race')">
+          <div class="map-icon">🏁</div>
+          <div class="map-name">Race</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Actions</div>
+      <div class="panel-actions">
+        <button class="panel-btn go" id="startBtn" onclick="startGame()">▶ START</button>
+        <button class="panel-btn primary" onclick="newRound()">🔄 Reset</button>
+        <button class="panel-btn primary" id="envChangeBtn" style="display:none" onclick="nextMarathonEnv()">🌍 Change Environment</button>
+        <button class="panel-btn danger" onclick="clearPlayers()">🗑 Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="notif-area" id="notifArea"></div>
+
+  <div class="game-guide" id="gameGuide">
+    <!-- Always visible: controls -->
+    <div class="guide-bar" id="guideControls">
+      <div class="guide-section guide-highlight">
+        <span class="g-emoji">💬</span>
+        <div><span class="g-label">Type: up / down / left / right</span><span class="g-sub">to move your character</span></div>
+      </div>
+      <div class="guide-section">
+        <span class="g-emoji">🌹</span><span class="g-label">Up</span>
+      </div>
+      <div class="guide-section">
+        <span class="g-emoji">🍦</span><span class="g-label">Down</span>
+      </div>
+      <div class="guide-section">
+        <span class="g-emoji">🎮</span><span class="g-label">Left</span>
+      </div>
+      <div class="guide-section">
+        <span class="g-emoji">🍩</span><span class="g-label">Right</span>
+      </div>
+      <div class="guide-section guide-highlight">
+        <span class="g-emoji">🎁</span>
+        <div><span class="g-label">Gifts = ⚡ Extra Steps</span><span class="g-sub">More 💎 = Move further!</span></div>
+      </div>
+    </div>
+    <!-- Mode-specific guide -->
+    <div class="guide-mode-info active" id="guideMaze">
+      <div class="guide-title">🏰 Maze — Reach the ⚡ goal first!</div>
+    </div>
+    <div class="guide-mode-info" id="guideBR">
+      <div class="guide-bar">
+        <div class="guide-section"><span class="g-emoji">⚔️</span><div><span class="g-label">Pick Up Weapons</span><span class="g-sub">Walk over to collect</span></div></div>
+        <div class="guide-section"><span class="g-emoji">💀</span><div><span class="g-label">Stronger Weapon Wins</span><span class="g-sub">Touch enemy to fight</span></div></div>
+        <div class="guide-section"><span class="g-emoji">🛡️</span><div><span class="g-label">Follow = Shield</span><span class="g-sub">Blocks 1 hit</span></div></div>
+        <div class="guide-section"><span class="g-emoji">💎</span><div><span class="g-label">50+ 💎 Gift = Heal</span><span class="g-sub">Restores HP</span></div></div>
+        <div class="guide-section"><span class="g-emoji">🔴</span><div><span class="g-label">Stay In The Zone!</span><span class="g-sub">Zone shrinks over time</span></div></div>
+      </div>
+      <div class="guide-title">⚔️ Battle Royale — Last one standing wins! (30 min)</div>
+    </div>
+    <div class="guide-mode-info" id="guideTH">
+      <div class="guide-bar">
+        <div class="guide-section"><span class="g-emoji">🪙</span><div><span class="g-label">Collect Coins</span><span class="g-sub">Walk over gold coins</span></div></div>
+        <div class="guide-section"><span class="g-emoji">💎</span><div><span class="g-label">💎 = Bonus Coins</span><span class="g-sub">Rare gems worth 3x</span></div></div>
+        <div class="guide-section"><span class="g-emoji">⭐</span><div><span class="g-label">Follow = +5 Bonus</span><span class="g-sub">Free coins for followers</span></div></div>
+      </div>
+      <div class="guide-title">💰 Treasure Hunt — Collect the most coins! (30 min)</div>
+    </div>
+    <div class="guide-mode-info" id="guideTag">
+      <div class="guide-bar">
+        <div class="guide-section"><span class="g-emoji">🧟</span><div><span class="g-label">Avoid Zombies!</span><span class="g-sub">Green glow = infected</span></div></div>
+        <div class="guide-section"><span class="g-emoji">🏃</span><div><span class="g-label">RUN AWAY!</span><span class="g-sub">Don't let them touch you</span></div></div>
+        <div class="guide-section"><span class="g-emoji">🎁</span><div><span class="g-label">Gift = Speed Boost</span><span class="g-sub">More 💎 = escape faster</span></div></div>
+        <div class="guide-section"><span class="g-emoji">🏆</span><div><span class="g-label">Survive to Win!</span><span class="g-sub">Last human standing</span></div></div>
+      </div>
+      <div class="guide-title">🧟 Tag / Infection — Don't get infected! (30 min)</div>
+    </div>
+    <div class="guide-mode-info" id="guideKoth">
+      <div class="guide-bar">
+        <div class="guide-section"><span class="g-emoji">👑</span><div><span class="g-label">Stand on The Hill</span><span class="g-sub">Golden zone on map</span></div></div>
+        <div class="guide-section"><span class="g-emoji">⏱️</span><div><span class="g-label">+1 Point / Second</span><span class="g-sub">While inside the zone</span></div></div>
+        <div class="guide-section"><span class="g-emoji">🔄</span><div><span class="g-label">Hill Moves!</span><span class="g-sub">Every 30 seconds</span></div></div>
+        <div class="guide-section"><span class="g-emoji">⭐</span><div><span class="g-label">Follow = +5 Bonus</span><span class="g-sub">Free points for followers</span></div></div>
+      </div>
+      <div class="guide-title">👑 King of the Hill — Hold the hill for points! (30 min)</div>
+    </div>
+    <div class="guide-mode-info" id="guideMarathon">
+      <div class="guide-bar">
+        <div class="guide-section guide-highlight"><span class="g-emoji">🎁</span><div><span class="g-label">Gift = Run Forward!</span><span class="g-sub">More 💎 = longer sprint</span></div></div>
+        <div class="guide-section guide-highlight"><span class="g-emoji">❤️</span><div><span class="g-label">Tap Like = JUMP!</span><span class="g-sub">Jump over obstacles</span></div></div>
+        <div class="guide-section"><span class="g-emoji">🪵</span><div><span class="g-label">Obstacles Ahead!</span><span class="g-sub">Jump or get stunned</span></div></div>
+        <div class="guide-section"><span class="g-emoji">🏁</span><div><span class="g-label">First to Finish!</span><span class="g-sub">Race to the flag</span></div></div>
+      </div>
+      <div class="guide-title">🏃 Marathon — Send gifts to run, tap likes to jump! (30 min)</div>
+    </div>
+  </div>
+
+  <div class="scoreboard" id="scoreboard">
+    <div class="sb-title">🏆 Scoreboard</div>
+    <div id="sbRows"></div>
+  </div>
+
+  <div class="zoom-controls">
+    <button class="zoom-btn" onclick="zoomIn()">+</button>
+    <div class="zoom-label" id="zoomLabel">100%</div>
+    <button class="zoom-btn" onclick="zoomOut()">−</button>
+    <button class="zoom-btn" onclick="zoomFit()" style="font-size:12px;margin-top:4px">FIT</button>
+  </div>
+
+  <div class="countdown" id="countdownOverlay">
+    <div class="countdown-num" id="countdownNum">3</div>
+  </div>
+
+  <div class="celebration" id="celebration">
+    <div class="celeb-title" id="celebTitle">WINNER!</div>
+    <div class="celeb-subtitle" id="celebSub"></div>
+    <div class="celeb-winner">
+      <div class="celeb-name" id="celebName"></div>
+      <div class="celeb-score" id="celebScore"></div>
+    </div>
+    <div class="celeb-podium" id="celebPodium"></div>
+    <button class="celeb-close" onclick="closeCelebration()">Continue</button>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // ===== CONFIG =====
+    const TILE = 40;
+    const CHAR_SIZE = 30;
+    const MOVE_SPEED = 2;
+    const COLORS = [
+      '#25f4ee','#fe2c55','#ffd700','#00ff88','#ff6b35',
+      '#a855f7','#06b6d4','#f43f5e','#84cc16','#f59e0b',
+      '#8b5cf6','#14b8a6','#e11d48','#eab308','#3b82f6',
+    ];
+
+    const GIFT_MAP = {
+      'rose': 'up', 'Rosa': 'up',
+      'ice cream cone': 'down', 'Ice Cream Cone': 'down',
+      'gg': 'left', 'GG': 'left',
+      'doughnut': 'right', 'Doughnut': 'right',
+      'tiktok': 'random', 'TikTok': 'random',
+    };
+
+    const CHAT_COMMANDS = {
+      'up': 'up', 'u': 'up', 'atas': 'up', '1': 'up',
+      'down': 'down', 'd': 'down', 'bawah': 'down', '2': 'down',
+      'left': 'left', 'l': 'left', 'kiri': 'left', '3': 'left',
+      'right': 'right', 'r': 'right', 'kanan': 'right', '4': 'right',
+    };
+
+    const DIR_VECTORS = {
+      'up': { dx: 0, dy: -1 },
+      'down': { dx: 0, dy: 1 },
+      'left': { dx: -1, dy: 0 },
+      'right': { dx: 1, dy: 0 },
+    };
+
+    // ===== MAPS =====
+    // 0 = path, 1 = wall, 2 = spawn, 3 = goal/star
+    // 4 = flower (walkable decor), 5 = tree (blocking decor), 6 = pond (blocking decor), 7 = stone path (walkable decor)
+    const MAPS = {
+      garden: [
+        [5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,5],
+        [1,2,0,0,4,0,0,0,0,7,7,7,7,7,0,0,0,0,4,0,0,0,0,2,1],
+        [1,0,0,0,0,0,0,0,0,0,7,0,7,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,1],
+        [1,4,0,0,0,0,5,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,4,0,1],
+        [1,0,0,0,0,0,0,0,0,4,0,0,0,4,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,7,0,0,0,0,0,0,4,0,6,6,6,0,4,0,0,0,0,0,0,0,7,0,1],
+        [1,7,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0,0,7,0,1],
+        [1,0,0,0,0,0,0,0,0,4,0,0,0,4,0,0,0,0,0,0,0,0,0,0,1],
+        [1,4,0,0,0,0,5,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,4,0,1],
+        [1,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,7,0,7,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,2,0,0,4,0,0,0,0,7,7,7,7,7,0,0,0,0,4,0,0,0,0,2,1],
+        [5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,5],
+      ],
+      maze1: [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],
+        [1,0,1,0,1,0,1,1,1,1,1,0,1,0,1,1,1,1,0,1],
+        [1,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,1],
+        [1,0,1,1,1,1,1,1,1,0,1,1,1,1,1,0,1,1,0,1],
+        [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1],
+        [1,1,1,0,1,1,1,0,1,1,1,1,1,0,1,1,1,0,1,1],
+        [1,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1],
+        [1,0,1,1,1,0,1,1,1,0,1,1,1,1,1,0,1,1,0,1],
+        [1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,1],
+        [1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1,1,1,1],
+        [1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,3,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      ],
+      maze2: [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+        [1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+        [1,0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1],
+        [1,0,1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1],
+        [1,0,1,0,1,0,1,1,1,1,1,1,1,1,0,1,0,1,0,1],
+        [1,0,1,0,1,0,1,3,0,0,0,0,0,1,0,1,0,1,0,1],
+        [1,0,1,0,1,0,1,1,1,0,1,1,1,1,0,1,0,1,0,1],
+        [1,0,1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1],
+        [1,0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1],
+        [1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+        [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      ],
+      arena: [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1],
+        [1,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1],
+        [1,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      ],
+      race: [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,1],
+        [1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+        [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+        [1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      ],
+      // Beach: sandy open area with palm trees and tide pools
+      beach: [
+        [5,5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,5,5],
+        [5,0,0,7,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,7,0,0,0,5],
+        [1,0,0,7,0,0,0,5,0,0,0,0,0,0,0,0,0,5,0,0,7,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,4,0,4,0,4,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,6,6,0,0,0,0,0,0,0,0,6,6,0,0,0,0,0,0,1],
+        [1,0,0,0,5,0,6,0,0,0,0,0,0,0,0,0,0,6,0,5,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,7,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,7,7,7,7,7,7,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,1],
+        [1,0,0,0,0,0,6,0,0,0,4,0,0,4,0,0,0,6,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,6,6,0,0,0,0,0,0,0,0,6,6,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [5,0,0,7,7,0,0,0,0,0,4,0,4,0,4,0,0,0,0,7,7,0,0,0,5],
+        [5,5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,5,5],
+      ],
+      // Castle: medieval fortress with rooms and corridors
+      castle: [
+        [1,1,1,1,1,5,1,1,1,1,1,1,1,1,1,5,1,1,1,1],
+        [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+        [1,0,4,0,1,0,0,0,0,0,0,0,0,0,0,1,0,4,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,1,0,1,1,0,0,7,7,7,7,7,7,0,0,1,1,0,1,1],
+        [5,0,0,0,0,0,0,7,0,0,0,0,7,0,0,0,0,0,0,5],
+        [1,0,0,0,0,0,0,7,0,4,4,0,7,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,7,0,4,4,0,7,0,0,0,0,0,0,1],
+        [5,0,0,0,0,0,0,7,0,0,0,0,7,0,0,0,0,0,0,5],
+        [1,1,0,1,1,0,0,7,7,7,7,7,7,0,0,1,1,0,1,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,4,0,1,0,0,0,0,0,0,0,0,0,0,1,0,4,0,1],
+        [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+        [1,1,1,1,1,5,1,1,1,1,1,1,1,1,1,5,1,1,1,1],
+      ],
+      // Forest: dense woodland with clearings
+      forest: [
+        [5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5],
+        [5,0,0,0,5,0,0,0,0,4,0,0,0,0,4,0,0,0,0,5,0,0,0,0,5],
+        [5,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,5],
+        [5,0,0,0,0,0,0,0,0,0,0,7,7,0,0,0,0,0,0,0,0,0,0,0,5],
+        [5,5,0,0,0,0,0,0,0,0,7,7,7,7,0,0,0,0,0,0,0,0,5,0,5],
+        [5,0,0,0,0,0,4,0,0,7,7,0,0,7,7,0,0,4,0,0,0,0,0,0,5],
+        [5,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,5],
+        [5,0,0,0,0,0,0,0,6,0,0,4,0,0,0,6,0,0,0,0,0,0,0,0,5],
+        [5,0,0,0,0,0,0,6,6,6,0,0,0,0,6,6,6,0,0,0,0,0,0,0,5],
+        [5,0,0,5,0,0,0,0,6,0,0,0,0,0,0,6,0,0,0,0,5,0,0,0,5],
+        [5,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,5],
+        [5,0,0,0,0,0,0,0,0,0,7,7,7,7,0,0,0,0,0,0,0,0,0,0,5],
+        [5,0,0,0,0,0,5,0,0,0,0,7,7,0,0,0,0,5,0,0,0,0,0,0,5],
+        [5,0,0,0,5,0,0,0,0,4,0,0,0,0,4,0,0,0,0,5,0,0,0,0,5],
+        [5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5],
+      ],
+      // Islands: water everywhere with small land masses
+      islands: [
+        [6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6],
+        [6,6,0,0,0,6,6,6,6,6,6,6,6,6,6,6,6,6,6,0,0,0,6,6,6],
+        [6,0,0,4,0,0,6,6,6,6,6,6,6,6,6,6,6,6,0,0,4,0,0,6,6],
+        [6,0,4,0,0,0,6,6,6,0,0,7,0,0,0,6,6,6,0,0,0,4,0,6,6],
+        [6,0,0,0,0,6,6,6,0,0,0,7,0,0,0,0,6,6,6,0,0,0,0,6,6],
+        [6,6,0,6,6,6,6,0,0,0,4,7,4,0,0,0,0,6,6,6,6,0,6,6,6],
+        [6,6,6,6,6,6,0,0,0,0,0,0,0,0,0,0,0,0,6,6,6,6,6,6,6],
+        [6,6,6,6,6,0,0,0,5,0,0,0,0,0,5,0,0,0,0,6,6,6,6,6,6],
+        [6,6,6,6,6,0,0,0,0,0,0,4,0,0,0,0,0,0,0,6,6,6,6,6,6],
+        [6,6,6,6,6,0,0,0,5,0,0,0,0,0,5,0,0,0,0,6,6,6,6,6,6],
+        [6,6,6,6,6,6,0,0,0,0,0,0,0,0,0,0,0,0,6,6,6,6,6,6,6],
+        [6,6,0,6,6,6,6,0,0,0,4,7,4,0,0,0,0,6,6,6,6,0,6,6,6],
+        [6,0,0,0,0,6,6,6,0,0,0,7,0,0,0,0,6,6,6,0,0,0,0,6,6],
+        [6,0,4,0,0,0,6,6,6,0,0,7,0,0,0,6,6,6,0,0,0,4,0,6,6],
+        [6,0,0,4,0,0,6,6,6,6,6,6,6,6,6,6,6,6,0,0,4,0,0,6,6],
+        [6,6,0,0,0,6,6,6,6,6,6,6,6,6,6,6,6,6,6,0,0,0,6,6,6],
+        [6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6],
+      ],
+      // Candy: sweet themed with candy obstacles
+      candy: [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,5,0,0,0,0,7,7,7,0,0,0,7,7,7,0,0,0,0,5,0,0,1],
+        [1,0,0,0,0,0,0,0,7,0,0,0,0,0,0,0,7,0,0,0,0,0,0,0,1],
+        [1,4,0,0,0,0,4,0,0,0,0,4,0,4,0,0,0,0,4,0,0,0,0,4,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,7,0,0,0,0,0,0,5,0,0,0,5,0,0,0,0,0,7,0,0,0,1],
+        [1,0,0,7,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,7,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,5,0,0,0,5,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,4,0,0,0,0,4,0,0,0,0,4,0,4,0,0,0,0,4,0,0,0,0,4,1],
+        [1,0,0,0,0,0,0,0,7,0,0,0,0,0,0,0,7,0,0,0,0,0,0,0,1],
+        [1,0,0,5,0,0,0,0,7,7,7,0,0,0,7,7,7,0,0,0,0,5,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      ],
+      // Village: houses and paths like a little town
+      village: [
+        [5,5,5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,5,5,5],
+        [5,0,0,0,0,0,7,0,0,0,7,0,7,0,0,0,7,0,0,0,0,0,5],
+        [5,0,1,1,0,0,7,0,1,1,7,0,7,1,1,0,7,0,0,1,1,0,5],
+        [1,0,1,1,0,0,7,0,1,1,7,0,7,1,1,0,7,0,0,1,1,0,1],
+        [1,0,0,0,0,0,7,0,0,0,7,0,7,0,0,0,7,0,0,0,0,0,1],
+        [1,7,7,7,7,7,7,7,7,7,7,0,7,7,7,7,7,7,7,7,7,7,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,4,0,0,6,6,0,0,4,0,0,0,4,0,0,6,6,0,0,4,0,1],
+        [1,0,0,0,0,6,6,0,0,0,0,5,0,0,0,0,6,6,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,7,7,7,7,7,7,7,7,7,7,0,7,7,7,7,7,7,7,7,7,7,1],
+        [1,0,0,0,0,0,7,0,0,0,7,0,7,0,0,0,7,0,0,0,0,0,1],
+        [5,0,1,1,0,0,7,0,1,1,7,0,7,1,1,0,7,0,0,1,1,0,5],
+        [5,0,1,1,0,0,7,0,1,1,7,0,7,1,1,0,7,0,0,1,1,0,5],
+        [5,0,0,0,0,0,7,0,0,0,7,0,7,0,0,0,7,0,0,0,0,0,5],
+        [5,5,5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,5,5,5],
+      ],
+      // Snow: winter wonderland with frozen ponds and pine trees
+      snow: [
+        [5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,5],
+        [1,0,0,0,0,4,0,0,0,0,0,7,7,7,0,0,0,0,4,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,5,0,0,7,0,7,0,0,5,0,0,0,0,0,0,0,1],
+        [1,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,6,6,0,0,6,6,0,0,0,0,0,0,0,0,0,1],
+        [1,4,0,0,0,5,0,0,0,6,0,0,0,0,6,0,0,0,5,0,0,0,4,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,7,0,0,0,0,0,0,0,0,0,4,4,0,0,0,0,0,0,0,0,0,7,0,1],
+        [1,7,0,0,0,0,0,0,0,0,0,4,4,0,0,0,0,0,0,0,0,0,7,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,4,0,0,0,5,0,0,0,6,0,0,0,0,6,0,0,0,5,0,0,0,4,0,1],
+        [1,0,0,0,0,0,0,0,0,6,6,0,0,6,6,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,1],
+        [1,0,0,0,0,4,0,0,5,0,0,7,7,7,0,0,5,0,0,4,0,0,0,0,1],
+        [5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,5],
+      ],
+      // Battle Royale: big open arena with cover
+      br_arena: [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1],
+        [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+        [1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      ],
+      // Treasure Hunt: open with strategic walls
+      th_field: [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      ],
+    };
+
+    // ===== GAME STATE =====
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let currentMap = MAPS.maze1;
+    let currentMapName = 'maze1';
+    let players = new Map();
+    let spawnPoints = [];
+    let goalPoint = null;
+    let profileImages = new Map();
+
+    // Game mode: 'maze', 'br', 'th', 'tag', 'koth'
+    let gameMode = 'maze';
+    let gameActive = false;
+    let gameStartTime = 0;
+
+    // Tag / Infection state
+    let tagInfected = new Set(); // player IDs that are "it"
+    let tagGameOver = false;
+    let tagTimeLeft = 1800; // 30 min
+    let tagTimerInterval = null;
+    const TAG_INFECT_RANGE = TILE * 1.1;
+    const TAG_INFECT_COOLDOWN = 2000; // 2s after becoming infected before you can spread
+    let tagInfectTimes = new Map(); // id → timestamp when infected
+
+    // King of the Hill state
+    let kothZone = null; // { x, y, radius } in tile coords
+    let kothScores = new Map();
+    let kothTimeLeft = 1800; // 30 min
+    let kothTimerInterval = null;
+    let kothZoneMoveTimer = null;
+    let kothGameOver = false;
+    const KOTH_ZONE_RADIUS = TILE * 2.5;
+    const KOTH_ZONE_MOVE_INTERVAL = 30000; // move zone every 30s
+    const KOTH_SCORE_INTERVAL = 1000; // earn 1 point per second in zone
+
+    // Marathon state (ENDLESS MODE)
+    let marathonTrackLength = 99999; // effectively infinite
+    let marathonFinishLine = 99999;
+    let marathonObstacles = []; // { x (tile), type }
+    let marathonTimerInterval = null;
+    let marathonGameOver = false;
+    let marathonCameraX = 0; // camera offset in tile units
+    let marathonEnvIndex = 0; // current environment theme
+    let marathonEnvChangeAt = 0; // next environment change tile position
+    let marathonLastObstacleTile = 0; // for dynamic obstacle generation
+    const MARATHON_LANE_COUNT = 5;
+    const MARATHON_LANE_HEIGHT = TILE * 2;
+    const MARATHON_GROUND_Y_START = 3;
+    const MARATHON_OBSTACLE_TYPES = [
+      { name: 'hurdle', emoji: '🪵' },
+      { name: 'rock', emoji: '🪨' },
+      { name: 'fire', emoji: '🔥' },
+      { name: 'cactus', emoji: '🌵' },
+      { name: 'barrel', emoji: '🛢️' },
+      { name: 'snowman', emoji: '⛄' },
+      { name: 'crystal', emoji: '💎' },
+      { name: 'bomb', emoji: '💣' },
+    ];
+    const MARATHON_JUMP_DURATION = 600;
+    const MARATHON_STUN_DURATION = 1500;
+    const MARATHON_ENV_INTERVAL = 100; // change environment every 100 tiles
+
+    // Environment themes for marathon
+    const MARATHON_ENVS = [
+      { name: 'Grasslands', sky1: '#1a1a4e', sky2: '#5a8ac0', sky3: '#a8d4f0', mtFar: '#4a6a9a', mtNear: '#3a7a4a', grass1: '#3a8a35', grass2: '#2d7a2a', road1: '#6a6a6a', road2: '#5a5a5a', rumble1: '#e22', rumble2: '#fff', scenery: ['🌲','🌳','🌴','🪨','🌺','🏠'] },
+      { name: 'Desert', sky1: '#4a2a0a', sky2: '#c08040', sky3: '#f0d8a0', mtFar: '#c4956a', mtNear: '#a07050', grass1: '#d4b060', grass2: '#c0a050', road1: '#b8a070', road2: '#a89060', rumble1: '#e8a020', rumble2: '#fff', scenery: ['🌵','🏜️','🐪','☀️','🦎','🏚️'] },
+      { name: 'Snow', sky1: '#1a2a4e', sky2: '#6a8aaa', sky3: '#c8dae8', mtFar: '#8aa8c8', mtNear: '#a0c0d0', grass1: '#e0e8f0', grass2: '#d0d8e8', road1: '#9a9aaa', road2: '#8a8a9a', rumble1: '#4af', rumble2: '#fff', scenery: ['🌲','⛄','❄️','🎄','🏔️','🦌'] },
+      { name: 'Volcano', sky1: '#2a0a0a', sky2: '#8a2a0a', sky3: '#d06020', mtFar: '#5a2a1a', mtNear: '#3a1a0a', grass1: '#3a2a1a', grass2: '#2a1a0a', road1: '#4a3a2a', road2: '#3a2a1a', rumble1: '#f40', rumble2: '#fa0', scenery: ['🌋','🔥','💀','🪨','⬛','🦇'] },
+      { name: 'Ocean', sky1: '#0a1a3e', sky2: '#2a6aaa', sky3: '#70c0e8', mtFar: '#2a5a9a', mtNear: '#3a8aba', grass1: '#2a7aaa', grass2: '#1a6a9a', road1: '#5a8aaa', road2: '#4a7a9a', rumble1: '#0af', rumble2: '#fff', scenery: ['🌊','🐚','🦀','🐠','⚓','🏖️'] },
+      { name: 'Space', sky1: '#000010', sky2: '#0a0a2a', sky3: '#1a1a3a', mtFar: '#1a1a3a', mtNear: '#2a2a4a', grass1: '#2a1a3a', grass2: '#1a0a2a', road1: '#3a2a4a', road2: '#2a1a3a', rumble1: '#a0f', rumble2: '#50f', scenery: ['🌟','🛸','👽','🪐','🌙','☄️'] },
+      { name: 'Candy', sky1: '#4a1a3a', sky2: '#c050a0', sky3: '#ffc0e0', mtFar: '#e080b0', mtNear: '#f0a0c0', grass1: '#ffb0d0', grass2: '#ffa0c0', road1: '#e890b8', road2: '#d880a8', rumble1: '#f0f', rumble2: '#ff0', scenery: ['🍭','🍬','🧁','🎂','🍩','🍪'] },
+      { name: 'Jungle', sky1: '#0a2a0a', sky2: '#2a5a1a', sky3: '#6aaa40', mtFar: '#2a5a2a', mtNear: '#1a4a1a', grass1: '#1a6a15', grass2: '#0a5a0a', road1: '#5a4a2a', road2: '#4a3a1a', rumble1: '#0a0', rumble2: '#8f4', scenery: ['🌴','🦜','🐍','🌿','🍌','🦧'] },
+    ];
+
+    // Battle Royale state
+    let brZone = { x1: 0, y1: 0, x2: 0, y2: 0 };
+    let brTargetZone = { x1: 0, y1: 0, x2: 0, y2: 0 };
+    let brPhase = 0;
+    const BR_MAX_PHASE = 6;
+    const BR_PHASE_DURATION = 300000; // 5 min per phase (~30 min total)
+    const BR_SHRINK_DURATION = 15000; // 15s smooth shrink
+    let brPhaseTimer = 0;
+    let brShrinking = false;
+    let brDamageTimer = 0;
+    let brEliminated = new Set();
+    let brGameOver = false;
+
+    // Weapons system (10 tiers!)
+    const WEAPONS = [
+      { name: 'Stick',    emoji: '🪵', power: 1,  chance: 0.20 },
+      { name: 'Knife',    emoji: '🔪', power: 2,  chance: 0.18 },
+      { name: 'Axe',      emoji: '🪓', power: 3,  chance: 0.15 },
+      { name: 'Sword',    emoji: '🗡️', power: 4,  chance: 0.13 },
+      { name: 'Bow',      emoji: '🏹', power: 5,  chance: 0.10 },
+      { name: 'Pistol',   emoji: '🔫', power: 6,  chance: 0.08 },
+      { name: 'Bomb',     emoji: '💣', power: 7,  chance: 0.06 },
+      { name: 'Lightning', emoji: '⚡', power: 8,  chance: 0.04 },
+      { name: 'Rocket',   emoji: '🚀', power: 9,  chance: 0.03 },
+      { name: 'Legendary', emoji: '☄️', power: 10, chance: 0.02 },
+      { name: 'Infinity',  emoji: '👑', power: 11, chance: 0.01 },
+    ];
+    let brWeapons = [];
+    let brWeaponIdCounter = 0;
+    let brWeaponTimer = null;
+    const BR_MAX_WEAPONS = 20;
+    const BR_COMBAT_RANGE = TILE * 1.2;
+
+    // Treasure Hunt state
+    let thCoins = []; // { x, y, value, id, born }
+    let thScores = new Map();
+    let thTimeLeft = 1800; // 30 min
+    let thTimerInterval = null;
+    let thCoinIdCounter = 0;
+    let thGameOver = false;
+    const TH_MAX_COINS = 8;
+    const TH_COIN_INTERVAL = 2500;
+    let thCoinTimer = null;
+
+    // ===== PLAYER INTERACTIONS =====
+    const INTERACT_RANGE = TILE * 1.1;
+    const INTERACT_COOLDOWN = 5000; // 5s between interactions per pair
+    const interactCooldowns = new Map(); // "id1-id2" → timestamp
+    const activeInteractions = []; // { x, y, emoji, text, born, duration, p1, p2 }
+
+    const INTERACTIONS = [
+      // Friendly
+      { emoji: '🤗', text: 'HUG!', type: 'friendly', weight: 3 },
+      { emoji: '🤝', text: 'Handshake!', type: 'friendly', weight: 3 },
+      { emoji: '✋', text: 'High Five!', type: 'friendly', weight: 3 },
+      { emoji: '💃🕺', text: 'Dance!', type: 'friendly', weight: 2 },
+      { emoji: '🫶', text: 'Heart!', type: 'friendly', weight: 2 },
+      { emoji: '😘', text: 'Muah!', type: 'friendly', weight: 1 },
+      { emoji: '🎵', text: 'Singing~', type: 'friendly', weight: 1 },
+      { emoji: '📸', text: 'Selfie!', type: 'friendly', weight: 1 },
+      // Playful fight
+      { emoji: '👊', text: 'BONK!', type: 'fight', weight: 2 },
+      { emoji: '🤼', text: 'Wrestling!', type: 'fight', weight: 2 },
+      { emoji: '💥', text: 'POW!', type: 'fight', weight: 2 },
+      { emoji: '🥊', text: 'Boxing!', type: 'fight', weight: 1 },
+      { emoji: '😤', text: 'Stare Down!', type: 'fight', weight: 1 },
+      { emoji: '🤺', text: 'En Garde!', type: 'fight', weight: 1 },
+      // Funny
+      { emoji: '💨', text: 'Oops!', type: 'funny', weight: 2 },
+      { emoji: '🍕', text: 'Pizza Time!', type: 'funny', weight: 1 },
+      { emoji: '👻', text: 'BOO!', type: 'funny', weight: 1 },
+      { emoji: '🐔', text: 'Chicken!', type: 'funny', weight: 1 },
+      { emoji: '🎉', text: 'Party!', type: 'funny', weight: 1 },
+      { emoji: '🤣', text: 'LMAO!', type: 'funny', weight: 1 },
+    ];
+
+    function rollInteraction() {
+      const total = INTERACTIONS.reduce((s, i) => s + i.weight, 0);
+      let r = Math.random() * total;
+      for (const inter of INTERACTIONS) {
+        r -= inter.weight;
+        if (r <= 0) return inter;
+      }
+      return INTERACTIONS[0];
+    }
+
+    function getInteractKey(a, b) {
+      return a.id < b.id ? `${a.id}-${b.id}` : `${b.id}-${a.id}`;
+    }
+
+    function checkPlayerInteractions(now) {
+      // Skip in BR/Tag/Marathon mode (they have their own collision logic)
+      if ((gameMode === 'br' || gameMode === 'tag' || gameMode === 'marathon') && gameActive) return;
+
+      const allPlayers = Array.from(players.values()).filter(p => !p.eliminated);
+      for (let i = 0; i < allPlayers.length; i++) {
+        for (let j = i + 1; j < allPlayers.length; j++) {
+          const a = allPlayers[i];
+          const b = allPlayers[j];
+          const dist = Math.hypot(a.x - b.x, a.y - b.y);
+          if (dist >= INTERACT_RANGE) continue;
+
+          const key = getInteractKey(a, b);
+          const lastTime = interactCooldowns.get(key) || 0;
+          if (now - lastTime < INTERACT_COOLDOWN) continue;
+
+          interactCooldowns.set(key, now);
+          const inter = rollInteraction();
+          const midX = (a.x + b.x) / 2;
+          const midY = (a.y + b.y) / 2;
+
+          activeInteractions.push({
+            x: midX, y: midY,
+            emoji: inter.emoji,
+            text: inter.text,
+            type: inter.type,
+            born: now,
+            duration: 2000,
+            p1: a.id, p2: b.id,
+          });
+
+          // Keep max 20 active interactions
+          while (activeInteractions.length > 20) activeInteractions.shift();
+
+          showNotif(`${inter.emoji} <strong>${a.nickname}</strong> × <strong>${b.nickname}</strong> — ${inter.text}`);
+        }
+      }
+
+      // Clean expired
+      for (let i = activeInteractions.length - 1; i >= 0; i--) {
+        if (now - activeInteractions[i].born > activeInteractions[i].duration) {
+          activeInteractions.splice(i, 1);
+        }
+      }
+    }
+
+    function drawInteractions() {
+      const now = Date.now();
+      activeInteractions.forEach(inter => {
+        const elapsed = now - inter.born;
+        const progress = elapsed / inter.duration;
+        if (progress > 1) return;
+
+        const x = inter.x * renderScale;
+        const y = inter.y * renderScale;
+
+        // Float upward + fade
+        const floatY = y - progress * 40 * renderScale;
+        const alpha = progress < 0.7 ? 1 : 1 - ((progress - 0.7) / 0.3);
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+
+        // Background bubble
+        const bubbleW = 60 * renderScale;
+        const bubbleH = 32 * renderScale;
+        const bx = x - bubbleW / 2;
+        const by = floatY - bubbleH / 2;
+        const cornerR = 10 * renderScale;
+
+        let bgColor;
+        if (inter.type === 'fight') bgColor = 'rgba(254,44,85,0.85)';
+        else if (inter.type === 'funny') bgColor = 'rgba(168,85,247,0.85)';
+        else bgColor = 'rgba(37,244,238,0.85)';
+
+        ctx.fillStyle = bgColor;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, bubbleW, bubbleH, cornerR);
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 1.5 * renderScale;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, bubbleW, bubbleH, cornerR);
+        ctx.stroke();
+
+        // Emoji
+        ctx.font = `${16 * renderScale}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(inter.emoji, x, floatY - 2 * renderScale);
+
+        // Text below emoji
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${7 * renderScale}px sans-serif`;
+        ctx.fillText(inter.text, x, floatY + 10 * renderScale);
+
+        // Bounce effect at start
+        if (progress < 0.2) {
+          const bounceScale = 1 + Math.sin(progress / 0.2 * Math.PI) * 0.3;
+          // Draw impact sparkles
+          const sparkCount = 6;
+          const sparkProgress = progress / 0.2;
+          for (let s = 0; s < sparkCount; s++) {
+            const angle = (Math.PI * 2 / sparkCount) * s + inter.born * 0.001;
+            const dist = sparkProgress * 25 * renderScale;
+            const sx = x + Math.cos(angle) * dist;
+            const sy = floatY + Math.sin(angle) * dist;
+            const sparkAlpha = 1 - sparkProgress;
+            ctx.fillStyle = inter.type === 'fight' ? `rgba(255,100,100,${sparkAlpha})` :
+                            inter.type === 'funny' ? `rgba(200,150,255,${sparkAlpha})` :
+                            `rgba(100,255,255,${sparkAlpha})`;
+            ctx.font = `${5 * renderScale}px sans-serif`;
+            ctx.fillText('✦', sx, sy);
+          }
+        }
+
+        // Draw connection line between the two players
+        const p1 = players.get(inter.p1);
+        const p2 = players.get(inter.p2);
+        if (p1 && p2 && progress < 0.5) {
+          const lineAlpha = (0.5 - progress) / 0.5 * 0.4;
+          ctx.strokeStyle = inter.type === 'fight' ? `rgba(254,44,85,${lineAlpha})` :
+                           inter.type === 'funny' ? `rgba(168,85,247,${lineAlpha})` :
+                           `rgba(37,244,238,${lineAlpha})`;
+          ctx.lineWidth = 2 * renderScale;
+          ctx.setLineDash([4 * renderScale, 4 * renderScale]);
+          ctx.beginPath();
+          ctx.moveTo(p1.x * renderScale, p1.y * renderScale);
+          ctx.lineTo(p2.x * renderScale, p2.y * renderScale);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        ctx.restore();
+      });
+    }
+
+    // ===== CANVAS SIZING & ZOOM =====
+    let userZoom = 1.0;
+    const ZOOM_STEP = 0.25;
+    const ZOOM_MIN = 0.5;
+    const ZOOM_MAX = 3.0;
+
+    function resizeCanvas() {
+      const cols = currentMap[0].length;
+      const rows = currentMap.length;
+      const maxW = window.innerWidth;
+      const maxH = window.innerHeight;
+      const scaleX = maxW / (cols * TILE);
+      const scaleY = maxH / (rows * TILE);
+      const baseScale = Math.min(scaleX, scaleY, 1.5);
+      const scale = baseScale * userZoom;
+      canvas.width = cols * TILE * scale;
+      canvas.height = rows * TILE * scale;
+      canvas.style.marginTop = `${Math.max(0, (maxH - canvas.height) / 2)}px`;
+      document.body.style.overflow = (canvas.width > maxW || canvas.height > maxH) ? 'auto' : 'hidden';
+      return scale;
+    }
+
+    function updateZoomLabel() {
+      document.getElementById('zoomLabel').textContent = `${Math.round(userZoom * 100)}%`;
+    }
+    function zoomIn() { userZoom = Math.min(userZoom + ZOOM_STEP, ZOOM_MAX); renderScale = resizeCanvas(); updateZoomLabel(); }
+    function zoomOut() { userZoom = Math.max(userZoom - ZOOM_STEP, ZOOM_MIN); renderScale = resizeCanvas(); updateZoomLabel(); }
+    function zoomFit() { userZoom = 1.0; renderScale = resizeCanvas(); updateZoomLabel(); }
+
+    let renderScale = resizeCanvas();
+    window.addEventListener('resize', () => { renderScale = resizeCanvas(); });
+
+    // ===== MAP LOADING =====
+    function loadMap(name) {
+      currentMap = MAPS[name] || MAPS.maze1;
+      currentMapName = name;
+      spawnPoints = [];
+      goalPoint = null;
+      for (let r = 0; r < currentMap.length; r++) {
+        for (let c = 0; c < currentMap[r].length; c++) {
+          if (currentMap[r][c] === 2) spawnPoints.push({ x: c, y: r });
+          if (currentMap[r][c] === 3) goalPoint = { x: c, y: r };
+        }
+      }
+      players.forEach(p => {
+        const sp = getSpawnPos();
+        p.x = sp.x; p.y = sp.y;
+        p.targetX = sp.x; p.targetY = sp.y;
+        p.moveQueue = [];
+      });
+      renderScale = resizeCanvas();
+    }
+
+    function getSpawnPos() {
+      // Collect all walkable tiles (0=path, 2=spawn, 4=flower, 7=stone)
+      const walkable = [];
+      for (let r = 0; r < currentMap.length; r++) {
+        for (let c = 0; c < currentMap[0].length; c++) {
+          const t = currentMap[r][c];
+          if (t === 0 || t === 2 || t === 4 || t === 7) {
+            walkable.push({ x: c, y: r });
+          }
+        }
+      }
+      if (walkable.length === 0) return { x: 1 * TILE + TILE/2, y: 1 * TILE + TILE/2 };
+
+      // Get existing player positions
+      const occupied = Array.from(players.values()).map(p => ({ x: p.x, y: p.y }));
+
+      // Try to find a spot far from other players (best of 20 random picks)
+      let bestSpot = null;
+      let bestMinDist = -1;
+      const attempts = Math.min(walkable.length, 20);
+      for (let i = 0; i < attempts; i++) {
+        const sp = walkable[Math.floor(Math.random() * walkable.length)];
+        const px = sp.x * TILE + TILE / 2;
+        const py = sp.y * TILE + TILE / 2;
+        if (occupied.length === 0) {
+          bestSpot = { x: px, y: py };
+          break;
+        }
+        const minDist = Math.min(...occupied.map(o => Math.hypot(o.x - px, o.y - py)));
+        if (minDist > bestMinDist) {
+          bestMinDist = minDist;
+          bestSpot = { x: px, y: py };
+        }
+      }
+      return bestSpot;
+    }
+
+    // ===== COLLISION =====
+    function isWall(px, py) {
+      const col = Math.floor(px / TILE);
+      const row = Math.floor(py / TILE);
+      if (row < 0 || row >= currentMap.length || col < 0 || col >= currentMap[0].length) return true;
+      const tile = currentMap[row][col];
+      return tile === 1 || tile === 5 || tile === 6; // wall, tree, pond
+    }
+
+    function canMove(px, py, dx, dy) {
+      const half = CHAR_SIZE / 2 - 2;
+      const nx = px + dx * TILE;
+      const ny = py + dy * TILE;
+      return !isWall(nx - half, ny - half) && !isWall(nx + half, ny - half) &&
+             !isWall(nx - half, ny + half) && !isWall(nx + half, ny + half);
+    }
+
+    // ===== CHARACTER CUSTOMIZATION =====
+    const ACCESSORIES = [
+      { type: 'hat', emoji: '🎩', name: 'Top Hat' },
+      { type: 'hat', emoji: '🧢', name: 'Cap' },
+      { type: 'hat', emoji: '👒', name: 'Sun Hat' },
+      { type: 'hat', emoji: '🎀', name: 'Bow' },
+      { type: 'hat', emoji: '🌸', name: 'Flower' },
+      { type: 'hat', emoji: '⭐', name: 'Star' },
+      { type: 'hat', emoji: '🍀', name: 'Clover' },
+      { type: 'hat', emoji: '🔥', name: 'Fire' },
+      { type: 'hat', emoji: '❄️', name: 'Ice' },
+      { type: 'hat', emoji: '🌙', name: 'Moon' },
+      { type: 'hat', emoji: '🦋', name: 'Butterfly' },
+      { type: 'hat', emoji: '🍄', name: 'Mushroom' },
+    ];
+
+    const ANIMAL_SKINS = [
+      { name: 'Cat',     ears: 'pointed', pattern: 'stripes',  tailEmoji: '🐱', earColor: null },
+      { name: 'Dog',     ears: 'floppy',  pattern: 'spots',    tailEmoji: '🐶', earColor: null },
+      { name: 'Bunny',   ears: 'long',    pattern: 'none',     tailEmoji: '🐰', earColor: '#ffd0d0' },
+      { name: 'Bear',    ears: 'round',   pattern: 'belly',    tailEmoji: '🐻', earColor: null },
+      { name: 'Fox',     ears: 'pointed', pattern: 'belly',    tailEmoji: '🦊', earColor: '#fff' },
+      { name: 'Panda',   ears: 'round',   pattern: 'panda',    tailEmoji: '🐼', earColor: '#222' },
+      { name: 'Penguin', ears: 'none',    pattern: 'belly',    tailEmoji: '🐧', earColor: null },
+      { name: 'Frog',    ears: 'none',    pattern: 'none',     tailEmoji: '🐸', earColor: null },
+      { name: 'Chicken', ears: 'none',    pattern: 'none',     tailEmoji: '🐔', earColor: null },
+      { name: 'Mouse',   ears: 'round',   pattern: 'belly',    tailEmoji: '🐭', earColor: '#ffb0b0' },
+      { name: 'Pig',     ears: 'floppy',  pattern: 'none',     tailEmoji: '🐷', earColor: null },
+      { name: 'Koala',   ears: 'round',   pattern: 'belly',    tailEmoji: '🐨', earColor: '#ddd' },
+    ];
+
+    const IDLE_EMOTES = ['💭','💤','✨','💫','🎵','🎶','❓','💡','🌟','😊'];
+
+    const BODY_SHAPES = [
+      { scaleX: 1.0,  scaleY: 1.1  }, // normal oval
+      { scaleX: 1.15, scaleY: 0.95 }, // chubby
+      { scaleX: 0.9,  scaleY: 1.2  }, // tall/slim
+      { scaleX: 1.1,  scaleY: 1.0  }, // round
+      { scaleX: 0.95, scaleY: 1.15 }, // slightly tall
+    ];
+
+    // Deterministic random from player ID
+    function playerHash(id, seed = 0) {
+      let h = seed;
+      for (let i = 0; i < id.length; i++) h = id.charCodeAt(i) + ((h << 5) - h);
+      return Math.abs(h);
+    }
+
+    function getPlayerStyle(player) {
+      if (player._style) return player._style;
+      const h = playerHash(player.id);
+      const h2 = playerHash(player.id, 42);
+      const h3 = playerHash(player.id, 99);
+      player._style = {
+        accessory: ACCESSORIES[h % ACCESSORIES.length],
+        animal: ANIMAL_SKINS[h2 % ANIMAL_SKINS.length],
+        bodyShape: BODY_SHAPES[h3 % BODY_SHAPES.length],
+        blinkOffset: (h % 1000) / 1000 * 5000, // stagger blinks
+        bobOffset: (h2 % 1000) / 1000 * Math.PI * 2, // stagger idle bob
+        emoteOffset: (h3 % 1000) / 1000 * 12000, // stagger emotes
+      };
+      return player._style;
+    }
+
+    // ===== PLAYER MANAGEMENT =====
+    function getColor(id) {
+      let hash = 0;
+      for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+      return COLORS[Math.abs(hash) % COLORS.length];
+    }
+
+    function addPlayer(viewer) {
+      if (players.has(viewer.id)) {
+        // Update profile pic if missing
+        const p = players.get(viewer.id);
+        if (!profileImages.has(viewer.id) && viewer.profilePic) {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = `/api/proxy-image?url=${encodeURIComponent(viewer.profilePic)}`;
+          img.onload = () => profileImages.set(viewer.id, img);
+        }
+        return p;
+      }
+      const sp = getSpawnPos();
+      const player = {
+        id: viewer.id,
+        uniqueId: viewer.uniqueId,
+        nickname: viewer.nickname || viewer.uniqueId,
+        color: getColor(viewer.uniqueId || viewer.id),
+        profilePic: viewer.profilePic || '',
+        isFollower: viewer.isFollower || false,
+        x: sp.x, y: sp.y,
+        targetX: sp.x, targetY: sp.y,
+        dir: 'down',
+        frame: 0,
+        moveQueue: [],
+        reachedGoal: false,
+        chatBubble: null,
+        chatTimer: null,
+        // Movement boost
+        bonusSteps: 0,
+        // Visuals
+        totalDiamonds: 0, // tracks gift spending for tier
+        highlightUntil: 0, // timestamp for chat ping highlight
+        // BR
+        hp: 3,
+        eliminated: false,
+        shield: false,
+        weapon: null,
+        kills: 0,
+        combatCooldown: 0,
+        // TH
+        score: 0,
+        // Marathon
+        marathonX: 0, // progress in pixels along track
+        marathonLane: 0, // which lane (0-4)
+        marathonJumping: false,
+        marathonJumpStart: 0,
+        marathonStunned: false,
+        marathonStunEnd: 0,
+        marathonFinished: false,
+        marathonFinishTime: 0,
+      };
+      players.set(viewer.id, player);
+
+      if (viewer.profilePic) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = `/api/proxy-image?url=${encodeURIComponent(viewer.profilePic)}`;
+        img.onload = () => profileImages.set(viewer.id, img);
+      }
+
+      // Init TH score
+      if (gameMode === 'th') thScores.set(viewer.id, 0);
+      // Init marathon lane — new joiners start slightly behind the last runner
+      if (gameMode === 'marathon') {
+        player.marathonLane = Math.floor(Math.random() * MARATHON_LANE_COUNT);
+        // Place at the back of the pack (or start if no runners)
+        let minX = Infinity;
+        players.forEach(p => { if (p.id !== viewer.id && p.marathonX < minX) minX = p.marathonX; });
+        player.marathonX = minX === Infinity ? TILE : Math.max(TILE, minX - TILE * 2);
+      }
+
+      document.getElementById('playerCount').textContent = players.size;
+      return player;
+    }
+
+    function movePlayer(playerId, direction, extraMoves = 0) {
+      const player = players.get(playerId);
+      if (!player) return;
+      if (gameMode === 'br' && player.eliminated) return;
+      if (gameMode === 'marathon') return; // Marathon doesn't use tile movement
+
+      if (direction === 'random') {
+        const dirs = ['up','down','left','right'];
+        direction = dirs[Math.floor(Math.random() * dirs.length)];
+      }
+      const vec = DIR_VECTORS[direction];
+      if (!vec) return;
+
+      // Base move (1 tile)
+      const maxQueue = 15;
+      if (player.moveQueue.length < maxQueue) {
+        player.moveQueue.push(direction);
+      }
+
+      // Add extra moves from parameter (e.g. direction gifts)
+      for (let i = 0; i < extraMoves && player.moveQueue.length < maxQueue; i++) {
+        player.moveQueue.push(direction);
+      }
+
+      // Consume bonus steps (from non-directional gifts)
+      const bonusToUse = Math.min(player.bonusSteps, maxQueue - player.moveQueue.length);
+      for (let i = 0; i < bonusToUse; i++) {
+        player.moveQueue.push(direction);
+      }
+      player.bonusSteps -= bonusToUse;
+
+      player.dir = direction;
+    }
+
+    // ===== BATTLE ROYALE LOGIC =====
+    function initBR() {
+      const cols = currentMap[0].length;
+      const rows = currentMap.length;
+      brZone = { x1: TILE, y1: TILE, x2: (cols - 1) * TILE, y2: (rows - 1) * TILE };
+      brTargetZone = { ...brZone };
+      brPhase = 0;
+      brShrinking = false;
+      brPhaseTimer = Date.now();
+      brDamageTimer = Date.now();
+      brEliminated = new Set();
+      brGameOver = false;
+      brWeapons = [];
+      brWeaponIdCounter = 0;
+      players.forEach(p => {
+        p.hp = 3; p.eliminated = false; p.shield = false;
+        p.weapon = null; p.kills = 0; p.combatCooldown = 0; p.bonusSteps = 0;
+      });
+
+      // Start weapon spawning
+      if (brWeaponTimer) { clearTimeout(brWeaponTimer); clearInterval(brWeaponTimer); }
+      // Spawn initial scattered weapons
+      for (let i = 0; i < 10; i++) spawnWeapon();
+      // Frequent randomized spawning (1.5-4 seconds)
+      function scheduleNextWeapon() {
+        if (!gameActive || brGameOver) return;
+        const delay = 1500 + Math.random() * 2500;
+        brWeaponTimer = setTimeout(() => {
+          if (!gameActive || brGameOver) return;
+          spawnWeapon();
+          // 40% chance to spawn a second weapon
+          if (Math.random() < 0.4) spawnWeapon();
+          scheduleNextWeapon();
+        }, delay);
+      }
+      scheduleNextWeapon();
+    }
+
+    function rollWeapon() {
+      const r = Math.random();
+      let cumulative = 0;
+      for (const w of WEAPONS) {
+        cumulative += w.chance;
+        if (r < cumulative) return { name: w.name, emoji: w.emoji, power: w.power };
+      }
+      return { name: WEAPONS[0].name, emoji: WEAPONS[0].emoji, power: WEAPONS[0].power };
+    }
+
+    function spawnWeapon() {
+      if (brWeapons.length >= BR_MAX_WEAPONS) return;
+      const cols = currentMap[0].length;
+      const rows = currentMap.length;
+      let attempts = 0;
+      while (attempts < 50) {
+        const c = Math.floor(Math.random() * (cols - 2)) + 1;
+        const r = Math.floor(Math.random() * (rows - 2)) + 1;
+        if (currentMap[r][c] === 0) {
+          const weapon = rollWeapon();
+          brWeapons.push({
+            x: c * TILE + TILE/2,
+            y: r * TILE + TILE/2,
+            weapon,
+            id: brWeaponIdCounter++,
+          });
+          return;
+        }
+        attempts++;
+      }
+    }
+
+    function updateBR() {
+      if (brGameOver || !gameActive) return;
+      const now = Date.now();
+      const cols = currentMap[0].length;
+      const rows = currentMap.length;
+
+      // Phase progression
+      if (!brShrinking && now - brPhaseTimer > BR_PHASE_DURATION && brPhase < BR_MAX_PHASE) {
+        brPhase++;
+        brShrinking = true;
+        brPhaseTimer = now;
+        const cx = (cols * TILE) / 2;
+        const cy = (rows * TILE) / 2;
+        const factor = 1 - (brPhase / BR_MAX_PHASE) * 0.85;
+        const hw = ((cols - 2) * TILE / 2) * factor;
+        const hh = ((rows - 2) * TILE / 2) * factor;
+        brTargetZone = { x1: cx - hw, y1: cy - hh, x2: cx + hw, y2: cy + hh };
+        const minsLeft = Math.round((BR_MAX_PHASE - brPhase) * BR_PHASE_DURATION / 60000);
+        showNotif(`⚠️ <strong>Zone shrinking! Phase ${brPhase}/${BR_MAX_PHASE}</strong> (~${minsLeft}min left)`, 'elim');
+      }
+
+      // Smooth zone shrink
+      if (brShrinking) {
+        const t = Math.min((now - brPhaseTimer) / BR_SHRINK_DURATION, 1);
+        const ease = t * t * (3 - 2 * t);
+        brZone.x1 += (brTargetZone.x1 - brZone.x1) * ease * 0.05;
+        brZone.y1 += (brTargetZone.y1 - brZone.y1) * ease * 0.05;
+        brZone.x2 += (brTargetZone.x2 - brZone.x2) * ease * 0.05;
+        brZone.y2 += (brTargetZone.y2 - brZone.y2) * ease * 0.05;
+        if (t >= 1) brShrinking = false;
+      }
+
+      // Weapon pickup
+      players.forEach(p => {
+        if (p.eliminated) return;
+        for (let i = brWeapons.length - 1; i >= 0; i--) {
+          const w = brWeapons[i];
+          const dist = Math.hypot(p.x - w.x, p.y - w.y);
+          if (dist < TILE * 0.6) {
+            // Pick up if better, or if unarmed
+            if (!p.weapon || w.weapon.power > p.weapon.power) {
+              const old = p.weapon;
+              p.weapon = w.weapon;
+              brWeapons.splice(i, 1);
+              if (old) {
+                showNotif(`${p.weapon.emoji} <strong>${p.nickname}</strong> upgraded to ${p.weapon.name}!`, 'coin');
+              } else {
+                showNotif(`${p.weapon.emoji} <strong>${p.nickname}</strong> found a ${p.weapon.name}!`, 'coin');
+              }
+            } else if (p.weapon && w.weapon.power <= p.weapon.power) {
+              // Already have better — skip
+            }
+          }
+        }
+      });
+
+      // Combat: check player proximity
+      const alivePlayers = Array.from(players.values()).filter(p => !p.eliminated);
+      for (let i = 0; i < alivePlayers.length; i++) {
+        for (let j = i + 1; j < alivePlayers.length; j++) {
+          const a = alivePlayers[i];
+          const b = alivePlayers[j];
+          if (a.combatCooldown > now || b.combatCooldown > now) continue;
+          const dist = Math.hypot(a.x - b.x, a.y - b.y);
+          if (dist < BR_COMBAT_RANGE) {
+            resolveCombat(a, b, now);
+          }
+        }
+      }
+
+      // Zone damage (every 2s outside zone)
+      if (now - brDamageTimer > 2000) {
+        brDamageTimer = now;
+        players.forEach(p => {
+          if (p.eliminated) return;
+          if (p.x < brZone.x1 || p.x > brZone.x2 || p.y < brZone.y1 || p.y > brZone.y2) {
+            if (p.shield) {
+              p.shield = false;
+              showNotif(`🛡️ <strong>${p.nickname}</strong>'s shield broke!`);
+            } else {
+              p.hp--;
+              if (p.hp <= 0) {
+                eliminatePlayer(p, null);
+              }
+            }
+          }
+        });
+      }
+
+      // Check win condition
+      const alive = Array.from(players.values()).filter(p => !p.eliminated);
+      if (players.size >= 2 && alive.length <= 1) {
+        brGameOver = true;
+        gameActive = false;
+        if (brWeaponTimer) { clearTimeout(brWeaponTimer); clearInterval(brWeaponTimer); }
+        if (alive.length === 1) {
+          showCelebration('br', alive[0]);
+        } else {
+          showCelebration('br', null);
+        }
+      }
+    }
+
+    function resolveCombat(a, b, now) {
+      const aPower = a.weapon ? a.weapon.power : 0;
+      const bPower = b.weapon ? b.weapon.power : 0;
+
+      // Both unarmed = nothing happens
+      if (aPower === 0 && bPower === 0) return;
+
+      // Set cooldown so they don't fight again immediately
+      const cooldown = now + 3000;
+
+      if (aPower > bPower) {
+        // A kills B
+        eliminatePlayer(b, a);
+        // A's weapon degrades
+        degradeWeapon(a);
+        a.combatCooldown = cooldown;
+      } else if (bPower > aPower) {
+        // B kills A
+        eliminatePlayer(a, b);
+        degradeWeapon(b);
+        b.combatCooldown = cooldown;
+      } else {
+        // Equal power: both weapons break
+        a.weapon = null;
+        b.weapon = null;
+        a.combatCooldown = cooldown;
+        b.combatCooldown = cooldown;
+        showNotif(`💥 <strong>${a.nickname}</strong> vs <strong>${b.nickname}</strong> — weapons shattered!`, 'elim');
+      }
+    }
+
+    function eliminatePlayer(victim, killer) {
+      victim.eliminated = true;
+      victim.hp = 0;
+      brEliminated.add(victim.id);
+      if (killer) {
+        killer.kills++;
+        showNotif(`${killer.weapon?.emoji || '👊'} <strong>${killer.nickname}</strong> eliminated <strong>${victim.nickname}</strong>! (${killer.kills} kills)`, 'elim');
+      } else {
+        showNotif(`💀 <strong>${victim.nickname}</strong> eliminated by the zone!`, 'elim');
+      }
+      // Drop victim's weapon on the ground
+      if (victim.weapon) {
+        brWeapons.push({
+          x: victim.x, y: victim.y,
+          weapon: { ...victim.weapon },
+          id: brWeaponIdCounter++,
+        });
+        victim.weapon = null;
+      }
+    }
+
+    function degradeWeapon(player) {
+      if (!player.weapon) return;
+      if (player.weapon.power <= 1) {
+        player.weapon = null; // knife breaks
+      } else {
+        // Downgrade to next lower tier
+        const lowerPower = player.weapon.power - 1;
+        const lower = WEAPONS.find(w => w.power === lowerPower);
+        if (lower) {
+          player.weapon = { name: lower.name, emoji: lower.emoji, power: lower.power };
+        } else {
+          player.weapon = null;
+        }
+      }
+    }
+
+    // ===== TREASURE HUNT LOGIC =====
+    function initTH() {
+      thCoins = [];
+      thScores = new Map();
+      thTimeLeft = 1800;
+      thCoinIdCounter = 0;
+      thGameOver = false;
+      players.forEach(p => { p.score = 0; });
+
+      // Timer
+      if (thTimerInterval) clearInterval(thTimerInterval);
+      thTimerInterval = setInterval(() => {
+        if (!gameActive || thGameOver) return;
+        thTimeLeft--;
+        updateTimerDisplay();
+        if (thTimeLeft <= 0) {
+          thGameOver = true;
+          gameActive = false;
+          clearInterval(thTimerInterval);
+          if (thCoinTimer) clearInterval(thCoinTimer);
+          // Find winner
+          let best = null;
+          let bestScore = -1;
+          players.forEach(p => {
+            if (p.score > bestScore) { bestScore = p.score; best = p; }
+          });
+          showCelebration('th', best);
+        }
+      }, 1000);
+
+      // Spawn coins
+      if (thCoinTimer) clearInterval(thCoinTimer);
+      thCoinTimer = setInterval(() => {
+        if (!gameActive || thGameOver) return;
+        spawnCoin();
+      }, TH_COIN_INTERVAL);
+
+      // Spawn initial coins
+      for (let i = 0; i < 5; i++) spawnCoin();
+    }
+
+    function spawnCoin() {
+      if (thCoins.length >= TH_MAX_COINS) return;
+      const cols = currentMap[0].length;
+      const rows = currentMap.length;
+      let attempts = 0;
+      while (attempts < 50) {
+        const c = Math.floor(Math.random() * (cols - 2)) + 1;
+        const r = Math.floor(Math.random() * (rows - 2)) + 1;
+        if (currentMap[r][c] === 0) {
+          const isGold = Math.random() < 0.15;
+          thCoins.push({
+            x: c * TILE + TILE/2,
+            y: r * TILE + TILE/2,
+            value: isGold ? 3 : 1,
+            id: thCoinIdCounter++,
+            born: Date.now(),
+          });
+          return;
+        }
+        attempts++;
+      }
+    }
+
+    function updateTH() {
+      if (thGameOver || !gameActive) return;
+      // Check coin collection
+      players.forEach(p => {
+        if (p.eliminated) return;
+        for (let i = thCoins.length - 1; i >= 0; i--) {
+          const coin = thCoins[i];
+          const dist = Math.hypot(p.x - coin.x, p.y - coin.y);
+          if (dist < TILE * 0.6) {
+            p.score += coin.value;
+            thScores.set(p.id, p.score);
+            thCoins.splice(i, 1);
+            const label = coin.value >= 3 ? '💎 +3' : '🪙 +1';
+            showNotif(`${label} <strong>${p.nickname}</strong> (${p.score})`, 'coin');
+          }
+        }
+      });
+    }
+
+    // ===== TAG / INFECTION LOGIC =====
+    function initTag() {
+      tagInfected = new Set();
+      tagInfectTimes = new Map();
+      tagGameOver = false;
+      tagTimeLeft = 1800;
+      players.forEach(p => { p.eliminated = false; p.score = 0; });
+
+      // Pick one random player as the first zombie
+      const allIds = Array.from(players.keys());
+      if (allIds.length === 0) return;
+      const zombieId = allIds[Math.floor(Math.random() * allIds.length)];
+      tagInfected.add(zombieId);
+      tagInfectTimes.set(zombieId, Date.now());
+      const zombie = players.get(zombieId);
+      showNotif(`🧟 <strong>${zombie.nickname}</strong> is Patient Zero!`, 'elim');
+
+      // Timer
+      if (tagTimerInterval) clearInterval(tagTimerInterval);
+      tagTimerInterval = setInterval(() => {
+        if (!gameActive || tagGameOver) return;
+        tagTimeLeft--;
+        updateTimerDisplay();
+        if (tagTimeLeft <= 0) {
+          tagGameOver = true;
+          gameActive = false;
+          clearInterval(tagTimerInterval);
+          // Survivors win
+          const survivors = Array.from(players.values()).filter(p => !tagInfected.has(p.id));
+          showCelebration('tag', survivors.length > 0 ? survivors[0] : null);
+        }
+      }, 1000);
+    }
+
+    function updateTag() {
+      if (tagGameOver || !gameActive) return;
+      const now = Date.now();
+      const allPlayers = Array.from(players.values());
+
+      // Check infection spread
+      allPlayers.forEach(p => {
+        if (!tagInfected.has(p.id)) return; // only infected can spread
+        const infectTime = tagInfectTimes.get(p.id) || 0;
+        if (now - infectTime < TAG_INFECT_COOLDOWN) return; // cooldown after getting infected
+
+        allPlayers.forEach(target => {
+          if (tagInfected.has(target.id)) return; // already infected
+          const dist = Math.hypot(p.x - target.x, p.y - target.y);
+          if (dist < TAG_INFECT_RANGE) {
+            tagInfected.add(target.id);
+            tagInfectTimes.set(target.id, now);
+            p.score = (p.score || 0) + 1; // spreader gets a point
+            showNotif(`🧟 <strong>${p.nickname}</strong> infected <strong>${target.nickname}</strong>!`, 'elim');
+          }
+        });
+      });
+
+      // Check if all infected = game over
+      const survivors = allPlayers.filter(p => !tagInfected.has(p.id));
+      if (survivors.length === 0 && allPlayers.length >= 2) {
+        tagGameOver = true;
+        gameActive = false;
+        clearInterval(tagTimerInterval);
+        // Last infected is the "winner" (survived longest)
+        // Find who was infected last
+        let lastInfected = null;
+        let latestTime = 0;
+        tagInfectTimes.forEach((time, id) => {
+          if (time > latestTime && id !== Array.from(tagInfected)[0]) { // exclude patient zero
+            latestTime = time;
+            lastInfected = players.get(id);
+          }
+        });
+        showCelebration('tag', lastInfected);
+      }
+    }
+
+    // ===== KING OF THE HILL LOGIC =====
+    function initKOTH() {
+      kothScores = new Map();
+      kothGameOver = false;
+      kothTimeLeft = 1800;
+      players.forEach(p => { p.score = 0; });
+
+      // Place initial zone
+      moveKothZone();
+
+      // Timer
+      if (kothTimerInterval) clearInterval(kothTimerInterval);
+      kothTimerInterval = setInterval(() => {
+        if (!gameActive || kothGameOver) return;
+        kothTimeLeft--;
+
+        // Score: players in zone get +1
+        if (kothZone) {
+          players.forEach(p => {
+            if (p.eliminated) return;
+            const dist = Math.hypot(p.x - kothZone.x, p.y - kothZone.y);
+            if (dist < kothZone.radius) {
+              p.score = (p.score || 0) + 1;
+              kothScores.set(p.id, p.score);
+            }
+          });
+        }
+
+        updateTimerDisplay();
+        updateScoreboard();
+
+        if (kothTimeLeft <= 0) {
+          kothGameOver = true;
+          gameActive = false;
+          clearInterval(kothTimerInterval);
+          if (kothZoneMoveTimer) clearInterval(kothZoneMoveTimer);
+          // Find winner
+          let best = null;
+          let bestScore = -1;
+          players.forEach(p => {
+            if (p.score > bestScore) { bestScore = p.score; best = p; }
+          });
+          showCelebration('koth', best);
+        }
+      }, KOTH_SCORE_INTERVAL);
+
+      // Move zone periodically
+      if (kothZoneMoveTimer) clearInterval(kothZoneMoveTimer);
+      kothZoneMoveTimer = setInterval(() => {
+        if (!gameActive || kothGameOver) return;
+        moveKothZone();
+        showNotif('👑 The hill has moved!', 'coin');
+      }, KOTH_ZONE_MOVE_INTERVAL);
+    }
+
+    function moveKothZone() {
+      // Find a random walkable position for the zone
+      const walkable = [];
+      for (let r = 2; r < currentMap.length - 2; r++) {
+        for (let c = 2; c < currentMap[0].length - 2; c++) {
+          const t = currentMap[r][c];
+          if (t === 0 || t === 2 || t === 4 || t === 7) walkable.push({ x: c, y: r });
+        }
+      }
+      if (walkable.length === 0) return;
+      const pos = walkable[Math.floor(Math.random() * walkable.length)];
+      kothZone = {
+        x: pos.x * TILE + TILE / 2,
+        y: pos.y * TILE + TILE / 2,
+        radius: KOTH_ZONE_RADIUS,
+      };
+    }
+
+    function updateKOTH() {
+      // Scoring is handled in the timer interval
+      // Visual pulsing is handled in draw
+    }
+
+    function drawKothZone() {
+      if (gameMode !== 'koth' || !gameActive || !kothZone) return;
+      const x = kothZone.x * renderScale;
+      const y = kothZone.y * renderScale;
+      const r = kothZone.radius * renderScale;
+      const now = Date.now();
+      const pulse = 0.15 + Math.sin(now / 500) * 0.08;
+
+      // Zone glow
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, `rgba(255,215,0,${pulse + 0.15})`);
+      grad.addColorStop(0.7, `rgba(255,215,0,${pulse})`);
+      grad.addColorStop(1, 'rgba(255,215,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Zone border ring
+      ctx.strokeStyle = `rgba(255,215,0,${0.5 + Math.sin(now / 300) * 0.2})`;
+      ctx.lineWidth = 3 * renderScale;
+      ctx.setLineDash([8 * renderScale, 4 * renderScale]);
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Crown icon in center
+      ctx.font = `${20 * renderScale}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const bob = Math.sin(now / 600) * 4 * renderScale;
+      ctx.fillText('👑', x, y + bob);
+
+      // Show "HILL" text
+      ctx.fillStyle = 'rgba(255,215,0,0.7)';
+      ctx.font = `bold ${10 * renderScale}px sans-serif`;
+      ctx.fillText('THE HILL', x, y + r + 12 * renderScale);
+    }
+
+    function drawTagIndicators() {
+      if (gameMode !== 'tag' || !gameActive) return;
+      const now = Date.now();
+
+      players.forEach(p => {
+        const x = p.x * renderScale;
+        const y = p.y * renderScale;
+
+        if (tagInfected.has(p.id)) {
+          // === INFECTED PLAYER ===
+          const pulse = 0.25 + Math.sin(now / 200 + p.x) * 0.15;
+          const r = TILE * 1.0 * renderScale;
+
+          // Toxic green aura (large, pulsing)
+          const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+          grad.addColorStop(0, `rgba(80,200,0,${pulse + 0.1})`);
+          grad.addColorStop(0.6, `rgba(80,200,0,${pulse})`);
+          grad.addColorStop(1, 'rgba(80,200,0,0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Dashed danger ring
+          ctx.strokeStyle = `rgba(255,50,50,${0.4 + Math.sin(now / 300) * 0.2})`;
+          ctx.lineWidth = 2 * renderScale;
+          ctx.setLineDash([5 * renderScale, 3 * renderScale]);
+          ctx.beginPath();
+          ctx.arc(x, y, r * 0.85, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // BIG zombie emoji above head
+          ctx.font = `${18 * renderScale}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const bob = Math.sin(now / 300) * 3 * renderScale;
+          ctx.fillText('🧟', x, y - CHAR_SIZE * renderScale * 1.1 + bob);
+
+          // "INFECTED" label
+          ctx.fillStyle = 'rgba(200,50,50,0.9)';
+          ctx.font = `bold ${7 * renderScale}px sans-serif`;
+          const tagW = 42 * renderScale;
+          const tagH = 10 * renderScale;
+          const tagY2 = y + CHAR_SIZE * renderScale * 0.8;
+          ctx.beginPath();
+          ctx.roundRect(x - tagW/2, tagY2, tagW, tagH, 5 * renderScale);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('INFECTED', x, tagY2 + tagH/2);
+
+          // Floating toxic particles
+          for (let i = 0; i < 3; i++) {
+            const angle = (now / 1000 + i * 2.1) % (Math.PI * 2);
+            const dist = (15 + Math.sin(now / 500 + i) * 5) * renderScale;
+            const px2 = x + Math.cos(angle) * dist;
+            const py2 = y + Math.sin(angle) * dist;
+            ctx.fillStyle = `rgba(100,255,0,${0.3 + Math.sin(now / 200 + i) * 0.2})`;
+            ctx.font = `${6 * renderScale}px sans-serif`;
+            ctx.fillText('☠️', px2, py2);
+          }
+        } else {
+          // === SURVIVOR (safe) ===
+          const safeAlpha = 0.1 + Math.sin(now / 800) * 0.05;
+          const r = TILE * 0.7 * renderScale;
+
+          // Soft blue safe glow
+          ctx.fillStyle = `rgba(37,244,238,${safeAlpha})`;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+
+          // "SAFE" small label
+          ctx.fillStyle = 'rgba(37,244,238,0.8)';
+          ctx.font = `bold ${6 * renderScale}px sans-serif`;
+          const sW = 28 * renderScale;
+          const sH = 9 * renderScale;
+          const sY = y + CHAR_SIZE * renderScale * 0.8;
+          ctx.beginPath();
+          ctx.roundRect(x - sW/2, sY, sW, sH, 4 * renderScale);
+          ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('SAFE', x, sY + sH/2);
+        }
+      });
+    }
+
+    function updateTimerDisplay() {
+      const badge = document.getElementById('timerBadge');
+      const text = document.getElementById('timerText');
+      if (gameMode === 'th' && gameActive) {
+        badge.style.display = 'flex';
+        const m = Math.floor(thTimeLeft / 60);
+        const s = thTimeLeft % 60;
+        text.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+      } else if (gameMode === 'br' && gameActive) {
+        badge.style.display = 'flex';
+        const alive = Array.from(players.values()).filter(p => !p.eliminated).length;
+        const elapsed = Math.floor((Date.now() - brPhaseTimer) / 1000);
+        const phaseTotal = Math.floor(BR_PHASE_DURATION / 1000);
+        const nextIn = Math.max(0, phaseTotal - elapsed);
+        const m = Math.floor(nextIn / 60);
+        const s = nextIn % 60;
+        text.textContent = `${alive} alive · P${brPhase}/${BR_MAX_PHASE} · ${m}:${s.toString().padStart(2,'0')}`;
+      } else if (gameMode === 'tag' && gameActive) {
+        badge.style.display = 'flex';
+        const survivors = Array.from(players.values()).filter(p => !tagInfected.has(p.id)).length;
+        const m = Math.floor(tagTimeLeft / 60);
+        const s = tagTimeLeft % 60;
+        text.textContent = `🧟 ${tagInfected.size} infected · ${survivors} safe · ${m}:${s.toString().padStart(2,'0')}`;
+      } else if (gameMode === 'koth' && gameActive) {
+        badge.style.display = 'flex';
+        const m = Math.floor(kothTimeLeft / 60);
+        const s = kothTimeLeft % 60;
+        // Show top scorer
+        let topName = '—'; let topScore = 0;
+        players.forEach(p => { if (p.score > topScore) { topScore = p.score; topName = p.nickname; } });
+        text.textContent = `👑 ${topName}: ${topScore}pts · ${m}:${s.toString().padStart(2,'0')}`;
+      } else if (gameMode === 'marathon' && gameActive) {
+        badge.style.display = 'flex';
+        // Show elapsed time + leader
+        const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+        const em = Math.floor(elapsed / 60);
+        const es = elapsed % 60;
+        let leaderName = '—'; let leaderX = 0;
+        players.forEach(p => { if (p.marathonX > leaderX) { leaderX = p.marathonX; leaderName = p.nickname; } });
+        const leaderDist = Math.round(leaderX / TILE * 5);
+        const envName = getMarathonEnv().name;
+        text.textContent = `🏃 ${leaderName} · ${leaderDist}m · ${envName} · ${em}:${es.toString().padStart(2,'0')}`;
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    function updateScoreboard() {
+      const sb = document.getElementById('scoreboard');
+      if ((gameMode === 'th' || gameMode === 'koth') && gameActive) {
+        sb.classList.add('visible');
+      } else if (gameMode === 'marathon' && gameActive) {
+        sb.classList.add('visible');
+        const sorted = Array.from(players.values()).sort((a, b) => b.marathonX - a.marathonX).slice(0, 5);
+        const rows = document.getElementById('sbRows');
+        const finishPx = marathonFinishLine * TILE;
+        rows.innerHTML = sorted.map((p, i) => {
+          const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}`;
+          const pct = Math.min(100, Math.round((p.marathonX / finishPx) * 100));
+          const status = p.marathonFinished ? '🏁' : `${pct}%`;
+          return `<div class="sb-row"><span class="sb-rank ${rankClass}">${medal}</span><span class="sb-name">${p.nickname}</span><span class="sb-score">${status}</span></div>`;
+        }).join('');
+        return;
+      } else { sb.classList.remove('visible'); return; }
+      sb.classList.add('visible');
+      const sorted = Array.from(players.values()).sort((a, b) => b.score - a.score).slice(0, 5);
+      const rows = document.getElementById('sbRows');
+      rows.innerHTML = sorted.map((p, i) => {
+        const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}`;
+        return `<div class="sb-row"><span class="sb-rank ${rankClass}">${medal}</span><span class="sb-name">${p.nickname}</span><span class="sb-score">${p.score}</span></div>`;
+      }).join('');
+    }
+
+    // ===== RENDERING =====
+    // Per-map color themes
+    const MAP_THEMES = {
+      garden:  { floor1: '#3a8a35', floor2: '#359a30', wall1: '#2d5a27', wall2: '#3a7a32', wallLeaf: '#4a9a42', grass: '#4aaa40', treeBg: '#3a8a35', treeCanopy1: '#2d8a28', treeCanopy2: '#3aaa35', stonePath: '#c4b08a', floorDetail: 'grass' },
+      beach:   { floor1: '#e8d5a3', floor2: '#dcc994', wall1: '#c4a86c', wall2: '#d4b87c', wallLeaf: '#b89860', grass: '#d4c080', treeBg: '#e0cc90', treeCanopy1: '#2d8a28', treeCanopy2: '#3aaa35', stonePath: '#b0a080', floorDetail: 'sand' },
+      castle:  { floor1: '#8a8a8a', floor2: '#7a7a7a', wall1: '#4a4a4a', wall2: '#5a5a5a', wallLeaf: '#6a6a6a', grass: '#666', treeBg: '#707070', treeCanopy1: '#2d8a28', treeCanopy2: '#3aaa35', stonePath: '#999', floorDetail: 'stone' },
+      forest:  { floor1: '#2a6a25', floor2: '#256a20', wall1: '#1a4a17', wall2: '#2a5a22', wallLeaf: '#3a6a32', grass: '#3a8a30', treeBg: '#2a6a25', treeCanopy1: '#1a6a18', treeCanopy2: '#2a8a25', stonePath: '#9a8a6a', floorDetail: 'moss' },
+      islands: { floor1: '#e8d5a3', floor2: '#dcc994', wall1: '#3a7aba', wall2: '#4a8aca', wallLeaf: '#5a9ada', grass: '#d4c080', treeBg: '#d8c890', treeCanopy1: '#2d8a28', treeCanopy2: '#3aaa35', stonePath: '#c4b48a', floorDetail: 'sand' },
+      candy:   { floor1: '#ffb6d9', floor2: '#ffc4e0', wall1: '#d44a8a', wall2: '#e05a9a', wallLeaf: '#ff7ab5', grass: '#ffa0cc', treeBg: '#ffb0d0', treeCanopy1: '#ff69b4', treeCanopy2: '#ff85c8', stonePath: '#ffd700', floorDetail: 'sprinkle' },
+      village: { floor1: '#5a9a50', floor2: '#4f8f48', wall1: '#7a5a3a', wall2: '#8a6a4a', wallLeaf: '#6a4a2a', grass: '#4a9a40', treeBg: '#4a8a45', treeCanopy1: '#2d8a28', treeCanopy2: '#3aaa35', stonePath: '#c0a878', floorDetail: 'grass' },
+      snow:    { floor1: '#e8eef5', floor2: '#dde5ee', wall1: '#8ab4d4', wall2: '#9ac4e4', wallLeaf: '#aad4f4', grass: '#c0d8ea', treeBg: '#d8e4ee', treeCanopy1: '#e0eaf0', treeCanopy2: '#f0f5fa', stonePath: '#b0b8c0', floorDetail: 'snow' },
+    };
+    const CUTE_MAPS = new Set(['garden','beach','castle','forest','islands','candy','village','snow']);
+    const isCuteMap = () => CUTE_MAPS.has(currentMapName);
+    function getTheme() { return MAP_THEMES[currentMapName] || MAP_THEMES.garden; }
+
+    function drawMap() {
+      const cols = currentMap[0].length;
+      const rows = currentMap.length;
+      const cute = isCuteMap();
+      const theme = getTheme();
+      const now = Date.now();
+      const isSnow = currentMapName === 'snow';
+      const isBeach = currentMapName === 'beach' || currentMapName === 'islands';
+      const isCandy = currentMapName === 'candy';
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = c * TILE * renderScale;
+          const y = r * TILE * renderScale;
+          const s = TILE * renderScale;
+          const tile = currentMap[r][c];
+
+          if (tile === 1) {
+            if (cute) {
+              ctx.fillStyle = theme.wall1;
+              ctx.fillRect(x, y, s, s);
+              ctx.fillStyle = theme.wall2;
+              ctx.fillRect(x + 2, y + 2, s - 4, s - 4);
+              // Detail texture
+              ctx.fillStyle = theme.wallLeaf;
+              for (let i = 0; i < 3; i++) {
+                const lx = x + 4 + (i * s/3);
+                const ly = y + 4 + ((i * 7) % 10);
+                ctx.beginPath();
+                ctx.arc(lx, ly, 3 * renderScale, 0, Math.PI * 2);
+                ctx.fill();
+              }
+              // Snow caps on walls
+              if (isSnow) {
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.ellipse(x + s/2, y + 3, s * 0.45, 4 * renderScale, 0, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            } else {
+              ctx.fillStyle = '#2a1f4e';
+              ctx.fillRect(x, y, s, s);
+              ctx.fillStyle = '#3d2d6b';
+              ctx.fillRect(x + 1, y + 1, s - 2, s - 2);
+              ctx.strokeStyle = '#1a1238';
+              ctx.lineWidth = 0.5;
+              ctx.strokeRect(x + 2, y + 2, s - 4, s/2 - 3);
+              ctx.strokeRect(x + s/2, y + s/2, s/2 - 2, s/2 - 3);
+            }
+          } else if (tile === 5) {
+            // Tree (blocking decorative)
+            ctx.fillStyle = cute ? theme.treeBg : '#1a1a2e';
+            ctx.fillRect(x, y, s, s);
+            if (isSnow) {
+              // Snowy pine tree
+              ctx.fillStyle = '#8B5E3C';
+              ctx.fillRect(x + s * 0.42, y + s * 0.65, s * 0.16, s * 0.35);
+              // Snow-covered canopy (white-green)
+              ctx.fillStyle = '#4a8a55';
+              ctx.beginPath();
+              ctx.moveTo(x + s/2, y + s * 0.1);
+              ctx.lineTo(x + s * 0.2, y + s * 0.65);
+              ctx.lineTo(x + s * 0.8, y + s * 0.65);
+              ctx.fill();
+              ctx.fillStyle = '#fff';
+              ctx.beginPath();
+              ctx.moveTo(x + s/2, y + s * 0.08);
+              ctx.lineTo(x + s * 0.3, y + s * 0.35);
+              ctx.lineTo(x + s * 0.7, y + s * 0.35);
+              ctx.fill();
+            } else if (isBeach) {
+              // Palm tree
+              ctx.fillStyle = '#a0703c';
+              ctx.fillRect(x + s * 0.42, y + s * 0.35, s * 0.16, s * 0.65);
+              ctx.fillStyle = '#2d8a28';
+              const palmBob = Math.sin(now / 1200 + c) * 3;
+              for (let i = 0; i < 5; i++) {
+                const a = (Math.PI * 2 / 5) * i - Math.PI / 2;
+                ctx.beginPath();
+                ctx.ellipse(x + s/2 + Math.cos(a) * s * 0.25, y + s * 0.25 + Math.sin(a) * s * 0.15 + palmBob, s * 0.25, s * 0.08, a, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            } else if (isCandy) {
+              // Lollipop tree
+              ctx.fillStyle = '#fff';
+              ctx.fillRect(x + s * 0.45, y + s * 0.5, s * 0.1, s * 0.5);
+              const candyColors = ['#ff69b4','#ff4500','#ffd700','#00bfff','#9370db'];
+              ctx.fillStyle = candyColors[(r + c) % candyColors.length];
+              ctx.beginPath();
+              ctx.arc(x + s/2, y + s * 0.35, s * 0.3, 0, Math.PI * 2);
+              ctx.fill();
+              // Swirl
+              ctx.strokeStyle = '#fff';
+              ctx.lineWidth = 2 * renderScale;
+              ctx.beginPath();
+              ctx.arc(x + s/2, y + s * 0.35, s * 0.15, 0, Math.PI * 1.5);
+              ctx.stroke();
+            } else {
+              // Normal tree
+              ctx.fillStyle = '#8B5E3C';
+              ctx.fillRect(x + s * 0.38, y + s * 0.5, s * 0.24, s * 0.5);
+              ctx.fillStyle = theme.treeCanopy1;
+              ctx.beginPath();
+              ctx.arc(x + s/2, y + s * 0.35, s * 0.4, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = theme.treeCanopy2;
+              ctx.beginPath();
+              ctx.arc(x + s * 0.38, y + s * 0.3, s * 0.28, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          } else if (tile === 6) {
+            // Pond/water (blocking decorative)
+            ctx.fillStyle = cute ? theme.treeBg : '#1a1a2e';
+            ctx.fillRect(x, y, s, s);
+            if (isSnow) {
+              // Frozen pond (icy)
+              ctx.fillStyle = '#b8daf0';
+              ctx.beginPath();
+              ctx.ellipse(x + s/2, y + s/2, s * 0.42, s * 0.38, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = 'rgba(255,255,255,0.4)';
+              ctx.beginPath();
+              ctx.ellipse(x + s * 0.35, y + s * 0.4, s * 0.2, s * 0.12, -0.3, 0, Math.PI * 2);
+              ctx.fill();
+              // Ice crack lines
+              ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(x + s * 0.3, y + s * 0.5);
+              ctx.lineTo(x + s * 0.55, y + s * 0.45);
+              ctx.lineTo(x + s * 0.7, y + s * 0.6);
+              ctx.stroke();
+            } else {
+              ctx.fillStyle = isBeach ? '#2a7ab8' : '#4a9ae6';
+              ctx.beginPath();
+              ctx.ellipse(x + s/2, y + s/2, s * 0.42, s * 0.38, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = 'rgba(255,255,255,0.2)';
+              ctx.beginPath();
+              ctx.ellipse(x + s * 0.4, y + s * 0.4, s * 0.15, s * 0.1, -0.5, 0, Math.PI * 2);
+              ctx.fill();
+              const ripple = Math.sin(now / 800 + c + r) * 0.1 + 0.1;
+              ctx.strokeStyle = `rgba(255,255,255,${ripple})`;
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.arc(x + s/2, y + s/2, s * 0.25 + Math.sin(now / 500 + c) * 3, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+          } else if (tile === 4) {
+            // Flower/decoration patch (walkable)
+            ctx.fillStyle = cute ? ((r + c) % 2 === 0 ? theme.floor1 : theme.floor2) : ((r + c) % 2 === 0 ? '#1a1a2e' : '#16213e');
+            ctx.fillRect(x, y, s, s);
+            if (isSnow) {
+              const snowDecor = ['⛄','❄️','🎄','⭐','🎁'];
+              const idx = (r * 7 + c * 3) % snowDecor.length;
+              ctx.font = `${12 * renderScale}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              const bob = Math.sin(now / 1000 + r + c) * 2 * renderScale;
+              ctx.fillText(snowDecor[idx], x + s/2, y + s/2 + bob);
+            } else if (isBeach) {
+              const beachDecor = ['🐚','🦀','🌴','⛱️','🏖️'];
+              const idx = (r * 7 + c * 3) % beachDecor.length;
+              ctx.font = `${12 * renderScale}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(beachDecor[idx], x + s/2, y + s/2);
+            } else if (isCandy) {
+              const candyDecor = ['🍭','🍬','🍩','🧁','🍪'];
+              const idx = (r * 7 + c * 3) % candyDecor.length;
+              ctx.font = `${12 * renderScale}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              const bob = Math.sin(now / 800 + r + c) * 2 * renderScale;
+              ctx.fillText(candyDecor[idx], x + s/2, y + s/2 + bob);
+            } else {
+              const flowers = ['🌸','🌼','🌺','🌻','💐'];
+              const flowerIdx = (r * 7 + c * 3) % flowers.length;
+              ctx.font = `${12 * renderScale}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              const fBob = Math.sin(now / 1000 + r + c) * 2 * renderScale;
+              ctx.fillText(flowers[flowerIdx], x + s/2, y + s/2 + fBob);
+            }
+          } else if (tile === 7) {
+            // Path (walkable decorative)
+            ctx.fillStyle = cute ? theme.treeBg : '#1a1a2e';
+            ctx.fillRect(x, y, s, s);
+            ctx.fillStyle = cute ? theme.stonePath : '#333';
+            ctx.beginPath();
+            ctx.ellipse(x + s * 0.3, y + s * 0.35, s * 0.18, s * 0.14, 0.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(x + s * 0.65, y + s * 0.55, s * 0.2, s * 0.15, -0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(x + s * 0.4, y + s * 0.75, s * 0.16, s * 0.12, 0.1, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            // Regular floor
+            if (cute) {
+              ctx.fillStyle = (r + c) % 2 === 0 ? theme.floor1 : theme.floor2;
+              ctx.fillRect(x, y, s, s);
+              // Floor detail varies by theme
+              if ((r * 3 + c * 7) % 5 === 0) {
+                if (theme.floorDetail === 'grass') {
+                  ctx.strokeStyle = theme.grass;
+                  ctx.lineWidth = 1;
+                  ctx.beginPath();
+                  ctx.moveTo(x + s * 0.3, y + s * 0.8);
+                  ctx.lineTo(x + s * 0.25, y + s * 0.5);
+                  ctx.moveTo(x + s * 0.7, y + s * 0.7);
+                  ctx.lineTo(x + s * 0.75, y + s * 0.4);
+                  ctx.stroke();
+                } else if (theme.floorDetail === 'sand') {
+                  ctx.fillStyle = 'rgba(180,160,100,0.3)';
+                  ctx.beginPath();
+                  ctx.arc(x + s * 0.3, y + s * 0.6, 2 * renderScale, 0, Math.PI * 2);
+                  ctx.arc(x + s * 0.7, y + s * 0.4, 1.5 * renderScale, 0, Math.PI * 2);
+                  ctx.arc(x + s * 0.5, y + s * 0.8, 1 * renderScale, 0, Math.PI * 2);
+                  ctx.fill();
+                } else if (theme.floorDetail === 'snow') {
+                  // Snow sparkle
+                  const sparkle = Math.sin(now / 600 + r * 3 + c * 7) * 0.3 + 0.3;
+                  ctx.fillStyle = `rgba(255,255,255,${sparkle})`;
+                  ctx.beginPath();
+                  ctx.arc(x + s * 0.3, y + s * 0.4, 1.5 * renderScale, 0, Math.PI * 2);
+                  ctx.arc(x + s * 0.7, y + s * 0.7, 1 * renderScale, 0, Math.PI * 2);
+                  ctx.fill();
+                } else if (theme.floorDetail === 'stone') {
+                  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                  ctx.lineWidth = 0.5;
+                  ctx.strokeRect(x + 2, y + 2, s/2 - 2, s - 4);
+                } else if (theme.floorDetail === 'moss') {
+                  ctx.fillStyle = 'rgba(60,120,40,0.2)';
+                  ctx.beginPath();
+                  ctx.arc(x + s * 0.5, y + s * 0.5, 3 * renderScale, 0, Math.PI * 2);
+                  ctx.fill();
+                } else if (theme.floorDetail === 'sprinkle') {
+                  const sprinkleColors = ['#ff0','#0ff','#f0f','#0f0','#ff8800'];
+                  ctx.fillStyle = sprinkleColors[(r * 3 + c) % sprinkleColors.length];
+                  ctx.fillRect(x + s * 0.4, y + s * 0.45, s * 0.12, s * 0.04);
+                  ctx.fillStyle = sprinkleColors[(r + c * 5) % sprinkleColors.length];
+                  ctx.fillRect(x + s * 0.6, y + s * 0.65, s * 0.04, s * 0.12);
+                }
+              }
+            } else {
+              ctx.fillStyle = (r + c) % 2 === 0 ? '#1a1a2e' : '#16213e';
+              ctx.fillRect(x, y, s, s);
+            }
+          }
+
+          // Spawn marker
+          if (tile === 2) {
+            if (cute) {
+              ctx.fillStyle = 'rgba(255,255,200,0.15)';
+              ctx.fillRect(x, y, s, s);
+              ctx.font = `${14 * renderScale}px sans-serif`;
+              ctx.textAlign = 'center';
+              const sBob = Math.sin(now / 600 + c) * 2 * renderScale;
+              ctx.fillText('✨', x + s/2, y + s/2 + 5 * renderScale + sBob);
+            } else {
+              ctx.fillStyle = 'rgba(37, 244, 238, 0.15)';
+              ctx.fillRect(x, y, s, s);
+              ctx.fillStyle = '#25f4ee';
+              ctx.font = `${14 * renderScale}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.fillText('⚡', x + s/2, y + s/2 + 5 * renderScale);
+            }
+          }
+
+          // Goal marker
+          if (tile === 3 && gameMode === 'maze') {
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.15)';
+            ctx.fillRect(x, y, s, s);
+            ctx.fillStyle = '#ffd700';
+            ctx.font = `${20 * renderScale}px sans-serif`;
+            ctx.textAlign = 'center';
+            const bob = Math.sin(now / 500) * 3 * renderScale;
+            ctx.fillText('⭐', x + s/2, y + s/2 + 6 * renderScale + bob);
+          }
+        }
+      }
+    }
+
+    function drawBRZone() {
+      if (gameMode !== 'br' || !gameActive) return;
+      const cols = currentMap[0].length;
+      const rows = currentMap.length;
+
+      // Draw danger zone (outside safe zone) as red overlay
+      ctx.fillStyle = `rgba(255, 0, 0, ${0.15 + Math.sin(Date.now() / 300) * 0.05})`;
+
+      // Top
+      ctx.fillRect(0, 0, canvas.width, brZone.y1 * renderScale);
+      // Bottom
+      ctx.fillRect(0, brZone.y2 * renderScale, canvas.width, canvas.height - brZone.y2 * renderScale);
+      // Left
+      ctx.fillRect(0, brZone.y1 * renderScale, brZone.x1 * renderScale, (brZone.y2 - brZone.y1) * renderScale);
+      // Right
+      ctx.fillRect(brZone.x2 * renderScale, brZone.y1 * renderScale, canvas.width - brZone.x2 * renderScale, (brZone.y2 - brZone.y1) * renderScale);
+
+      // Draw zone border
+      ctx.strokeStyle = `rgba(37, 244, 238, ${0.6 + Math.sin(Date.now() / 200) * 0.3})`;
+      ctx.lineWidth = 3 * renderScale;
+      ctx.setLineDash([8 * renderScale, 4 * renderScale]);
+      ctx.strokeRect(
+        brZone.x1 * renderScale, brZone.y1 * renderScale,
+        (brZone.x2 - brZone.x1) * renderScale, (brZone.y2 - brZone.y1) * renderScale
+      );
+      ctx.setLineDash([]);
+    }
+
+    function drawCoins() {
+      if (gameMode !== 'th' || !gameActive) return;
+      thCoins.forEach(coin => {
+        const x = coin.x * renderScale;
+        const y = coin.y * renderScale;
+        const bob = Math.sin(Date.now() / 400 + coin.id) * 3 * renderScale;
+        const size = (coin.value >= 3 ? 20 : 16) * renderScale;
+
+        ctx.fillStyle = coin.value >= 3 ? 'rgba(0, 200, 255, 0.2)' : 'rgba(255, 215, 0, 0.2)';
+        ctx.beginPath();
+        ctx.arc(x, y + bob, size * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.font = `${size}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(coin.value >= 3 ? '💎' : '🪙', x, y + bob);
+      });
+    }
+
+    function drawWeapons() {
+      if (gameMode !== 'br' || !gameActive) return;
+      brWeapons.forEach(w => {
+        const x = w.x * renderScale;
+        const y = w.y * renderScale;
+        const bob = Math.sin(Date.now() / 500 + w.id * 0.7) * 3 * renderScale;
+        const size = 18 * renderScale;
+
+        // Glow based on power
+        const glowColors = ['', 'rgba(180,180,180,0.2)', 'rgba(100,200,100,0.2)', 'rgba(50,150,255,0.25)', 'rgba(200,100,255,0.3)', 'rgba(255,50,50,0.3)', 'rgba(255,215,0,0.35)'];
+        ctx.fillStyle = glowColors[w.weapon.power] || 'rgba(255,255,255,0.15)';
+        ctx.beginPath();
+        ctx.arc(x, y + bob, size * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pulsing ring for rare weapons
+        if (w.weapon.power >= 4) {
+          ctx.strokeStyle = w.weapon.power >= 5 ? 'rgba(255,50,50,0.5)' : 'rgba(200,100,255,0.4)';
+          ctx.lineWidth = 2 * renderScale;
+          const pulseR = size + Math.sin(Date.now() / 300) * 4 * renderScale;
+          ctx.beginPath();
+          ctx.arc(x, y + bob, pulseR, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        ctx.font = `${size}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(w.weapon.emoji, x, y + bob);
+
+        // Power label
+        ctx.font = `bold ${8 * renderScale}px sans-serif`;
+        ctx.fillStyle = '#fff';
+        ctx.fillText(`Lv${w.weapon.power}`, x, y + bob + size * 0.7);
+      });
+    }
+
+    // Gift tier thresholds
+    function getPlayerTier(p) {
+      const d = p.totalDiamonds || 0;
+      if (d >= 500) return { tier: 5, name: 'Diamond', color: '#b9f2ff', glow: 'rgba(185,242,255,0.5)', trail: true, crown: true, sizeBonus: 1.15 };
+      if (d >= 200) return { tier: 4, name: 'Gold', color: '#ffd700', glow: 'rgba(255,215,0,0.4)', trail: false, crown: false, sizeBonus: 1.1 };
+      if (d >= 50)  return { tier: 3, name: 'Silver', color: '#c0c0c0', glow: 'rgba(192,192,192,0.3)', trail: false, crown: false, sizeBonus: 1.05 };
+      if (d >= 10)  return { tier: 2, name: 'Bronze', color: '#cd7f32', glow: null, trail: false, crown: false, sizeBonus: 1.0 };
+      return { tier: 1, name: 'Basic', color: null, glow: null, trail: false, crown: false, sizeBonus: 1.0 };
+    }
+
+    function drawCharacter(player) {
+      const tierInfo = getPlayerTier(player);
+      const style = getPlayerStyle(player);
+      const now = Date.now();
+      const sizeBase = CHAR_SIZE * renderScale * tierInfo.sizeBonus;
+      const halfSize = sizeBase / 2;
+      const isHighlighted = now < player.highlightUntil;
+      const isMoving = player.moveQueue.length > 0 || Math.abs(player.x - player.targetX) > 1 || Math.abs(player.y - player.targetY) > 1;
+
+      // Idle bob animation (gentle breathing/bounce when not moving)
+      const idleBob = isMoving ? 0 : Math.sin((now + style.bobOffset) / 600) * 2 * renderScale;
+      const x = player.x * renderScale;
+      const y = player.y * renderScale + idleBob;
+
+      if (player.eliminated) ctx.globalAlpha = 0.3;
+
+      // === CHAT HIGHLIGHT: pulsing beacon ===
+      if (isHighlighted && !player.eliminated) {
+        const pulse = 0.4 + Math.sin(now / 150) * 0.3;
+        const ringR = halfSize * 2.5 + Math.sin(now / 200) * 8 * renderScale;
+        ctx.strokeStyle = `rgba(37,244,238,${pulse})`;
+        ctx.lineWidth = 3 * renderScale;
+        ctx.setLineDash([6 * renderScale, 3 * renderScale]);
+        ctx.beginPath();
+        ctx.arc(x, y, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = `rgba(37,244,238,${pulse + 0.2})`;
+        const arrowY = y - ringR - 8 * renderScale;
+        ctx.beginPath();
+        ctx.moveTo(x - 6 * renderScale, arrowY - 10 * renderScale);
+        ctx.lineTo(x + 6 * renderScale, arrowY - 10 * renderScale);
+        ctx.lineTo(x, arrowY);
+        ctx.fill();
+      }
+
+      // === TIER GLOW / AURA ===
+      if (tierInfo.glow && !player.eliminated) {
+        const glowR = halfSize * 1.8;
+        ctx.fillStyle = tierInfo.glow;
+        ctx.beginPath();
+        ctx.arc(x, y, glowR + Math.sin(now / 600) * 3 * renderScale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // === SHADOW ===
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath();
+      ctx.ellipse(x, y + halfSize * 0.75 - idleBob, halfSize * 0.55, halfSize * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // === ANIMAL TAIL (behind body) ===
+      const animal = style.animal;
+      if (!player.eliminated) {
+        const tailSwing = Math.sin(now / 300 + style.bobOffset) * 8 * renderScale;
+        ctx.font = `${8 * renderScale}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(animal.tailEmoji, x + halfSize * 0.5 + tailSwing * 0.3, y + halfSize * 0.3);
+      }
+
+      // === BODY (cute round with body shape variation) ===
+      const bodyR = sizeBase * 0.28;
+      const bodyRX = bodyR * style.bodyShape.scaleX;
+      const bodyRY = bodyR * style.bodyShape.scaleY;
+      const bodyY = y + bodyR * 0.2;
+      const isInfected = gameMode === 'tag' && gameActive && tagInfected.has(player.id);
+      const bodyColor = player.eliminated ? '#555' : isInfected ? '#5a8a2a' : player.color;
+
+      // Body oval
+      ctx.fillStyle = bodyColor;
+      ctx.beginPath();
+      ctx.ellipse(x, bodyY, bodyRX, bodyRY, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // === ANIMAL SKIN PATTERN ===
+      if (!player.eliminated) {
+        if (animal.pattern === 'belly') {
+          // Light belly patch
+          ctx.fillStyle = 'rgba(255,255,255,0.35)';
+          ctx.beginPath();
+          ctx.ellipse(x, bodyY + bodyRY * 0.15, bodyRX * 0.55, bodyRY * 0.6, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (animal.pattern === 'stripes') {
+          // Tiger/cat stripes
+          ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+          ctx.lineWidth = 2 * renderScale;
+          for (let s = -1; s <= 1; s++) {
+            ctx.beginPath();
+            ctx.moveTo(x - bodyRX * 0.5, bodyY + s * bodyRY * 0.3);
+            ctx.quadraticCurveTo(x, bodyY + s * bodyRY * 0.3 - 3 * renderScale, x + bodyRX * 0.5, bodyY + s * bodyRY * 0.3);
+            ctx.stroke();
+          }
+        } else if (animal.pattern === 'spots') {
+          // Dalmatian/dog spots
+          ctx.fillStyle = 'rgba(0,0,0,0.15)';
+          const spots = [[0.2, -0.2], [-0.3, 0.1], [0.15, 0.3], [-0.1, -0.3]];
+          spots.forEach(([sx, sy]) => {
+            ctx.beginPath();
+            ctx.arc(x + bodyRX * sx, bodyY + bodyRY * sy, 3 * renderScale, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        } else if (animal.pattern === 'panda') {
+          // White belly + dark patches
+          ctx.fillStyle = 'rgba(255,255,255,0.4)';
+          ctx.beginPath();
+          ctx.ellipse(x, bodyY + bodyRY * 0.1, bodyRX * 0.5, bodyRY * 0.55, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(0,0,0,0.15)';
+          ctx.beginPath();
+          ctx.ellipse(x - bodyRX * 0.6, bodyY - bodyRY * 0.2, bodyRX * 0.25, bodyRY * 0.3, -0.3, 0, Math.PI * 2);
+          ctx.ellipse(x + bodyRX * 0.6, bodyY - bodyRY * 0.2, bodyRX * 0.25, bodyRY * 0.3, 0.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Body shine
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.beginPath();
+        ctx.ellipse(x - bodyRX * 0.25, bodyY - bodyRY * 0.3, bodyRX * 0.25, bodyRY * 0.4, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // === TIER CAPE ===
+      if (tierInfo.tier >= 4 && !player.eliminated) {
+        const capeColor = tierInfo.tier >= 5 ? 'rgba(185,242,255,0.6)' : 'rgba(255,215,0,0.5)';
+        const capeSwing = Math.sin(now / 400) * 3 * renderScale;
+        ctx.fillStyle = capeColor;
+        ctx.beginPath();
+        ctx.moveTo(x - bodyRX * 0.5, bodyY - bodyRY * 0.5);
+        ctx.quadraticCurveTo(x - bodyRX * 1.5, bodyY + bodyRY * 1.2 + capeSwing, x - bodyRX * 0.3, bodyY + bodyRY * 1.8);
+        ctx.lineTo(x + bodyRX * 0.3, bodyY + bodyRY * 1.8);
+        ctx.quadraticCurveTo(x + bodyRX * 1.5, bodyY + bodyRY * 1.2 - capeSwing, x + bodyRX * 0.5, bodyY - bodyRY * 0.5);
+        ctx.fill();
+      }
+
+      // === TINY ARMS (animated) ===
+      const walk = isMoving ? Math.sin(player.frame * 0.3) * 4 * renderScale : Math.sin((now + style.bobOffset) / 800) * 1.5 * renderScale;
+      ctx.strokeStyle = bodyColor;
+      ctx.lineWidth = 3 * renderScale;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x - bodyRX, bodyY);
+      ctx.lineTo(x - bodyRX - 6 * renderScale, bodyY + 4 * renderScale + walk);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + bodyRX, bodyY);
+      ctx.lineTo(x + bodyRX + 6 * renderScale, bodyY + 4 * renderScale - walk);
+      ctx.stroke();
+
+      // === CUTE FEET (animated) ===
+      const footSize = 4.5 * renderScale;
+      const footY = bodyY + bodyRY * 1.05;
+      const footWalk = isMoving ? walk : 0;
+      ctx.fillStyle = bodyColor;
+      ctx.beginPath();
+      ctx.ellipse(x - bodyRX * 0.4, footY + footWalk * 0.5, footSize, footSize * 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(x + bodyRX * 0.4, footY - footWalk * 0.5, footSize, footSize * 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // === HEAD ===
+      const headR = halfSize * 0.6;
+      const headY = y - headR * 0.6;
+
+      // === ANIMAL EARS (behind head for some types) ===
+      if (!player.eliminated && animal.ears !== 'none') {
+        const earC = animal.earColor || bodyColor;
+        if (animal.ears === 'pointed') {
+          // Cat/Fox pointed ears
+          ctx.fillStyle = earC;
+          ctx.beginPath();
+          ctx.moveTo(x - headR * 0.6, headY - headR * 0.4);
+          ctx.lineTo(x - headR * 0.3, headY - headR * 1.3);
+          ctx.lineTo(x - headR * 0.0, headY - headR * 0.4);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(x + headR * 0.0, headY - headR * 0.4);
+          ctx.lineTo(x + headR * 0.3, headY - headR * 1.3);
+          ctx.lineTo(x + headR * 0.6, headY - headR * 0.4);
+          ctx.fill();
+          // Inner ear
+          ctx.fillStyle = animal.earColor || 'rgba(255,180,180,0.5)';
+          ctx.beginPath();
+          ctx.moveTo(x - headR * 0.5, headY - headR * 0.45);
+          ctx.lineTo(x - headR * 0.3, headY - headR * 1.05);
+          ctx.lineTo(x - headR * 0.1, headY - headR * 0.45);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(x + headR * 0.1, headY - headR * 0.45);
+          ctx.lineTo(x + headR * 0.3, headY - headR * 1.05);
+          ctx.lineTo(x + headR * 0.5, headY - headR * 0.45);
+          ctx.fill();
+        } else if (animal.ears === 'round') {
+          // Bear/Panda/Mouse round ears
+          ctx.fillStyle = earC;
+          ctx.beginPath();
+          ctx.arc(x - headR * 0.65, headY - headR * 0.65, headR * 0.35, 0, Math.PI * 2);
+          ctx.arc(x + headR * 0.65, headY - headR * 0.65, headR * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+          if (animal.earColor) {
+            ctx.fillStyle = 'rgba(255,200,200,0.4)';
+            ctx.beginPath();
+            ctx.arc(x - headR * 0.65, headY - headR * 0.65, headR * 0.2, 0, Math.PI * 2);
+            ctx.arc(x + headR * 0.65, headY - headR * 0.65, headR * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (animal.ears === 'long') {
+          // Bunny long ears
+          const earFlop = Math.sin((now + style.bobOffset) / 500) * 3 * renderScale;
+          ctx.fillStyle = earC || bodyColor;
+          ctx.beginPath();
+          ctx.ellipse(x - headR * 0.35, headY - headR * 1.4 + earFlop, headR * 0.2, headR * 0.7, -0.1, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(x + headR * 0.35, headY - headR * 1.4 - earFlop, headR * 0.2, headR * 0.7, 0.1, 0, Math.PI * 2);
+          ctx.fill();
+          // Inner ear pink
+          ctx.fillStyle = 'rgba(255,180,180,0.5)';
+          ctx.beginPath();
+          ctx.ellipse(x - headR * 0.35, headY - headR * 1.35 + earFlop, headR * 0.1, headR * 0.5, -0.1, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(x + headR * 0.35, headY - headR * 1.35 - earFlop, headR * 0.1, headR * 0.5, 0.1, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (animal.ears === 'floppy') {
+          // Dog/Pig floppy ears
+          const flopAnim = Math.sin((now + style.bobOffset) / 700) * 2 * renderScale;
+          ctx.fillStyle = earC || bodyColor;
+          ctx.beginPath();
+          ctx.ellipse(x - headR * 0.8, headY + flopAnim, headR * 0.25, headR * 0.45, -0.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(x + headR * 0.8, headY - flopAnim, headR * 0.25, headR * 0.45, 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Head circle + clip for image
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, headY, headR, 0, Math.PI * 2);
+      ctx.closePath();
+
+      const img = profileImages.get(player.id);
+      if (img && img.complete && !player.eliminated) {
+        ctx.clip();
+        ctx.drawImage(img, x - headR, headY - headR, headR * 2, headR * 2);
+      } else {
+        ctx.fillStyle = player.eliminated ? '#555' : player.color;
+        ctx.fill();
+
+        if (!player.eliminated) {
+          // Blinking eyes
+          const blinkCycle = ((now + style.blinkOffset) % 4000);
+          const isBlinking = blinkCycle > 3800;
+          const eyeY = headY - headR * 0.1;
+
+          if (isBlinking) {
+            // Closed eyes (lines)
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1.5 * renderScale;
+            ctx.beginPath();
+            ctx.moveTo(x - headR * 0.35, eyeY);
+            ctx.lineTo(x - headR * 0.15, eyeY);
+            ctx.moveTo(x + headR * 0.15, eyeY);
+            ctx.lineTo(x + headR * 0.35, eyeY);
+            ctx.stroke();
+          } else {
+            // Open eyes (white + pupil)
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(x - headR * 0.25, eyeY, 2.8 * renderScale, 0, Math.PI * 2);
+            ctx.arc(x + headR * 0.25, eyeY, 2.8 * renderScale, 0, Math.PI * 2);
+            ctx.fill();
+            // Pupils - look in movement direction
+            let pupilOx = 0, pupilOy = 0;
+            if (player.dir === 'left') pupilOx = -0.8;
+            else if (player.dir === 'right') pupilOx = 0.8;
+            else if (player.dir === 'up') pupilOy = -0.8;
+            else pupilOy = 0.5;
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(x - headR * 0.25 + pupilOx * renderScale, eyeY + pupilOy * renderScale, 1.6 * renderScale, 0, Math.PI * 2);
+            ctx.arc(x + headR * 0.25 + pupilOx * renderScale, eyeY + pupilOy * renderScale, 1.6 * renderScale, 0, Math.PI * 2);
+            ctx.fill();
+            // Eye shine
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.beginPath();
+            ctx.arc(x - headR * 0.22, eyeY - 0.8 * renderScale, 0.8 * renderScale, 0, Math.PI * 2);
+            ctx.arc(x + headR * 0.28, eyeY - 0.8 * renderScale, 0.8 * renderScale, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Mouth - changes based on state
+          ctx.strokeStyle = '#333';
+          ctx.lineWidth = 1 * renderScale;
+          const mouthY = headY + headR * 0.25;
+          if (isMoving) {
+            // Open mouth (excited)
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.ellipse(x, mouthY, headR * 0.12, headR * 0.1, 0, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            // Happy smile
+            ctx.beginPath();
+            ctx.arc(x, mouthY - headR * 0.05, headR * 0.18, 0.1, Math.PI - 0.1);
+            ctx.stroke();
+          }
+        } else {
+          ctx.fillStyle = '#fff';
+          ctx.font = `${10 * renderScale}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('💀', x, headY);
+        }
+      }
+      ctx.restore();
+
+      // Blush cheeks
+      if (!player.eliminated) {
+        ctx.fillStyle = 'rgba(255,150,150,0.35)';
+        ctx.beginPath();
+        ctx.ellipse(x - headR * 0.52, headY + headR * 0.18, 3 * renderScale, 2 * renderScale, 0, 0, Math.PI * 2);
+        ctx.ellipse(x + headR * 0.52, headY + headR * 0.18, 3 * renderScale, 2 * renderScale, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // === ACCESSORY (hat/decoration on top of head) ===
+      if (!player.eliminated) {
+        const accY = headY - headR * 1.0;
+        ctx.font = `${10 * renderScale}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(style.accessory.emoji, x, accY);
+      }
+
+      // Head border - tier colored ring
+      let borderColor = '#fff';
+      if (tierInfo.tier >= 3) borderColor = tierInfo.color;
+      if (player.reachedGoal) borderColor = '#ffd700';
+      if (player.eliminated) borderColor = '#ff4444';
+      if (player.shield) borderColor = '#00ffff';
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = (tierInfo.tier >= 4 ? 3 : player.shield ? 3 : 2) * renderScale;
+      ctx.beginPath();
+      ctx.arc(x, headY, headR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Sparkle for tier 3+
+      if (tierInfo.tier >= 3 && !player.eliminated) {
+        const sparkAngle = (now / 800) % (Math.PI * 2);
+        const sparkR = headR + 5 * renderScale;
+        for (let i = 0; i < tierInfo.tier - 1; i++) {
+          const a = sparkAngle + (Math.PI * 2 / (tierInfo.tier - 1)) * i;
+          const sx = x + Math.cos(a) * sparkR;
+          const sy = headY + Math.sin(a) * sparkR;
+          ctx.fillStyle = tierInfo.color;
+          ctx.font = `${6 * renderScale}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText('✦', sx, sy);
+        }
+      }
+
+      // Shield aura
+      if (player.shield && !player.eliminated) {
+        ctx.strokeStyle = 'rgba(0,255,255,0.4)';
+        ctx.lineWidth = 2 * renderScale;
+        ctx.beginPath();
+        ctx.arc(x, headY, headR + 5 * renderScale, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // === IDLE EMOTE (random thought bubbles when not moving) ===
+      if (!isMoving && !player.eliminated && !player.chatBubble) {
+        const emoteCycle = Math.floor((now + style.emoteOffset) / 8000);
+        const emotePhase = ((now + style.emoteOffset) % 8000);
+        if (emotePhase > 5500 && emotePhase < 7500) {
+          const emote = IDLE_EMOTES[emoteCycle % IDLE_EMOTES.length];
+          const emoteProgress = (emotePhase - 5500) / 2000;
+          const emoteAlpha = emoteProgress < 0.2 ? emoteProgress / 0.2 : emoteProgress > 0.8 ? (1 - emoteProgress) / 0.2 : 1;
+          const emoteFloat = emoteProgress * 8 * renderScale;
+          ctx.globalAlpha = (player.eliminated ? 0.3 : 1) * emoteAlpha;
+          ctx.font = `${9 * renderScale}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(emote, x + headR * 0.9, headY - headR * 0.8 - emoteFloat);
+          ctx.globalAlpha = player.eliminated ? 0.3 : 1;
+        }
+      }
+
+      // === HP bar (BR mode) ===
+      if (gameMode === 'br' && !player.eliminated && gameActive) {
+        const hpW = bodyR * 2.5;
+        const hpH = 4 * renderScale;
+        const hpY2 = headY - headR - 10 * renderScale;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(x - hpW/2, hpY2, hpW, hpH);
+        ctx.fillStyle = player.hp >= 2 ? '#00ff88' : '#fe2c55';
+        ctx.fillRect(x - hpW/2, hpY2, hpW * (player.hp / 3), hpH);
+
+        // Weapon badge
+        if (player.weapon) {
+          const wBadgeY = headY - headR - 22 * renderScale;
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          const wLabel = `${player.weapon.emoji}Lv${player.weapon.power}`;
+          ctx.font = `bold ${9 * renderScale}px sans-serif`;
+          const wW = ctx.measureText(wLabel).width + 8 * renderScale;
+          ctx.beginPath();
+          ctx.roundRect(x - wW/2, wBadgeY - 6 * renderScale, wW, 12 * renderScale, 6 * renderScale);
+          ctx.fill();
+          ctx.fillStyle = '#ffd700';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(wLabel, x, wBadgeY);
+        }
+
+        // Kill count
+        if (player.kills > 0) {
+          ctx.font = `bold ${8 * renderScale}px sans-serif`;
+          ctx.fillStyle = '#fe2c55';
+          ctx.textAlign = 'center';
+          ctx.fillText(`💀${player.kills}`, x + bodyR + 14 * renderScale, headY);
+        }
+      }
+
+      // Score (TH mode)
+      if (gameMode === 'th' && gameActive) {
+        ctx.font = `bold ${10 * renderScale}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText(`🪙${player.score}`, x, headY - headR - 14 * renderScale);
+      }
+
+      // Bonus steps badge
+      if (player.bonusSteps > 0 && !player.eliminated) {
+        const bsX = x - bodyR - 14 * renderScale;
+        const bsY = headY;
+        ctx.fillStyle = 'rgba(37,244,238,0.9)';
+        ctx.beginPath();
+        ctx.arc(bsX, bsY, 10 * renderScale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.font = `bold ${8 * renderScale}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`⚡${player.bonusSteps}`, bsX, bsY);
+      }
+
+      // Follower badge
+      if (player.isFollower && !player.eliminated) {
+        ctx.fillStyle = '#fe2c55';
+        ctx.beginPath();
+        ctx.arc(x + headR * 0.7, headY - headR * 0.5, 5 * renderScale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = `${7 * renderScale}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('♥', x + headR * 0.7, headY - headR * 0.5);
+      }
+
+      // Tier badge
+      if (tierInfo.tier >= 2 && !player.eliminated) {
+        const tEmoji = ['','','🥉','🥈','🥇','💎'][tierInfo.tier];
+        ctx.font = `${8 * renderScale}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(tEmoji, x - headR * 0.7, headY - headR * 0.5);
+      }
+
+      // Name tag
+      ctx.font = `${9 * renderScale}px sans-serif`;
+      const textMetrics = ctx.measureText(player.nickname);
+      const tagW = Math.min(textMetrics.width + 12 * renderScale, 85 * renderScale);
+      const tagH = 14 * renderScale;
+      const tagY = footY + footSize + 6 * renderScale;
+      // Tier-colored name bg
+      const nameBg = tierInfo.tier >= 4 ? `rgba(${tierInfo.tier >= 5 ? '100,200,255' : '255,200,50'},0.3)` : 'rgba(0,0,0,0.7)';
+      ctx.fillStyle = nameBg;
+      ctx.beginPath();
+      ctx.roundRect(x - tagW/2, tagY, tagW, tagH, 7 * renderScale);
+      ctx.fill();
+      if (tierInfo.tier >= 3) {
+        ctx.strokeStyle = tierInfo.color;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      ctx.fillStyle = tierInfo.tier >= 4 ? tierInfo.color : '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(player.nickname.slice(0, 10), x, tagY + tagH/2);
+
+      // Chat bubble
+      if (player.chatBubble && !player.eliminated) {
+        const bubbleY = headY - headR - (gameMode === 'br' && gameActive ? 34 : 20) * renderScale;
+        ctx.fillStyle = isHighlighted ? 'rgba(37,244,238,0.9)' : 'rgba(0,0,0,0.8)';
+        const bText = player.chatBubble.slice(0, 25);
+        ctx.font = `${10 * renderScale}px sans-serif`;
+        const bW = ctx.measureText(bText).width + 14 * renderScale;
+        const bH = 18 * renderScale;
+        ctx.beginPath();
+        ctx.roundRect(x - bW/2, bubbleY - bH/2, bW, bH, 9 * renderScale);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(x - 4 * renderScale, bubbleY + bH/2);
+        ctx.lineTo(x, bubbleY + bH/2 + 6 * renderScale);
+        ctx.lineTo(x + 4 * renderScale, bubbleY + bH/2);
+        ctx.fill();
+        ctx.fillStyle = isHighlighted ? '#000' : '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(bText, x, bubbleY);
+      }
+
+      // Crown for winners
+      if ((player.reachedGoal && gameMode === 'maze') || tierInfo.crown) {
+        ctx.font = `${14 * renderScale}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText('👑', x, headY - headR - 5 * renderScale);
+      }
+
+      ctx.globalAlpha = 1;
+    }
+
+    // ===== GAME LOOP =====
+    function update() {
+      players.forEach(player => {
+        if (player.eliminated) return;
+        if (gameMode === 'marathon') return; // Marathon handles its own movement
+
+        if (Math.abs(player.x - player.targetX) < 1 && Math.abs(player.y - player.targetY) < 1) {
+          player.x = player.targetX;
+          player.y = player.targetY;
+          if (player.moveQueue.length > 0) {
+            const dir = player.moveQueue.shift();
+            const vec = DIR_VECTORS[dir];
+            if (vec && canMove(player.x, player.y, vec.dx, vec.dy)) {
+              player.targetX = player.x + vec.dx * TILE;
+              player.targetY = player.y + vec.dy * TILE;
+              player.dir = dir;
+            }
+          }
+        } else {
+          const dx = player.targetX - player.x;
+          const dy = player.targetY - player.y;
+          player.x += Math.sign(dx) * Math.min(Math.abs(dx), MOVE_SPEED * TILE / 10);
+          player.y += Math.sign(dy) * Math.min(Math.abs(dy), MOVE_SPEED * TILE / 10);
+          player.frame++;
+        }
+
+        // Maze goal check
+        if (gameMode === 'maze' && goalPoint && !player.reachedGoal) {
+          const gc = goalPoint.x * TILE + TILE/2;
+          const gr = goalPoint.y * TILE + TILE/2;
+          if (Math.abs(player.x - gc) < TILE/2 && Math.abs(player.y - gr) < TILE/2) {
+            player.reachedGoal = true;
+            showNotif(`<strong>${player.nickname}</strong> reached the goal! 👑`, 'gift');
+          }
+        }
+      });
+
+      if (gameMode === 'br') updateBR();
+      if (gameMode === 'th') updateTH();
+      if (gameMode === 'tag') updateTag();
+      if (gameMode === 'koth') updateKOTH();
+      if (gameMode === 'marathon') updateMarathon();
+      checkPlayerInteractions(Date.now());
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (gameMode === 'marathon') {
+        drawMarathon();
+        return;
+      }
+      drawMap();
+      drawBRZone();
+      drawKothZone();
+      drawWeapons();
+      drawCoins();
+      drawTagIndicators();
+      const sorted = Array.from(players.values()).sort((a, b) => {
+        if (a.eliminated !== b.eliminated) return a.eliminated ? -1 : 1;
+        return a.y - b.y;
+      });
+      sorted.forEach(drawCharacter);
+      drawInteractions();
+    }
+
+    function gameLoop() {
+      update();
+      render();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ===== MARATHON MODE (Pseudo-3D OutRun Style) =====
+    // Perspective constants
+    const M3D_CAMERA_HEIGHT = 1200;   // camera height above road
+    const M3D_CAMERA_DEPTH = 0.8;     // field of view factor
+    const M3D_VIEW_DISTANCE = 120;    // how many tiles ahead we can see
+    const M3D_ROAD_WIDTH = 1200;      // base road width in world units
+    const M3D_SEGMENT_LENGTH = TILE;  // each segment = 1 tile
+    const M3D_RUMBLE_STRIPS = 4;      // alternating color every N segments
+    // Scenery items placed along track (seeded per position)
+    const M3D_SCENERY = [
+      { emoji: '🌲', scale: 2.5, offset: 1.3 },
+      { emoji: '🌳', scale: 2.2, offset: 1.4 },
+      { emoji: '🌴', scale: 2.8, offset: 1.2 },
+      { emoji: '🪨', scale: 1.2, offset: 1.1 },
+      { emoji: '🌺', scale: 1.0, offset: 1.05 },
+      { emoji: '🏠', scale: 2.0, offset: 1.6 },
+      { emoji: '⛪', scale: 2.5, offset: 1.8 },
+      { emoji: '🏪', scale: 1.8, offset: 1.5 },
+    ];
+
+    function loadMarathonTrack() {
+      currentMapName = 'marathon';
+      const cols = 24; const rows = 14;
+      const tempMap = [];
+      for (let r = 0; r < rows; r++) {
+        const row = []; for (let c = 0; c < cols; c++) row.push(0);
+        tempMap.push(row);
+      }
+      currentMap = tempMap;
+      renderScale = resizeCanvas();
+
+      players.forEach(p => {
+        p.marathonX = TILE;
+        p.marathonLane = Math.floor(Math.random() * MARATHON_LANE_COUNT);
+        p.marathonJumping = false;
+        p.marathonStunned = false;
+        p.marathonFinished = false;
+        p.marathonFinishTime = 0;
+      });
+      marathonObstacles = [];
+      marathonCameraX = 0;
+      marathonEnvIndex = 0;
+      marathonEnvChangeAt = MARATHON_ENV_INTERVAL;
+      marathonLastObstacleTile = 10;
+    }
+
+    // Dynamically generate obstacles ahead of the leader
+    function generateMarathonObstaclesAhead(upToTile) {
+      for (let x = marathonLastObstacleTile; x < upToTile; x++) {
+        if (Math.random() < 0.25) {
+          const type = MARATHON_OBSTACLE_TYPES[Math.floor(Math.random() * MARATHON_OBSTACLE_TYPES.length)];
+          marathonObstacles.push({ x: x, type: type });
+          x += 2; // min gap
+          marathonLastObstacleTile = x;
+        }
+      }
+      marathonLastObstacleTile = Math.max(marathonLastObstacleTile, upToTile);
+      // Cleanup obstacles far behind
+      const minKeep = (marathonCameraX - 20);
+      marathonObstacles = marathonObstacles.filter(o => o.x > minKeep);
+    }
+
+    function initMarathonEndless() {
+      marathonGameOver = false;
+      marathonCameraX = 0;
+      marathonEnvIndex = 0;
+      marathonEnvChangeAt = MARATHON_ENV_INTERVAL;
+      marathonLastObstacleTile = 10;
+      marathonObstacles = [];
+
+      players.forEach(p => {
+        p.marathonX = TILE;
+        p.marathonLane = Math.floor(Math.random() * MARATHON_LANE_COUNT);
+        p.marathonJumping = false;
+        p.marathonJumpStart = 0;
+        p.marathonStunned = false;
+        p.marathonStunEnd = 0;
+        p.marathonFinished = false;
+        p.marathonFinishTime = 0;
+      });
+
+      // No timer — endless mode!
+      if (marathonTimerInterval) clearInterval(marathonTimerInterval);
+    }
+
+    function getMarathonEnv() {
+      return MARATHON_ENVS[marathonEnvIndex % MARATHON_ENVS.length];
+    }
+
+    function nextMarathonEnv() {
+      marathonEnvIndex++;
+      const env = getMarathonEnv();
+      showNotif(`🌍 Environment changed to <strong>${env.name}</strong>!`);
+    }
+
+    function updateMarathon() {
+      if (!gameActive || marathonGameOver) return;
+      const now = Date.now();
+
+      // Find leader position for dynamic obstacle generation
+      let leaderTile = 0;
+      players.forEach(p => {
+        const t = p.marathonX / TILE;
+        if (t > leaderTile) leaderTile = t;
+      });
+      generateMarathonObstaclesAhead(leaderTile + M3D_VIEW_DISTANCE + 20);
+
+      // Check environment change
+      if (leaderTile >= marathonEnvChangeAt) {
+        marathonEnvIndex++;
+        marathonEnvChangeAt += MARATHON_ENV_INTERVAL;
+        const env = getMarathonEnv();
+        showNotif(`🌍 Entering <strong>${env.name}</strong>!`);
+      }
+
+      players.forEach(player => {
+        if (player.marathonJumping) {
+          if (now - player.marathonJumpStart >= MARATHON_JUMP_DURATION) player.marathonJumping = false;
+        }
+
+        if (player.marathonStunned) {
+          if (now >= player.marathonStunEnd) player.marathonStunned = false;
+          return;
+        }
+
+        if (!player.marathonJumping) {
+          const playerTileX = player.marathonX / TILE;
+          for (const obs of marathonObstacles) {
+            if (Math.abs(playerTileX - obs.x) < 0.8) {
+              player.marathonStunned = true;
+              player.marathonStunEnd = now + MARATHON_STUN_DURATION;
+              player.marathonX = Math.max(0, player.marathonX - TILE * 0.5);
+              showNotif(`${obs.type.emoji} <strong>${player.nickname}</strong> hit a ${obs.type.name}! Stunned!`, 'elim');
+              break;
+            }
+          }
+        }
+      });
+
+      // Camera follows median runner
+      const allRunners = Array.from(players.values()).sort((a, b) => b.marathonX - a.marathonX);
+      if (allRunners.length > 0) {
+        const median = allRunners[Math.floor(allRunners.length / 2)];
+        const target = median.marathonX / TILE - 1.5;
+        marathonCameraX += (Math.max(0, target) - marathonCameraX) * 0.08;
+      }
+    }
+
+    // === Pseudo-3D Projection (OutRun-style) ===
+    function m3dProject(worldZ, camZ, W, H) {
+      // worldZ = tile index, camZ = camera tile position
+      const dz = worldZ - camZ; // distance in tiles ahead of camera
+      if (dz <= 0.3) return null; // behind camera or too close
+
+      const horizonY = H * 0.40;
+      const roadBottom = H * 0.97;
+      const roadH = roadBottom - horizonY;
+
+      // Classic pseudo-3D: screenY = horizon + roadHeight / depth
+      // At dz=1 → screenY = roadBottom (nearest visible)
+      // At dz=2 → middle of road area
+      // At dz=50 → near horizon
+      const screenY = horizonY + roadH / dz;
+      if (screenY < horizonY || screenY > H + 20) return null;
+
+      // Scale: bigger when closer (1/dz normalized)
+      const scale = 1.0 / dz;
+      const roadHalfW = W * 0.40 * scale;
+      return { screenY, scale, roadHalfW, centerX: W / 2, dz };
+    }
+
+    function drawMarathon() {
+      const W = canvas.width;
+      const H = canvas.height;
+      const now = Date.now();
+      const camZ = marathonCameraX; // in tile units
+      const horizonY = H * 0.40;
+      const env = getMarathonEnv();
+
+      // === SKY (themed) ===
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
+      skyGrad.addColorStop(0, env.sky1);
+      skyGrad.addColorStop(0.5, env.sky2);
+      skyGrad.addColorStop(1, env.sky3);
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, W, horizonY + 5);
+
+      // === SUN / MOON ===
+      const sunX = W * 0.5 + Math.sin(now / 20000) * W * 0.2;
+      const sunY = horizonY * 0.25;
+      const isSpace = env.name === 'Space';
+      const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 80);
+      if (isSpace) {
+        // Stars in space
+        for (let i = 0; i < 60; i++) {
+          const sx = ((i * 137 + 50) % W);
+          const sy = ((i * 211 + 30) % (horizonY * 0.9));
+          const bright = 0.3 + Math.sin(now / 500 + i) * 0.3;
+          ctx.fillStyle = `rgba(255,255,255,${bright})`;
+          ctx.fillRect(sx, sy, 2, 2);
+        }
+        sunGrad.addColorStop(0, 'rgba(200,200,255,0.8)');
+        sunGrad.addColorStop(0.3, 'rgba(150,150,255,0.3)');
+        sunGrad.addColorStop(1, 'rgba(100,100,255,0)');
+      } else {
+        sunGrad.addColorStop(0, 'rgba(255,255,200,1)');
+        sunGrad.addColorStop(0.3, 'rgba(255,220,100,0.6)');
+        sunGrad.addColorStop(1, 'rgba(255,200,50,0)');
+      }
+      ctx.fillStyle = sunGrad;
+      ctx.fillRect(sunX - 100, sunY - 100, 200, 200);
+
+      // === MOUNTAINS (themed) ===
+      const mtScroll = camZ * 2;
+      ctx.fillStyle = env.mtFar;
+      ctx.beginPath();
+      ctx.moveTo(0, horizonY);
+      for (let x = 0; x <= W; x += 3) {
+        const wx = (x / W * 8 + mtScroll * 0.01);
+        const h = (Math.sin(wx * 0.7) * 40 + Math.sin(wx * 1.3) * 25 + Math.cos(wx * 0.4) * 30 + 70);
+        ctx.lineTo(x, horizonY - h);
+      }
+      ctx.lineTo(W, horizonY);
+      ctx.fill();
+
+      ctx.fillStyle = env.mtNear;
+      ctx.beginPath();
+      ctx.moveTo(0, horizonY);
+      for (let x = 0; x <= W; x += 3) {
+        const wx = (x / W * 12 + mtScroll * 0.025);
+        const h = (Math.sin(wx * 0.5) * 25 + Math.sin(wx * 1.1) * 18 + Math.cos(wx * 0.3) * 15 + 35);
+        ctx.lineTo(x, horizonY - h);
+      }
+      ctx.lineTo(W, horizonY);
+      ctx.fill();
+
+      // === CLOUDS (skip in space) ===
+      if (!isSpace) {
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        for (let i = 0; i < 6; i++) {
+          const cx = ((i * 350 + now / 50 * (0.3 + i * 0.05) - camZ * 3) % (W + 200)) - 100;
+          const cy = horizonY * (0.15 + (i % 3) * 0.1);
+          const cw = 60 + (i % 3) * 30;
+          ctx.beginPath(); ctx.ellipse(cx, cy, cw, 12, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(cx - cw * 0.5, cy + 5, cw * 0.6, 10, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(cx + cw * 0.4, cy + 3, cw * 0.5, 9, 0, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      // === ROAD (pseudo-3D segments from far to near) ===
+      const startSeg = Math.max(0, Math.floor(camZ) + 1);
+      const endSeg = Math.min(startSeg + M3D_VIEW_DISTANCE, marathonTrackLength + 5);
+
+      // Draw road segments from far to near (back-to-front)
+      const segData = []; // store for object rendering
+
+      for (let seg = endSeg; seg >= startSeg; seg--) {
+        const p = m3dProject(seg, camZ, W, H);
+        if (!p) continue;
+
+        // Near edge: one tile closer to camera → lower on screen
+        const nearP = m3dProject(seg - 1, camZ, W, H);
+        const y1 = p.screenY; // top of strip (farther = higher)
+        const y2 = nearP ? Math.min(nearP.screenY, H) : H; // bottom of strip (nearer = lower)
+        if (y2 <= y1 + 0.5) continue;
+
+        const isEvenStrip = Math.floor(seg / M3D_RUMBLE_STRIPS) % 2 === 0;
+        const isFinish = seg >= marathonFinishLine && seg <= marathonFinishLine + 2;
+        const isStart = seg >= 0 && seg <= 1;
+
+        // Grass (themed)
+        ctx.fillStyle = isEvenStrip ? env.grass1 : env.grass2;
+        ctx.fillRect(0, y1, W, y2 - y1 + 1);
+
+        // Road surface (themed)
+        const roadLeft = p.centerX - p.roadHalfW;
+        const roadRight = p.centerX + p.roadHalfW;
+        ctx.fillStyle = isFinish ? '#333' : (isEvenStrip ? env.road1 : env.road2);
+        ctx.fillRect(roadLeft, y1, roadRight - roadLeft, y2 - y1 + 1);
+
+        // Rumble strips (themed)
+        const rumbleW = p.roadHalfW * 0.05;
+        ctx.fillStyle = isEvenStrip ? env.rumble1 : env.rumble2;
+        ctx.fillRect(roadLeft - rumbleW, y1, rumbleW, y2 - y1 + 1);
+        ctx.fillRect(roadRight, y1, rumbleW, y2 - y1 + 1);
+
+        // Lane dividers
+        if (!isFinish) {
+          ctx.fillStyle = isEvenStrip ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0)';
+          if (isEvenStrip) {
+            const laneW = (roadRight - roadLeft) / MARATHON_LANE_COUNT;
+            for (let i = 1; i < MARATHON_LANE_COUNT; i++) {
+              const lx = roadLeft + i * laneW;
+              ctx.fillRect(lx - 1, y1, 2, y2 - y1 + 1);
+            }
+          }
+        }
+
+        // Finish line checkered pattern
+        if (isFinish) {
+          const checkH = (y2 - y1);
+          const checkCols = 12;
+          const checkW = (roadRight - roadLeft) / checkCols;
+          for (let c = 0; c < checkCols; c++) {
+            ctx.fillStyle = (c + (seg - marathonFinishLine)) % 2 === 0 ? '#fff' : '#000';
+            ctx.fillRect(roadLeft + c * checkW, y1, checkW + 1, checkH + 1);
+          }
+        }
+
+        // Start line
+        if (isStart && seg === 1) {
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(roadLeft, y1, roadRight - roadLeft, Math.max(2, (y2 - y1) * 0.3));
+        }
+
+        segData.push({ seg, y: y1, y2, scale: p.scale, roadLeft, roadRight, halfW: p.roadHalfW, centerX: p.centerX });
+        prevY = y1;
+      }
+
+      // === SCENERY (trees, buildings along road) ===
+      // Draw from far to near
+      for (let i = segData.length - 1; i >= 0; i--) {
+        const sd = segData[i];
+        const seed = sd.seg * 7919; // deterministic pseudo-random
+        if (seed % 5 !== 0) continue; // only every ~5 segments
+
+        const envScenery = env.scenery;
+        const sceneIdx = Math.abs(seed * 13) % envScenery.length;
+        const sceneEmoji = envScenery[sceneIdx];
+        const side = (seed % 2 === 0) ? -1 : 1;
+        const offsetMult = 1.2 + (Math.abs(seed * 7) % 5) * 0.15;
+        const sx = sd.centerX + side * sd.halfW * offsetMult;
+        const fontSize = Math.max(8, Math.min(50, sd.scale * 800));
+        const sy = sd.y;
+
+        if (fontSize < 6) continue;
+        ctx.font = `${fontSize}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(sceneEmoji, sx, sy + fontSize * 0.2);
+
+        // Sometimes add on both sides
+        if (seed % 3 === 0) {
+          const sceneIdx2 = Math.abs(seed * 31) % envScenery.length;
+          ctx.font = `${fontSize * 0.8}px sans-serif`;
+          ctx.fillText(envScenery[sceneIdx2], sd.centerX - side * sd.halfW * 1.3, sy + fontSize * 0.15);
+        }
+      }
+
+      // === OBSTACLES (on the road) ===
+      // Collect visible obstacles with their projection
+      const visibleObs = [];
+      marathonObstacles.forEach(obs => {
+        const p = m3dProject(obs.x, camZ, W, H);
+        if (!p || p.screenY > H || p.screenY < horizonY) return;
+        visibleObs.push({ ...obs, proj: p });
+      });
+      // Draw far to near
+      visibleObs.sort((a, b) => a.proj.screenY - b.proj.screenY);
+      visibleObs.forEach(obs => {
+        const p = obs.proj;
+        const fontSize = Math.max(10, Math.min(60, p.scale * 800));
+        ctx.font = `${fontSize}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        // Draw across the road
+        const laneW = (p.roadHalfW * 2) / MARATHON_LANE_COUNT;
+        for (let lane = 0; lane < MARATHON_LANE_COUNT; lane++) {
+          const ox = p.centerX - p.roadHalfW + (lane + 0.5) * laneW;
+          ctx.fillText(obs.type.emoji, ox, p.screenY + fontSize * 0.3);
+        }
+        // Danger glow
+        ctx.fillStyle = `rgba(255,50,50,${Math.min(0.15, p.scale * 2)})`;
+        ctx.fillRect(p.centerX - p.roadHalfW, p.screenY - fontSize * 0.5, p.roadHalfW * 2, fontSize);
+      });
+
+      // === PLAYERS ===
+      const visiblePlayers = [];
+      players.forEach(player => {
+        const tileX = player.marathonX / TILE;
+        const p = m3dProject(tileX, camZ, W, H);
+        if (!p || p.screenY > H || p.screenY < horizonY) return;
+        visiblePlayers.push({ player, proj: p, tileX });
+      });
+      // Draw far to near (smaller first)
+      visiblePlayers.sort((a, b) => a.proj.screenY - b.proj.screenY);
+
+      visiblePlayers.forEach(({ player, proj }) => {
+        const p = proj;
+        const laneW = (p.roadHalfW * 2) / MARATHON_LANE_COUNT;
+        const px = p.centerX - p.roadHalfW + (player.marathonLane + 0.5) * laneW;
+        const baseSize = Math.max(10, Math.min(70, p.scale * 800));
+
+        // Jump arc (lift character up)
+        let jumpOffset = 0;
+        if (player.marathonJumping) {
+          const jumpProgress = (now - player.marathonJumpStart) / MARATHON_JUMP_DURATION;
+          jumpOffset = Math.sin(Math.min(jumpProgress, 1) * Math.PI) * baseSize * 2.5;
+        }
+
+        const charY = p.screenY - jumpOffset;
+
+        ctx.save();
+
+        // Stun effect
+        if (player.marathonStunned) {
+          ctx.globalAlpha = 0.4 + Math.sin(now / 80) * 0.3;
+          const starSize = baseSize * 0.4;
+          ctx.font = `${starSize}px sans-serif`;
+          ctx.textAlign = 'center';
+          for (let s = 0; s < 3; s++) {
+            const a = now / 250 + s * 2.1;
+            ctx.fillText('⭐', px + Math.cos(a) * baseSize * 0.8, charY - baseSize * 0.8 + Math.sin(a) * baseSize * 0.3);
+          }
+        }
+
+        if (player.marathonFinished) ctx.globalAlpha = 0.7;
+
+        // Shadow
+        ctx.fillStyle = `rgba(0,0,0,${jumpOffset > 0 ? 0.15 : 0.25})`;
+        ctx.beginPath();
+        ctx.ellipse(px, p.screenY + baseSize * 0.1, baseSize * 0.5, baseSize * 0.12, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        const bodyColor = player.marathonStunned ? '#888' : player.marathonFinished ? '#ffd700' : player.color;
+
+        // Body (ellipse)
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.ellipse(px, charY - baseSize * 0.3, baseSize * 0.35, baseSize * 0.45, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Body outline
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = Math.max(1, baseSize * 0.05);
+        ctx.stroke();
+
+        // Head
+        const headY = charY - baseSize * 0.85;
+        const headR = baseSize * 0.28;
+        ctx.fillStyle = '#fdd';
+        ctx.beginPath();
+        ctx.arc(px, headY, headR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Eyes
+        ctx.fillStyle = '#333';
+        ctx.beginPath();
+        ctx.arc(px + headR * 0.25, headY - headR * 0.1, headR * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px - headR * 0.25, headY - headR * 0.1, headR * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Animal skin emoji on head
+        const style = getPlayerStyle(player);
+        if (style.animal && baseSize > 14) {
+          ctx.font = `${baseSize * 0.35}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(style.animal.emoji || '🐱', px, headY - headR);
+        }
+
+        // Running legs
+        if (!player.marathonStunned && !player.marathonFinished) {
+          const legAnim = Math.sin(now / 100 + player.marathonX * 0.15);
+          ctx.strokeStyle = bodyColor;
+          ctx.lineWidth = Math.max(2, baseSize * 0.1);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(px - baseSize * 0.12, charY + baseSize * 0.05);
+          ctx.lineTo(px - baseSize * 0.12 + legAnim * baseSize * 0.3, charY + baseSize * 0.5);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(px + baseSize * 0.12, charY + baseSize * 0.05);
+          ctx.lineTo(px + baseSize * 0.12 - legAnim * baseSize * 0.3, charY + baseSize * 0.5);
+          ctx.stroke();
+        }
+
+        // Arms swinging
+        if (!player.marathonStunned && !player.marathonFinished && baseSize > 14) {
+          const armAnim = Math.sin(now / 100 + player.marathonX * 0.15 + Math.PI);
+          ctx.strokeStyle = bodyColor;
+          ctx.lineWidth = Math.max(1.5, baseSize * 0.07);
+          ctx.beginPath();
+          ctx.moveTo(px - baseSize * 0.3, charY - baseSize * 0.4);
+          ctx.lineTo(px - baseSize * 0.3 - armAnim * baseSize * 0.2, charY - baseSize * 0.1);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(px + baseSize * 0.3, charY - baseSize * 0.4);
+          ctx.lineTo(px + baseSize * 0.3 + armAnim * baseSize * 0.2, charY - baseSize * 0.1);
+          ctx.stroke();
+        }
+
+        // Name label (only if close enough)
+        if (baseSize > 16) {
+          const nameFS = Math.max(8, baseSize * 0.32);
+          ctx.font = `bold ${nameFS}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const nm = player.nickname.slice(0, 10);
+          const nW = ctx.measureText(nm).width + 6;
+          ctx.fillStyle = 'rgba(0,0,0,0.75)';
+          ctx.beginPath();
+          ctx.roundRect(px - nW / 2, charY + baseSize * 0.55, nW, nameFS + 4, 4);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.fillText(nm, px, charY + baseSize * 0.55 + nameFS / 2 + 2);
+        }
+
+        // Finished trophy
+        if (player.marathonFinished && baseSize > 12) {
+          ctx.font = `${baseSize * 0.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText('🏆', px, headY - headR - baseSize * 0.2);
+        }
+
+        // Jump dust
+        if (player.marathonJumping && baseSize > 12) {
+          ctx.font = `${baseSize * 0.4}px sans-serif`;
+          ctx.fillText('💨', px - baseSize * 0.6, p.screenY);
+        }
+
+        ctx.restore();
+      });
+
+      // === DISTANCE MARKERS on road edge ===
+      for (let m = Math.floor(camZ / 10) * 10; m < camZ + M3D_VIEW_DISTANCE; m += 10) {
+        const p = m3dProject(m, camZ, W, H);
+        if (!p || p.screenY > H || p.screenY < horizonY) continue;
+        const fs = Math.max(6, Math.min(16, p.scale * 300));
+        ctx.font = `bold ${fs}px sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${m * 5}m`, p.centerX - p.roadHalfW - fs * 2, p.screenY);
+      }
+
+      // === ENVIRONMENT NAME (top center) ===
+      ctx.font = 'bold 13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.beginPath();
+      ctx.roundRect(W / 2 - 60, 6, 120, 22, 11);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`🌍 ${env.name}`, W / 2, 17);
+
+      // === PODIUM — Top 3 Runners (top-right) ===
+      const sorted = Array.from(players.values()).sort((a, b) => b.marathonX - a.marathonX);
+      const top3 = sorted.slice(0, 3);
+      if (top3.length > 0) {
+        const podX = W - 10;
+        const podY = 40;
+        const podW = 180;
+        const podH = 24 + top3.length * 30;
+        const medals = ['🥇', '🥈', '🥉'];
+
+        // Background
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        ctx.beginPath();
+        ctx.roundRect(podX - podW, podY, podW, podH, 10);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,215,0,0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(podX - podW, podY, podW, podH, 10);
+        ctx.stroke();
+
+        // Title
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillStyle = '#ffd700';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🏆 TOP RUNNERS', podX - podW / 2, podY + 14);
+
+        // Entries
+        top3.forEach((p, i) => {
+          const ey = podY + 30 + i * 28;
+          const dist = Math.round(p.marathonX / TILE * 5); // convert to meters
+
+          // Medal
+          ctx.font = '14px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(medals[i] || `${i+1}`, podX - podW + 10, ey);
+
+          // Color dot
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(podX - podW + 34, ey - 1, 5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Name
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillStyle = i === 0 ? '#ffd700' : '#fff';
+          ctx.textAlign = 'left';
+          ctx.fillText(p.nickname.slice(0, 10), podX - podW + 44, ey);
+
+          // Distance
+          ctx.font = '10px sans-serif';
+          ctx.fillStyle = '#aaa';
+          ctx.textAlign = 'right';
+          ctx.fillText(`${dist}m`, podX - 10, ey);
+        });
+      }
+
+      // === TOTAL RUNNERS + DISTANCE (top-left alongside HUD) ===
+      if (sorted.length > 0) {
+        const leaderDist = Math.round(sorted[0].marathonX / TILE * 5);
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.textAlign = 'left';
+        ctx.beginPath();
+        ctx.roundRect(10, 40, 140, 22, 11);
+        ctx.fill();
+        ctx.fillStyle = '#25f4ee';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`🏃 ${players.size} runners · ${leaderDist}m`, 18, 51);
+      }
+    }
+
+    // ===== NOTIFICATIONS =====
+    function showNotif(html, type = '') {
+      const area = document.getElementById('notifArea');
+      const el = document.createElement('div');
+      el.className = `notif ${type}`;
+      el.innerHTML = html;
+      area.appendChild(el);
+      setTimeout(() => el.remove(), 4000);
+      while (area.children.length > 8) area.removeChild(area.firstChild);
+    }
+
+    // ===== CELEBRATION =====
+    function showCelebration(mode, winner) {
+      const el = document.getElementById('celebration');
+      const title = document.getElementById('celebTitle');
+      const sub = document.getElementById('celebSub');
+      const name = document.getElementById('celebName');
+      const score = document.getElementById('celebScore');
+      const podium = document.getElementById('celebPodium');
+
+      if (mode === 'br') {
+        title.textContent = '⚔️ BATTLE ROYALE ⚔️';
+        if (winner) {
+          sub.textContent = 'Last one standing!';
+          name.textContent = `👑 ${winner.nickname}`;
+          score.textContent = `${winner.kills} kills · ${winner.weapon ? winner.weapon.emoji + ' ' + winner.weapon.name : 'Unarmed'} · ${winner.hp} HP`;
+        } else {
+          sub.textContent = 'No survivors!';
+          name.textContent = '💀';
+          score.textContent = '';
+        }
+        // Show kill leaderboard
+        const sorted = Array.from(players.values()).sort((a, b) => b.kills - a.kills).slice(0, 3);
+        podium.innerHTML = sorted.filter(p => p.kills > 0).map((p, i) => {
+          const ranks = ['🥇', '🥈', '🥉'];
+          return `<div class="podium-entry"><div class="rank">${ranks[i]}</div><div class="p-name">${p.nickname}</div><div class="p-score">${p.kills} 💀</div></div>`;
+        }).join('');
+      } else if (mode === 'th') {
+        title.textContent = '💰 TREASURE HUNT 💰';
+        sub.textContent = 'Time\'s up!';
+        const sorted = Array.from(players.values()).sort((a, b) => b.score - a.score);
+        if (sorted.length > 0 && sorted[0].score > 0) {
+          name.textContent = `👑 ${sorted[0].nickname}`;
+          score.textContent = `${sorted[0].score} coins collected!`;
+        } else {
+          name.textContent = 'No coins collected!';
+          score.textContent = '';
+        }
+        // Show podium
+        const top3 = sorted.slice(0, 3);
+        podium.innerHTML = top3.map((p, i) => {
+          const ranks = ['🥇', '🥈', '🥉'];
+          return `<div class="podium-entry"><div class="rank">${ranks[i]}</div><div class="p-name">${p.nickname}</div><div class="p-score">${p.score} 🪙</div></div>`;
+        }).join('');
+      } else if (mode === 'tag') {
+        title.textContent = '🧟 TAG / INFECTION 🧟';
+        const survivors = Array.from(players.values()).filter(p => !tagInfected.has(p.id));
+        if (survivors.length > 0) {
+          sub.textContent = `${survivors.length} survived the infection!`;
+          name.textContent = `🏆 ${survivors[0].nickname}`;
+          score.textContent = `Survived ${1800 - tagTimeLeft}s of zombie chaos!`;
+          const top3 = survivors.slice(0, 3);
+          podium.innerHTML = top3.map((p, i) => {
+            const ranks = ['🥇', '🥈', '🥉'];
+            return `<div class="podium-entry"><div class="rank">${ranks[i]}</div><div class="p-name">${p.nickname}</div><div class="p-score">🛡️ Safe</div></div>`;
+          }).join('');
+        } else if (winner) {
+          sub.textContent = 'Everyone got infected!';
+          name.textContent = `🏆 ${winner.nickname}`;
+          score.textContent = 'Last one to get infected!';
+          // Show top spreaders
+          const spreaders = Array.from(players.values()).sort((a, b) => b.score - a.score).slice(0, 3);
+          podium.innerHTML = spreaders.filter(p => p.score > 0).map((p, i) => {
+            const ranks = ['🥇', '🥈', '🥉'];
+            return `<div class="podium-entry"><div class="rank">${ranks[i]}</div><div class="p-name">${p.nickname}</div><div class="p-score">${p.score} 🧟</div></div>`;
+          }).join('');
+        } else {
+          sub.textContent = 'The infection spreads...';
+          name.textContent = '🧟';
+          score.textContent = '';
+          podium.innerHTML = '';
+        }
+      } else if (mode === 'koth') {
+        title.textContent = '👑 KING OF THE HILL 👑';
+        sub.textContent = 'Time\'s up!';
+        const sorted = Array.from(players.values()).sort((a, b) => b.score - a.score);
+        if (sorted.length > 0 && sorted[0].score > 0) {
+          name.textContent = `👑 ${sorted[0].nickname}`;
+          score.textContent = `${sorted[0].score} seconds on the hill!`;
+        } else {
+          name.textContent = 'Nobody claimed the hill!';
+          score.textContent = '';
+        }
+        const top3 = sorted.slice(0, 3);
+        podium.innerHTML = top3.map((p, i) => {
+          const ranks = ['🥇', '🥈', '🥉'];
+          return `<div class="podium-entry"><div class="rank">${ranks[i]}</div><div class="p-name">${p.nickname}</div><div class="p-score">${p.score} 👑</div></div>`;
+        }).join('');
+      } else if (mode === 'marathon') {
+        title.textContent = '🏃 MARATHON 🏃';
+        const finishers = Array.from(players.values()).filter(p => p.marathonFinished).sort((a, b) => a.marathonFinishTime - b.marathonFinishTime);
+        if (finishers.length > 0) {
+          sub.textContent = `${finishers.length} runners crossed the finish line!`;
+          name.textContent = `🏆 ${finishers[0].nickname}`;
+          const elapsed = Math.round((finishers[0].marathonFinishTime - gameStartTime) / 1000);
+          const em = Math.floor(elapsed / 60);
+          const es = elapsed % 60;
+          score.textContent = `Finished in ${em}m ${es}s!`;
+          const top3 = finishers.slice(0, 3);
+          podium.innerHTML = top3.map((p, i) => {
+            const ranks = ['🥇', '🥈', '🥉'];
+            const t = Math.round((p.marathonFinishTime - gameStartTime) / 1000);
+            return `<div class="podium-entry"><div class="rank">${ranks[i]}</div><div class="p-name">${p.nickname}</div><div class="p-score">${Math.floor(t/60)}m${t%60}s 🏁</div></div>`;
+          }).join('');
+        } else {
+          sub.textContent = 'Time\'s up! Nobody finished!';
+          // Show by distance
+          const sorted = Array.from(players.values()).sort((a, b) => b.marathonX - a.marathonX);
+          if (sorted.length > 0) {
+            name.textContent = `🏆 ${sorted[0].nickname}`;
+            const pct = Math.round((sorted[0].marathonX / (marathonFinishLine * TILE)) * 100);
+            score.textContent = `Got ${pct}% of the way!`;
+            const top3 = sorted.slice(0, 3);
+            podium.innerHTML = top3.map((p, i) => {
+              const ranks = ['🥇', '🥈', '🥉'];
+              const pp = Math.round((p.marathonX / (marathonFinishLine * TILE)) * 100);
+              return `<div class="podium-entry"><div class="rank">${ranks[i]}</div><div class="p-name">${p.nickname}</div><div class="p-score">${pp}% 🏃</div></div>`;
+            }).join('');
+          } else {
+            name.textContent = 'No runners!';
+            score.textContent = '';
+            podium.innerHTML = '';
+          }
+        }
+      }
+
+      el.classList.add('visible');
+      spawnFireworks();
+    }
+
+    function closeCelebration() {
+      document.getElementById('celebration').classList.remove('visible');
+    }
+
+    function spawnFireworks() {
+      const colors = ['#fe2c55','#25f4ee','#ffd700','#00ff88','#a855f7','#ff6b35'];
+      for (let burst = 0; burst < 5; burst++) {
+        setTimeout(() => {
+          const cx = Math.random() * window.innerWidth;
+          const cy = Math.random() * window.innerHeight * 0.5;
+          for (let i = 0; i < 20; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'firework';
+            dot.style.left = cx + 'px';
+            dot.style.top = cy + 'px';
+            dot.style.background = colors[Math.floor(Math.random() * colors.length)];
+            const angle = (Math.PI * 2 / 20) * i;
+            const dist = 60 + Math.random() * 80;
+            dot.style.setProperty('--fx', `${Math.cos(angle) * dist}px`);
+            dot.style.setProperty('--fy', `${Math.sin(angle) * dist}px`);
+            document.body.appendChild(dot);
+            setTimeout(() => dot.remove(), 1000);
+          }
+        }, burst * 400);
+      }
+    }
+
+    // ===== COUNTDOWN =====
+    function showCountdown(callback) {
+      const overlay = document.getElementById('countdownOverlay');
+      const num = document.getElementById('countdownNum');
+      overlay.classList.add('visible');
+      let count = 3;
+      num.textContent = count;
+      const interval = setInterval(() => {
+        count--;
+        if (count > 0) {
+          num.textContent = count;
+          // Re-trigger animation
+          num.style.animation = 'none';
+          num.offsetHeight;
+          num.style.animation = '';
+        } else if (count === 0) {
+          num.textContent = 'GO!';
+          num.style.color = '#00ff88';
+        } else {
+          clearInterval(interval);
+          overlay.classList.remove('visible');
+          num.style.color = '#fff';
+          callback();
+        }
+      }, 800);
+    }
+
+    // ===== SOCKET.IO =====
+    const socket = io();
+
+    socket.on('viewer-join', (viewer) => {
+      addPlayer(viewer);
+      const modeNames = { maze: 'maze', br: 'battlefield', th: 'hunt', tag: 'infection zone', koth: 'hill' };
+      showNotif(`<strong>${viewer.nickname}</strong> joined the ${modeNames[gameMode] || 'game'}!`);
+    });
+
+    socket.on('viewer-list', (list) => { list.forEach(v => addPlayer(v)); });
+
+    socket.on('chat', (data) => {
+      const player = addPlayer(data);
+      const cmd = data.comment?.trim().toLowerCase();
+      const dir = CHAT_COMMANDS[cmd];
+      if (dir) movePlayer(data.id, dir);
+      player.chatBubble = data.comment;
+      // Highlight player so they can find themselves
+      player.highlightUntil = Date.now() + 4000;
+      clearTimeout(player.chatTimer);
+      player.chatTimer = setTimeout(() => { player.chatBubble = null; }, 4000);
+    });
+
+    socket.on('gift', (data) => {
+      const player = addPlayer(data);
+      const giftName = data.giftName || '';
+      const dir = GIFT_MAP[giftName] || GIFT_MAP[giftName.toLowerCase()];
+      const diamonds = data.diamondCount || 1;
+      const repeat = data.repeatCount || 1;
+      const totalDiamonds = diamonds * repeat;
+      player.totalDiamonds = (player.totalDiamonds || 0) + totalDiamonds;
+
+      // Calculate bonus steps based on diamond value
+      let bonusSteps;
+      if (totalDiamonds <= 5) bonusSteps = 1;
+      else if (totalDiamonds <= 20) bonusSteps = 2 + Math.floor(totalDiamonds / 10);
+      else if (totalDiamonds <= 50) bonusSteps = 4 + Math.floor((totalDiamonds - 20) / 10);
+      else if (totalDiamonds <= 100) bonusSteps = 7 + Math.floor((totalDiamonds - 50) / 15);
+      else bonusSteps = 10 + Math.min(5, Math.floor((totalDiamonds - 100) / 50));
+
+      if (dir) {
+        // Directional gift: move in that direction with extra steps
+        movePlayer(data.id, dir, bonusSteps);
+        showNotif(`🎁 <strong>${data.nickname}</strong> sent ${repeat > 1 ? repeat + 'x ' : ''}${data.giftName} (💎${totalDiamonds}) → ${1 + bonusSteps} steps ${dir}!`, 'gift');
+      } else {
+        // Non-directional gift: store as bonus steps for next move
+        player.bonusSteps += bonusSteps;
+        showNotif(`🎁 <strong>${data.nickname}</strong> sent ${data.giftName} (💎${totalDiamonds}) → ⚡${player.bonusSteps} boost stored!`, 'gift');
+      }
+
+      // Marathon: gifts move player forward (endless, always active)
+      if (gameMode === 'marathon' && gameActive) {
+        const marathonSteps = bonusSteps + 1; // base 1 + bonus from diamond calc
+        const movePixels = marathonSteps * TILE;
+        player.marathonX += movePixels;
+        showNotif(`🏃 <strong>${player.nickname}</strong> sprints ${marathonSteps} steps forward! (💎${totalDiamonds})`, 'gift');
+      }
+
+      // BR: gifts give shield + extra HP for big gifts
+      if (gameMode === 'br' && gameActive && !player.eliminated) {
+        player.shield = true;
+        if (diamonds >= 50) {
+          player.hp = Math.min(player.hp + 1, 3);
+          showNotif(`🛡️💪 <strong>${player.nickname}</strong> got shield + HP restore!`);
+        } else {
+          showNotif(`🛡️ <strong>${player.nickname}</strong> got a shield!`);
+        }
+      }
+
+      // TH: gifts give bonus coins scaled to diamonds
+      if (gameMode === 'th' && gameActive) {
+        const bonus = Math.min(Math.ceil(diamonds / 5) * repeat, 20);
+        player.score += bonus;
+        thScores.set(player.id, player.score);
+        showNotif(`✨ <strong>${player.nickname}</strong> gift bonus +${bonus} coins!`, 'coin');
+      }
+    });
+
+    socket.on('like', (data) => {
+      const player = players.get(data.id);
+      if (!player) return;
+
+      if (gameMode === 'marathon' && gameActive && !player.marathonStunned) {
+        // Like = jump in marathon
+        if (!player.marathonJumping) {
+          player.marathonJumping = true;
+          player.marathonJumpStart = Date.now();
+          // Also give a tiny forward nudge (0.5 tile)
+          player.marathonX += TILE * 0.5;
+        }
+      } else {
+        const dirs = ['up','down','left','right'];
+        movePlayer(data.id, dirs[Math.floor(Math.random() * dirs.length)]);
+      }
+    });
+
+    socket.on('follow', (data) => {
+      const player = addPlayer(data);
+      player.isFollower = true;
+      showNotif(`<strong>${data.nickname}</strong> followed! ⭐`);
+      // Bonus moves
+      for (let i = 0; i < 3; i++) movePlayer(data.id, 'random');
+      // BR: followers get shield
+      if (gameMode === 'br') player.shield = true;
+      // TH: followers get bonus
+      if (gameMode === 'th') {
+        player.score += 5;
+        thScores.set(player.id, player.score);
+        showNotif(`⭐ <strong>${player.nickname}</strong> follow bonus +5!`, 'coin');
+      }
+      // KOTH: followers get bonus points
+      if (gameMode === 'koth') {
+        player.score += 5;
+        kothScores.set(player.id, player.score);
+        showNotif(`⭐ <strong>${player.nickname}</strong> follow bonus +5!`, 'coin');
+      }
+      // Marathon: followers get forward boost
+      if (gameMode === 'marathon' && gameActive) {
+        player.marathonX += TILE * 3;
+        showNotif(`⭐ <strong>${player.nickname}</strong> follow boost +3 steps!`, 'gift');
+      }
+    });
+
+    socket.on('room-stats', (data) => {
+      document.getElementById('viewerCount').textContent = data.viewerCount;
+      const sv = document.getElementById('statViewers');
+      if (sv) sv.textContent = data.viewerCount;
+    });
+
+    socket.on('connection-status', () => {});
+
+    // ===== HOST PANEL =====
+    let panelOpen = false;
+
+    function togglePanel() {
+      panelOpen = !panelOpen;
+      document.getElementById('hostPanel').classList.toggle('open', panelOpen);
+      document.getElementById('hostToggle').classList.toggle('open', panelOpen);
+    }
+
+    function selectMode(mode) {
+      gameMode = mode;
+      gameActive = false;
+      closeCelebration();
+
+      // Cleanup all modes
+      if (thTimerInterval) clearInterval(thTimerInterval);
+      if (thCoinTimer) clearInterval(thCoinTimer);
+      if (brWeaponTimer) { clearTimeout(brWeaponTimer); clearInterval(brWeaponTimer); }
+      if (tagTimerInterval) clearInterval(tagTimerInterval);
+      if (kothTimerInterval) clearInterval(kothTimerInterval);
+      if (kothZoneMoveTimer) clearInterval(kothZoneMoveTimer);
+      if (marathonTimerInterval) clearInterval(marathonTimerInterval);
+      thCoins = [];
+      brWeapons = [];
+      brGameOver = false;
+      thGameOver = false;
+      tagGameOver = false;
+      tagInfected = new Set();
+      kothGameOver = false;
+      kothZone = null;
+      marathonGameOver = false;
+      marathonObstacles = [];
+      marathonCameraX = 0;
+
+      // Update UI
+      document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
+      document.querySelector(`.mode-card[data-mode="${mode}"]`).classList.add('active');
+
+      const mazeSection = document.getElementById('mazeMapSection');
+      const badge = document.getElementById('modeBadge');
+      const startBtn = document.getElementById('startBtn');
+      const aliveLabel = document.getElementById('statAliveLabel');
+      const envBtn = document.getElementById('envChangeBtn');
+      envBtn.style.display = mode === 'marathon' ? 'block' : 'none';
+      // Update game guide
+      const guideMap = { maze: 'guideMaze', br: 'guideBR', th: 'guideTH', tag: 'guideTag', koth: 'guideKoth', marathon: 'guideMarathon' };
+      document.querySelectorAll('.guide-mode-info').forEach(el => el.classList.remove('active'));
+      const guideEl = document.getElementById(guideMap[mode]);
+      if (guideEl) guideEl.classList.add('active');
+
+      if (mode === 'maze') {
+        mazeSection.style.display = 'block';
+        badge.textContent = '🏰 Maze';
+        startBtn.style.display = 'none';
+        aliveLabel.textContent = 'Winners';
+        const mazeModeMaps = new Set(['maze1','maze2','arena','race','garden','beach','castle','forest','islands','candy','village','snow']);
+        loadMap(mazeModeMaps.has(currentMapName) ? currentMapName : 'garden');
+      } else if (mode === 'br') {
+        mazeSection.style.display = 'none';
+        badge.textContent = '⚔️ Battle Royale';
+        startBtn.style.display = 'block';
+        startBtn.textContent = '▶ START BR';
+        aliveLabel.textContent = 'Alive';
+        loadMap('br_arena');
+      } else if (mode === 'th') {
+        mazeSection.style.display = 'none';
+        badge.textContent = '💰 Treasure Hunt';
+        startBtn.style.display = 'block';
+        startBtn.textContent = '▶ START HUNT';
+        aliveLabel.textContent = 'Top Score';
+        loadMap('th_field');
+      } else if (mode === 'tag') {
+        mazeSection.style.display = 'block';
+        badge.textContent = '🧟 Tag / Infection';
+        startBtn.style.display = 'block';
+        startBtn.textContent = '▶ START TAG';
+        aliveLabel.textContent = 'Survivors';
+        const mazeModeMaps = new Set(['maze1','maze2','arena','race','garden','beach','castle','forest','islands','candy','village','snow']);
+        loadMap(mazeModeMaps.has(currentMapName) ? currentMapName : 'garden');
+      } else if (mode === 'koth') {
+        mazeSection.style.display = 'block';
+        badge.textContent = '👑 King of the Hill';
+        startBtn.style.display = 'block';
+        startBtn.textContent = '▶ START KOTH';
+        aliveLabel.textContent = 'Top Score';
+        const mazeModeMaps = new Set(['maze1','maze2','arena','race','garden','beach','castle','forest','islands','candy','village','snow']);
+        loadMap(mazeModeMaps.has(currentMapName) ? currentMapName : 'garden');
+      } else if (mode === 'marathon') {
+        mazeSection.style.display = 'none';
+        badge.textContent = '🏃 Marathon';
+        startBtn.style.display = 'none'; // Marathon auto-starts, no button needed
+        aliveLabel.textContent = 'Distance';
+        loadMarathonTrack();
+        // Auto-start marathon immediately
+        gameActive = true;
+        gameStartTime = Date.now();
+        initMarathonEndless();
+        showNotif('🏃 <strong>Marathon started!</strong> Send gifts to run, tap likes to jump!');
+      }
+
+      updateTimerDisplay();
+      updateScoreboard();
+
+      // Reset players
+      players.forEach(p => {
+        p.hp = 3; p.eliminated = false; p.shield = false;
+        p.weapon = null; p.kills = 0; p.combatCooldown = 0; p.bonusSteps = 0;
+        p.score = 0; p.reachedGoal = false;
+        p.marathonX = TILE; p.marathonLane = Math.floor(Math.random() * MARATHON_LANE_COUNT);
+        p.marathonJumping = false; p.marathonStunned = false;
+        p.marathonFinished = false; p.marathonFinishTime = 0;
+        if (mode !== 'marathon') {
+          const sp = getSpawnPos();
+          p.x = sp.x; p.y = sp.y;
+          p.targetX = sp.x; p.targetY = sp.y;
+        }
+        p.moveQueue = [];
+      });
+
+      const modeLabels = { maze: 'Maze', br: 'Battle Royale', th: 'Treasure Hunt', tag: 'Tag / Infection', koth: 'King of the Hill', marathon: 'Marathon' };
+      showNotif(`Game mode: <strong>${modeLabels[mode] || mode}</strong>`);
+    }
+
+    function selectMap(name) {
+      loadMap(name);
+      currentMapName = name;
+      document.querySelectorAll('.map-card').forEach(c => c.classList.remove('active'));
+      const card = document.querySelector(`.map-card[data-map="${name}"]`);
+      if (card) card.classList.add('active');
+      showNotif(`Map changed to <strong>${name}</strong>!`);
+    }
+
+    function startGame() {
+      if (gameActive) return;
+      if (players.size < 1) {
+        showNotif('⚠️ Need at least 1 player!');
+        return;
+      }
+
+      // Reset players
+      players.forEach(p => {
+        p.hp = 3; p.eliminated = false; p.shield = false;
+        p.score = 0; p.reachedGoal = false;
+        const sp = getSpawnPos();
+        p.x = sp.x; p.y = sp.y;
+        p.targetX = sp.x; p.targetY = sp.y;
+        p.moveQueue = [];
+      });
+
+      closeCelebration();
+      togglePanel(); // close panel
+
+      showCountdown(() => {
+        gameActive = true;
+        gameStartTime = Date.now();
+        if (gameMode === 'br') initBR();
+        if (gameMode === 'th') initTH();
+        if (gameMode === 'tag') initTag();
+        if (gameMode === 'koth') initKOTH();
+        if (gameMode === 'marathon') initMarathon();
+        updateTimerDisplay();
+        showNotif(`🚀 <strong>Game started!</strong> ${players.size} players`);
+      });
+    }
+
+    function newRound() {
+      gameActive = false;
+      closeCelebration();
+      if (thTimerInterval) clearInterval(thTimerInterval);
+      if (thCoinTimer) clearInterval(thCoinTimer);
+      if (brWeaponTimer) { clearTimeout(brWeaponTimer); clearInterval(brWeaponTimer); }
+      if (tagTimerInterval) clearInterval(tagTimerInterval);
+      if (kothTimerInterval) clearInterval(kothTimerInterval);
+      if (kothZoneMoveTimer) clearInterval(kothZoneMoveTimer);
+      if (marathonTimerInterval) clearInterval(marathonTimerInterval);
+      thCoins = [];
+      brWeapons = [];
+      tagInfected = new Set();
+      kothZone = null;
+      marathonObstacles = [];
+      marathonGameOver = false;
+      marathonCameraX = 0;
+
+      players.forEach(p => {
+        if (gameMode !== 'marathon') {
+          const sp = getSpawnPos();
+          p.x = sp.x; p.y = sp.y;
+          p.targetX = sp.x; p.targetY = sp.y;
+        }
+        p.moveQueue = [];
+        p.reachedGoal = false;
+        p.hp = 3; p.eliminated = false; p.shield = false;
+        p.weapon = null; p.kills = 0; p.combatCooldown = 0; p.bonusSteps = 0;
+        p.score = 0;
+        p.marathonX = TILE; p.marathonLane = Math.floor(Math.random() * MARATHON_LANE_COUNT);
+        p.marathonJumping = false; p.marathonStunned = false;
+        p.marathonFinished = false; p.marathonFinishTime = 0;
+      });
+      brEliminated.clear();
+      updateTimerDisplay();
+      updateScoreboard();
+      showNotif('🔄 <strong>Round reset!</strong>');
+      updatePanelStats();
+    }
+
+    function clearPlayers() {
+      gameActive = false;
+      players.clear();
+      profileImages.clear();
+      if (thTimerInterval) clearInterval(thTimerInterval);
+      if (thCoinTimer) clearInterval(thCoinTimer);
+      if (brWeaponTimer) { clearTimeout(brWeaponTimer); clearInterval(brWeaponTimer); }
+      thCoins = [];
+      brWeapons = [];
+      document.getElementById('playerCount').textContent = '0';
+      updateTimerDisplay();
+      updateScoreboard();
+      showNotif('🗑 <strong>All players cleared</strong>');
+      updatePanelStats();
+    }
+
+    function updatePanelStats() {
+      const el = (id) => document.getElementById(id);
+      if (el('statPlayers')) el('statPlayers').textContent = players.size;
+      if (el('statAlive')) {
+        if (gameMode === 'br') {
+          el('statAlive').textContent = Array.from(players.values()).filter(p => !p.eliminated).length;
+        } else if (gameMode === 'th') {
+          const best = Math.max(0, ...Array.from(players.values()).map(p => p.score));
+          el('statAlive').textContent = best;
+        } else if (gameMode === 'marathon') {
+          el('statAlive').textContent = Array.from(players.values()).filter(p => p.marathonFinished).length;
+        } else {
+          let w = 0;
+          players.forEach(p => { if (p.reachedGoal) w++; });
+          el('statAlive').textContent = w;
+        }
+      }
+    }
+
+    setInterval(() => {
+      updatePanelStats();
+      updateTimerDisplay();
+      updateScoreboard();
+    }, 1000);
+
+    document.addEventListener('click', (e) => {
+      if (panelOpen && !e.target.closest('.host-panel') && !e.target.closest('.host-toggle')) {
+        togglePanel();
+      }
+    });
+
+    // ===== INIT =====
+    loadMap('garden');
+    gameLoop();
+  </script>
+</body>
+</html>

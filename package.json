@@ -1,0 +1,20 @@
+{
+  "name": "tiktok_live_1",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": ["tiktok", "live", "overlay"],
+  "author": "broneotodak",
+  "license": "ISC",
+  "description": "TikTok Live interactive overlay with cute character avatars",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3",
+    "tiktok-live-connector": "^2.1.1-beta1"
+  }
+}

@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok Live Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      min-height: 100vh;
+    }
+    .header {
+      background: linear-gradient(135deg, #25f4ee, #fe2c55);
+      padding: 20px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 { font-size: 24px; font-weight: 700; }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #ff4444;
+    }
+    .status-dot.connected { background: #00ff88; animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .connect-bar {
+      padding: 20px 30px;
+      background: #111;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      border-bottom: 1px solid #222;
+    }
+    .connect-bar input {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 16px;
+      outline: none;
+    }
+    .connect-bar input:focus { border-color: #25f4ee; }
+    .connect-bar button {
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: none;
+      background: linear-gradient(135deg, #25f4ee, #fe2c55);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .connect-bar button:hover { opacity: 0.9; }
+    .connect-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .stats-bar {
+      padding: 15px 30px;
+      background: #111;
+      display: flex;
+      gap: 30px;
+      border-bottom: 1px solid #222;
+    }
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .stat-value { font-size: 28px; font-weight: 700; color: #25f4ee; }
+    .stat-label { font-size: 12px; color: #888; text-transform: uppercase; }
+
+    .content { display: flex; height: calc(100vh - 200px); }
+
+    .viewers-panel {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    .viewers-panel h2 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      color: #888;
+    }
+    .viewer-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 15px;
+    }
+    .viewer-card {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 15px;
+      text-align: center;
+      animation: slideIn 0.5s ease-out;
+      border: 1px solid #222;
+      transition: border-color 0.3s;
+    }
+    .viewer-card:hover { border-color: #25f4ee; }
+    .viewer-card.new { border-color: #fe2c55; }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(20px) scale(0.9); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .viewer-avatar {
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      margin: 0 auto 8px;
+      overflow: hidden;
+      border: 3px solid #333;
+      position: relative;
+    }
+    .viewer-avatar img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    .viewer-avatar .follower-badge {
+      position: absolute;
+      bottom: -2px; right: -2px;
+      background: #fe2c55;
+      color: white;
+      font-size: 10px;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .viewer-name {
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .viewer-id {
+      font-size: 10px;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .feed-panel {
+      width: 380px;
+      background: #111;
+      border-left: 1px solid #222;
+      display: flex;
+      flex-direction: column;
+    }
+    .feed-panel h2 {
+      font-size: 18px;
+      padding: 15px 20px;
+      color: #888;
+      border-bottom: 1px solid #222;
+    }
+    .feed-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+    .feed-item {
+      display: flex;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 4px;
+      animation: fadeIn 0.3s;
+    }
+    .feed-item:hover { background: #1a1a1a; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .feed-item img {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .feed-item .feed-text {
+      flex: 1;
+      min-width: 0;
+    }
+    .feed-item .feed-name { font-weight: 600; font-size: 13px; }
+    .feed-item .feed-msg { font-size: 12px; color: #aaa; word-break: break-word; }
+    .feed-item.gift { background: rgba(254, 44, 85, 0.1); }
+    .feed-item.follow { background: rgba(37, 244, 238, 0.1); }
+    .feed-item .feed-time { font-size: 10px; color: #555; flex-shrink: 0; }
+
+    .overlay-link {
+      padding: 15px 20px;
+      border-top: 1px solid #222;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .overlay-link input {
+      flex: 1;
+      padding: 8px 12px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #25f4ee;
+      font-size: 13px;
+      font-family: monospace;
+    }
+    .overlay-link button {
+      padding: 8px 16px;
+      background: #25f4ee;
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>TikTok Live Dashboard</h1>
+    <div class="status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Disconnected</span>
+    </div>
+  </div>
+
+  <div class="connect-bar">
+    <span style="color:#888">@</span>
+    <input type="text" id="usernameInput" placeholder="Enter TikTok username..." value="">
+    <button id="connectBtn" onclick="connectTikTok()">Connect</button>
+    <button id="demoBtn" onclick="toggleDemo()" style="background:linear-gradient(135deg,#a855f7,#6366f1);padding:12px 24px;border-radius:8px;border:none;color:#fff;font-size:16px;font-weight:600;cursor:pointer;">Demo Mode</button>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-value" id="viewerCount">0</div>
+      <div class="stat-label">Viewers</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="joinCount">0</div>
+      <div class="stat-label">Joined</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="chatCount">0</div>
+      <div class="stat-label">Chats</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="giftCount">0</div>
+      <div class="stat-label">Gifts</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="likeCount">0</div>
+      <div class="stat-label">Likes</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="viewers-panel">
+      <h2>Viewers</h2>
+      <div class="viewer-grid" id="viewerGrid"></div>
+    </div>
+    <div class="feed-panel">
+      <h2>Live Feed</h2>
+      <div class="feed-list" id="feedList"></div>
+      <div class="overlay-link" style="flex-direction:column;gap:8px;">
+        <div style="display:flex;gap:8px;align-items:center;width:100%">
+          <span style="color:#888;font-size:12px;width:55px">Overlay:</span>
+          <input type="text" id="overlayUrl" readonly style="flex:1">
+          <button onclick="copyUrl('overlayUrl')">Copy</button>
+          <button onclick="window.open(document.getElementById('overlayUrl').value,'_blank')">Open</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;width:100%">
+          <span style="color:#fe2c55;font-size:12px;width:55px;font-weight:700">Game:</span>
+          <input type="text" id="gameUrl" readonly style="flex:1;border-color:#fe2c55;color:#fe2c55">
+          <button onclick="copyUrl('gameUrl')" style="background:#fe2c55">Copy</button>
+          <button onclick="window.open(document.getElementById('gameUrl').value,'_blank')" style="background:#fe2c55">Open</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let stats = { viewers: 0, joined: 0, chats: 0, gifts: 0, likes: 0 };
+    const viewerMap = new Map();
+
+    // Set overlay URL
+    document.getElementById('overlayUrl').value = `${window.location.origin}/overlay`;
+
+    // Load config
+    fetch('/api/config').then(r => r.json()).then(config => {
+      document.getElementById('usernameInput').value = config.username;
+    });
+
+    function connectTikTok() {
+      const username = document.getElementById('usernameInput').value.trim().replace('@', '');
+      if (!username) return;
+      document.getElementById('connectBtn').disabled = true;
+      document.getElementById('connectBtn').textContent = 'Connecting...';
+      socket.emit('connect-tiktok', username);
+    }
+
+    function proxyImg(url) {
+      if (!url) return '';
+      return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+    }
+
+    function timeAgo(ts) {
+      const s = Math.floor((Date.now() - ts) / 1000);
+      if (s < 60) return `${s}s`;
+      if (s < 3600) return `${Math.floor(s/60)}m`;
+      return `${Math.floor(s/3600)}h`;
+    }
+
+    function addViewerCard(viewer) {
+      if (viewerMap.has(viewer.id)) return;
+      viewerMap.set(viewer.id, viewer);
+
+      const grid = document.getElementById('viewerGrid');
+      const card = document.createElement('div');
+      card.className = 'viewer-card new';
+      card.id = `viewer-${viewer.id}`;
+      card.innerHTML = `
+        <div class="viewer-avatar">
+          <img src="${proxyImg(viewer.profilePic)}" alt="" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23888%22 font-size=%2240%22>${viewer.nickname?.[0] || '?'}</text></svg>'">
+          ${viewer.isFollower ? '<div class="follower-badge">♥</div>' : ''}
+        </div>
+        <div class="viewer-name">${viewer.nickname}</div>
+        <div class="viewer-id">@${viewer.uniqueId}</div>
+      `;
+      grid.prepend(card);
+      setTimeout(() => card.classList.remove('new'), 3000);
+    }
+
+    function addFeedItem(type, profilePic, name, message) {
+      const list = document.getElementById('feedList');
+      const item = document.createElement('div');
+      item.className = `feed-item ${type}`;
+      item.innerHTML = `
+        <img src="${proxyImg(profilePic)}" alt="" onerror="this.style.display='none'">
+        <div class="feed-text">
+          <div class="feed-name">${name}</div>
+          <div class="feed-msg">${message}</div>
+        </div>
+        <div class="feed-time">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>
+      `;
+      list.prepend(item);
+      // Keep max 200 items
+      while (list.children.length > 200) list.removeChild(list.lastChild);
+    }
+
+    function updateStats() {
+      document.getElementById('viewerCount').textContent = stats.viewers;
+      document.getElementById('joinCount').textContent = stats.joined;
+      document.getElementById('chatCount').textContent = stats.chats;
+      document.getElementById('giftCount').textContent = stats.gifts;
+      document.getElementById('likeCount').textContent = stats.likes;
+    }
+
+    // Socket events
+    socket.on('connection-status', (state) => {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      const btn = document.getElementById('connectBtn');
+      if (state.connected) {
+        dot.classList.add('connected');
+        text.textContent = `Connected (Room: ${state.roomId})`;
+        btn.textContent = 'Reconnect';
+        btn.disabled = false;
+      } else {
+        dot.classList.remove('connected');
+        text.textContent = state.error || 'Disconnected';
+        btn.textContent = 'Connect';
+        btn.disabled = false;
+      }
+    });
+
+    socket.on('viewer-list', (list) => {
+      list.forEach(v => addViewerCard(v));
+      stats.joined = list.length;
+      updateStats();
+    });
+
+    socket.on('viewer-join', (viewer) => {
+      addViewerCard(viewer);
+      addFeedItem('join', viewer.profilePic, viewer.nickname, 'joined the live');
+      stats.joined++;
+      updateStats();
+    });
+
+    socket.on('chat', (data) => {
+      addFeedItem('chat', data.profilePic, data.nickname, data.comment);
+      stats.chats++;
+      updateStats();
+    });
+
+    socket.on('gift', (data) => {
+      addFeedItem('gift', data.profilePic, data.nickname,
+        `sent ${data.repeatCount}x ${data.giftName} (${data.diamondCount} diamonds)`);
+      stats.gifts++;
+      updateStats();
+    });
+
+    socket.on('like', (data) => {
+      stats.likes = data.totalLikes || stats.likes + 1;
+      updateStats();
+    });
+
+    socket.on('follow', (data) => {
+      addFeedItem('follow', data.profilePic, data.nickname, 'followed you!');
+    });
+
+    socket.on('share', (data) => {
+      addFeedItem('share', data.profilePic, data.nickname, 'shared the live');
+    });
+
+    socket.on('room-stats', (data) => {
+      stats.viewers = data.viewerCount;
+      updateStats();
+    });
+
+    // Set game URL
+    document.getElementById('gameUrl').value = `${window.location.origin}/game`;
+
+    function copyUrl(id) {
+      const url = document.getElementById(id).value;
+      navigator.clipboard.writeText(url);
+      const btn = event.target;
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 1500);
+    }
+
+    let demoActive = false;
+    function toggleDemo() {
+      demoActive = !demoActive;
+      const btn = document.getElementById('demoBtn');
+      if (demoActive) {
+        socket.emit('start-demo');
+        btn.textContent = 'Stop Demo';
+        btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+        // Clear existing viewers
+        document.getElementById('viewerGrid').innerHTML = '';
+        document.getElementById('feedList').innerHTML = '';
+        viewerMap.clear();
+        stats = { viewers: 0, joined: 0, chats: 0, gifts: 0, likes: 0 };
+        updateStats();
+      } else {
+        socket.emit('stop-demo');
+        btn.textContent = 'Demo Mode';
+        btn.style.background = 'linear-gradient(135deg, #a855f7, #6366f1)';
+      }
+    }
+
+    // Enter key to connect
+    document.getElementById('usernameInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') connectTikTok();
+    });
+  </script>
+</body>
+</html>
