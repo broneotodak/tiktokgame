@@ -1020,9 +1020,10 @@
           break;
         }
         case 'shuffle-all': {
+          let shuffleSeed = 0;
           players.forEach(p => {
             if (p.mesh) {
-              const lane = Math.floor(Math.random() * LANE_COUNT);
+              const lane = seededLane(p.id, ++shuffleSeed * 37);
               p.lane = lane;
               p.mesh.position.x = getLaneX(lane);
             }
@@ -1200,11 +1201,18 @@
       activePowerups.length = 0;
       lastObstacleTile = 0;
       lastPowerupTile = 10;
-      // Reset road
+      // Reset road + re-apply hills
       nextChunkIndex = CHUNK_COUNT;
       roadChunks.forEach((chunk, i) => {
-        chunk.position.z = i * CHUNK_LENGTH + CHUNK_LENGTH / 2;
+        const cz = i * CHUNK_LENGTH + CHUNK_LENGTH / 2;
+        chunk.position.z = cz;
         chunk.userData.chunkIndex = i;
+        const ud = chunk.userData;
+        if (ud.roadGeo) applyHillGeometry(ud.roadGeo, cz);
+        if (ud.rumbleGeos) ud.rumbleGeos.forEach(g => applyHillGeometry(g, cz));
+        if (ud.dashes) ud.dashes.forEach(dash => {
+          dash.position.y = 0.03 + getHillHeight(cz + dash.userData.localZ);
+        });
       });
       // Change environment per level
       applyEnvironment((gameModeConfig.currentLevel - 1) % ENVIRONMENTS.length);
@@ -1420,10 +1428,10 @@
 
       // Apply event effects
       if (evt.name === 'Dragon Attack') {
-        // Stun all players in 2 random lanes for 2s
-        const lane1 = Math.floor(Math.random() * LANE_COUNT);
-        let lane2;
-        do { lane2 = Math.floor(Math.random() * LANE_COUNT); } while (lane2 === lane1);
+        // Stun all players in 2 deterministic lanes (based on leader position)
+        const seed = Math.floor(getLeaderTile());
+        const lane1 = seed % LANE_COUNT;
+        const lane2 = (lane1 + 1 + (seed >> 3)) % LANE_COUNT;
         players.forEach(p => {
           if (p.lane === lane1 || p.lane === lane2) {
             p.isStunned = true;
@@ -1450,10 +1458,10 @@
         triggerGiftFlash('#00ff88');
         showNotif(`🌊 <strong>Speed Wave!</strong> Everyone surges +5 tiles!`, 'gift');
       } else if (evt.name === 'Earthquake') {
-        // Screen shake + all players randomize lanes
+        // Screen shake + all players deterministic lane shuffle
         cameraShakeAmount = 1.0;
         players.forEach(p => {
-          p.lane = Math.floor(Math.random() * LANE_COUNT);
+          p.lane = seededLane(p.id, Math.floor(p.tilePos) + 99);
         });
         triggerGiftFlash('#aa6633');
         showNotif(`🌋 <strong>Earthquake!</strong> Everyone shuffled to random lanes!`, 'gift');
@@ -1546,12 +1554,12 @@
       for (let i = 0; i < pos.count; i++) {
         // PlaneGeometry rotated -PI/2: vertex Y becomes world-Z relative to group, vertex Z (original) becomes Y
         // But since we rotate the mesh, we work with the local coords pre-rotation
-        // For a PlaneGeometry(w, h) rotated -PI/2: local y → world z offset, local z → world y (unused before rotation)
-        // Actually: PlaneGeometry lies in XY plane. After rotation.x = -PI/2, local Y → -worldZ, local Z → worldY
-        // We set local Z to hill height so it becomes Y after rotation
-        const localY = pos.getY(i); // this is the Z-direction offset from chunk center
-        const worldZ = chunkWorldZ + localY; // localY spans -CHUNK_LENGTH/2 to +CHUNK_LENGTH/2
-        pos.setZ(i, getHillHeight(worldZ)); // this becomes Y after -PI/2 rotation
+        // PlaneGeometry lies in XY plane. After mesh.rotation.x = -PI/2:
+        // local Y → -worldZ offset, local Z → worldY
+        // So worldZ = chunkCenter - localY, and setting localZ = height → worldY
+        const localY = pos.getY(i);
+        const worldZ = chunkWorldZ - localY; // note: minus sign due to rotation
+        pos.setZ(i, getHillHeight(worldZ));
       }
       pos.needsUpdate = true;
       geometry.computeVertexNormals();
@@ -1610,8 +1618,113 @@
         dash.position.y = 0.03 + getHillHeight(chunkWorldZ + dash.userData.localZ);
       });
 
+      // Add environment-specific road edge decorations
+      addRoadEdgeDecor(group, chunkWorldZ);
+
       roadGroup.add(group);
       return group;
+    }
+
+    // Environment-specific road edge decorations
+    function addRoadEdgeDecor(chunkGroup, chunkWorldZ) {
+      // Remove old decor if exists
+      const oldDecor = chunkGroup.getObjectByName('edgeDecor');
+      if (oldDecor) { chunkGroup.remove(oldDecor); oldDecor.traverse(c => { if (c.geometry) c.geometry.dispose(); }); }
+
+      const decor = new THREE.Group();
+      decor.name = 'edgeDecor';
+      const env = ENVIRONMENTS[envIndex];
+      const half = CHUNK_LENGTH / 2;
+      const edgeX = ROAD_WIDTH / 2 + 1.0;
+
+      if (env.name === 'Snow') {
+        // Snow banks on edges
+        for (let z = -half; z < half; z += 5) {
+          const bankGeo = new THREE.BoxGeometry(1.5, 0.4, 3);
+          const bankMat = new THREE.MeshLambertMaterial({ color: 0xe8f0ff, flatShading: true });
+          [-1, 1].forEach(side => {
+            const bank = new THREE.Mesh(bankGeo, bankMat);
+            bank.position.set(side * edgeX, 0.2 + getHillHeight(chunkWorldZ + z), z);
+            decor.add(bank);
+          });
+        }
+      } else if (env.name === 'Desert') {
+        // Small sand dunes
+        for (let z = -half; z < half; z += 8) {
+          const duneGeo = new THREE.SphereGeometry(0.8 + Math.abs(Math.sin(z * 0.3)) * 0.5, 4, 3);
+          const duneMat = new THREE.MeshLambertMaterial({ color: 0xd4b060, flatShading: true });
+          [-1, 1].forEach(side => {
+            const dune = new THREE.Mesh(duneGeo, duneMat);
+            dune.scale.y = 0.4;
+            dune.position.set(side * (edgeX + Math.abs(Math.sin(z)) * 1.5), 0.15 + getHillHeight(chunkWorldZ + z), z);
+            decor.add(dune);
+          });
+        }
+      } else if (env.name === 'Volcano') {
+        // Orange glowing crack lines on road edges
+        for (let z = -half; z < half; z += 4) {
+          const crackGeo = new THREE.PlaneGeometry(0.3, 2);
+          const crackMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.6 + Math.abs(Math.sin(z * 0.5)) * 0.4 });
+          [-1, 1].forEach(side => {
+            const crack = new THREE.Mesh(crackGeo, crackMat);
+            crack.rotation.x = -Math.PI / 2;
+            crack.position.set(side * (ROAD_WIDTH / 2 + 0.1), 0.04 + getHillHeight(chunkWorldZ + z), z);
+            decor.add(crack);
+          });
+        }
+      } else if (env.name === 'Ocean') {
+        // Water plane visible below road level on both sides
+        const waterGeo = new THREE.PlaneGeometry(8, CHUNK_LENGTH);
+        const waterMat = new THREE.MeshBasicMaterial({ color: 0x2288cc, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+        [-1, 1].forEach(side => {
+          const water = new THREE.Mesh(waterGeo, waterMat);
+          water.rotation.x = -Math.PI / 2;
+          water.position.set(side * (edgeX + 3.5), -0.5, 0);
+          decor.add(water);
+        });
+      } else if (env.name === 'Candy') {
+        // Candy cane poles
+        for (let z = -half; z < half; z += 10) {
+          const poleGeo = new THREE.CylinderGeometry(0.12, 0.12, 2.5, 6);
+          const poleMat = new THREE.MeshLambertMaterial({ color: z % 20 < 10 ? 0xff4488 : 0xffaa44, flatShading: true });
+          [-1, 1].forEach(side => {
+            const pole = new THREE.Mesh(poleGeo, poleMat);
+            pole.position.set(side * edgeX, 1.25 + getHillHeight(chunkWorldZ + z), z);
+            decor.add(pole);
+            // Candy top
+            const topGeo = new THREE.SphereGeometry(0.25, 4, 3);
+            const top = new THREE.Mesh(topGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }));
+            top.position.set(side * edgeX, 2.6 + getHillHeight(chunkWorldZ + z), z);
+            decor.add(top);
+          });
+        }
+      } else if (env.name === 'Space') {
+        // Glowing purple crystals
+        for (let z = -half; z < half; z += 7) {
+          const crystalGeo = new THREE.ConeGeometry(0.3, 1.5, 4);
+          const crystalMat = new THREE.MeshBasicMaterial({ color: 0x8844ff, transparent: true, opacity: 0.7 });
+          [-1, 1].forEach(side => {
+            const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+            crystal.position.set(side * edgeX, 0.75 + getHillHeight(chunkWorldZ + z), z);
+            decor.add(crystal);
+          });
+        }
+      } else if (env.name === 'Jungle') {
+        // Vine-like green cylinders
+        for (let z = -half; z < half; z += 6) {
+          const vineGeo = new THREE.CylinderGeometry(0.05, 0.08, 2.0, 4);
+          const vineMat = new THREE.MeshLambertMaterial({ color: 0x228822, flatShading: true });
+          [-1, 1].forEach(side => {
+            const vine = new THREE.Mesh(vineGeo, vineMat);
+            vine.position.set(side * edgeX, 1.0 + getHillHeight(chunkWorldZ + z), z);
+            vine.rotation.z = side * 0.3;
+            decor.add(vine);
+          });
+        }
+      }
+      // Grasslands: no extra decor (just the existing scenery trees/rocks)
+
+      chunkGroup.add(decor);
     }
 
     for (let i = 0; i < CHUNK_COUNT; i++) {
@@ -2014,6 +2127,13 @@
       return PLAYER_COLORS[Math.abs(hash) % PLAYER_COLORS.length];
     }
 
+    // Deterministic lane from player ID + seed (same result on all tabs)
+    function seededLane(id, seed) {
+      let hash = seed || 0;
+      for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0;
+      return Math.abs(hash) % LANE_COUNT;
+    }
+
     function createNameSprite(name) {
       const c = document.createElement('canvas');
       c.width = 256;
@@ -2243,7 +2363,7 @@
       const leader = getLeaderTile();
       const startTile = Math.max(0, leader - 5);
 
-      const lane = Math.floor(Math.random() * LANE_COUNT);
+      const lane = seededLane(id, 0);
       mesh.position.x = getLaneX(lane);
       mesh.position.z = startTile * TILE;
 
@@ -2458,6 +2578,10 @@
       rumbleMatAlt.color.set(e.rumbleAlt);
       mtMat.color.set(e.mountain);
       document.getElementById('envBadge').textContent = e.name;
+      // Refresh road edge decorations for new environment
+      roadChunks.forEach(chunk => {
+        addRoadEdgeDecor(chunk, chunk.position.z);
+      });
     }
 
     function checkEnvironmentChange() {
@@ -2521,8 +2645,8 @@
         if (elapsed >= STUN_DURATION) {
           p.isStunned = false;
           p.mesh.rotation.z = 0;
-          // Switch lane randomly on recovery
-          p.lane = Math.floor(Math.random() * LANE_COUNT);
+          // Switch lane deterministically on recovery
+          p.lane = seededLane(p.id, Math.floor(p.tilePos));
         } else {
           p.mesh.rotation.z = Math.sin(elapsed * 0.02) * 0.3;
           // Flash effect
@@ -2610,6 +2734,8 @@
           if (ud.dashes) ud.dashes.forEach(dash => {
             dash.position.y = 0.03 + getHillHeight(newZ + dash.userData.localZ);
           });
+          // Refresh environment edge decorations
+          addRoadEdgeDecor(chunk, newZ);
         }
       }
     }
@@ -2862,9 +2988,9 @@
       p.likeBank = Math.min(p.likeBankMax, p.likeBank + tilesEarned);
       p.targetTile += tilesEarned;
 
-      // Random lane switch occasionally
-      if (Math.random() < 0.15) {
-        p.lane = Math.floor(Math.random() * LANE_COUNT);
+      // Deterministic lane switch occasionally (based on totalLikes)
+      if ((data.totalLikes || 0) % 7 === 0) {
+        p.lane = seededLane(p.id, data.totalLikes || 0);
       }
 
       const pColor = hashColor(p.id);
@@ -3242,9 +3368,9 @@
         cleanupInactivePlayers(now);
       }
 
-      // Host broadcasts state to viewers every 3 seconds
+      // Host broadcasts state to viewers every 1 second
       syncTimer += dt;
-      if (syncTimer > 3 && !isViewerMode && _hostSocket) {
+      if (syncTimer > 1 && !isViewerMode && _hostSocket) {
         syncTimer = 0;
         const statePayload = [];
         players.forEach(p => statePayload.push({ id: p.id, tilePos: p.tilePos, lane: p.lane, mountType: p.mountType || 0 }));
