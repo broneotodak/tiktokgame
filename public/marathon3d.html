@@ -1245,6 +1245,9 @@
 
       let p = players.get(id);
       if (p) {
+        p.lastActive = Date.now();
+        p.fadeOut = 0; // reset fade if they come back
+        p.mesh.visible = true;
         // Update profile pic if we didn't have one before
         if (data.profilePic && !p.hasProfilePic) {
           loadProfilePhoto(p.mesh.userData.profileSprite, data.profilePic);
@@ -1286,6 +1289,9 @@
         likeBank: 0,       // accumulated tiles from rapid likes
         likeBankMax: 8,     // max tiles queued from likes
         likeCooldown: 400,  // ms between like movements
+        // Inactivity tracking
+        lastActive: Date.now(),
+        fadeOut: 0, // 0 = visible, 1 = fully faded
       };
       players.set(id, p);
       updateHUD();
@@ -1294,6 +1300,44 @@
 
     function getLaneX(lane) {
       return -ROAD_WIDTH / 2 + LANE_WIDTH / 2 + lane * LANE_WIDTH;
+    }
+
+    // ===== INACTIVE PLAYER CLEANUP =====
+    const INACTIVE_FADE_START = 45000;  // start fading after 45s inactive
+    const INACTIVE_REMOVE = 60000;      // remove after 60s inactive
+
+    function cleanupInactivePlayers(now) {
+      const toRemove = [];
+      players.forEach((p, id) => {
+        const idle = now - p.lastActive;
+        if (idle > INACTIVE_REMOVE) {
+          // Fully inactive — remove
+          toRemove.push(id);
+        } else if (idle > INACTIVE_FADE_START) {
+          // Fading out — make character translucent
+          p.fadeOut = (idle - INACTIVE_FADE_START) / (INACTIVE_REMOVE - INACTIVE_FADE_START);
+          p.mesh.traverse(child => {
+            if (child.material && child.material.opacity !== undefined) {
+              child.material.transparent = true;
+              child.material.opacity = 1 - p.fadeOut * 0.8;
+            }
+          });
+        }
+      });
+
+      for (const id of toRemove) {
+        const p = players.get(id);
+        if (p) {
+          playersGroup.remove(p.mesh);
+          // Clean up inventory sprites
+          const ud = p.mesh.userData;
+          if (ud.inventorySprites) ud.inventorySprites.forEach(s => p.mesh.remove(s));
+          if (ud.chatBubble) p.mesh.remove(ud.chatBubble);
+          players.delete(id);
+        }
+      }
+
+      if (toRemove.length > 0) updateHUD();
     }
 
     // ===== OBSTACLE GENERATION =====
@@ -1948,11 +1992,12 @@
         }
       }
 
-      // Update HUD periodically
+      // Update HUD periodically + cleanup inactive players
       hudTimer += dt;
       if (hudTimer > 0.5) {
         hudTimer = 0;
         updateHUD();
+        cleanupInactivePlayers(now);
       }
 
       renderer.render(scene, camera);
