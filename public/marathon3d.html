@@ -48,6 +48,8 @@
     .notif { padding: 6px 14px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border-radius: 20px; color: #fff; font-size: 12px; animation: slideIn 0.3s ease-out, fadeOut 0.4s ease-in 3s forwards; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .notif strong { color: #25f4ee; }
     .notif.gift strong { color: #fe2c55; }
+    .notif.tip { background: rgba(37,244,238,0.15); border: 1px solid rgba(37,244,238,0.3); animation: slideIn 0.3s ease-out, fadeOut 0.4s ease-in 5s forwards; }
+    .notif.tip strong { color: #ffd700; }
     @keyframes slideIn { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } }
     @keyframes fadeOut { to { opacity: 0; transform: translateX(-20px); } }
 
@@ -1792,6 +1794,50 @@
       // Keep max 6
       while (area.children.length > 6) area.firstChild.remove();
     }
+
+    // ===== RANDOM TIPS / HOW-TO REMINDERS =====
+    const GAME_TIPS = [
+      // How to run / move
+      { icon: '❤️', text: 'Tap the <strong>Like</strong> button to make your runner move forward!' },
+      { icon: '❤️', text: 'Spam those <strong>Likes</strong> to run faster! Each like = +1 tile!' },
+      { icon: '💬', text: 'Type <strong>"jump"</strong> in chat to dodge obstacles!' },
+      { icon: '💬', text: 'Type <strong>"left"</strong> or <strong>"right"</strong> to switch lanes!' },
+      { icon: '💬', text: 'Malay commands work too! <strong>"lompat"</strong>, <strong>"kiri"</strong>, <strong>"kanan"</strong>' },
+      { icon: '⭐', text: '<strong>Follow</strong> for an instant +3 tile boost!' },
+      // Gifts & powers
+      { icon: '🎁', text: 'Send a <strong>Gift</strong> to get exclusive powers like Mega Kick & Push Out!' },
+      { icon: '🎁', text: 'Gifts give you <strong>combat powers</strong> — kick rivals back or push them off-lane!' },
+      { icon: '🎁', text: 'Big gifts (50+ diamonds) trigger <strong>random events</strong> for everyone!' },
+      { icon: '⚡', text: 'Pick up <strong>road power-ups</strong>: Speed Boost, Shield, Lightning, Magnet!' },
+      { icon: '💬', text: 'Type <strong>"use"</strong> or <strong>"power"</strong> in chat to activate your stored power!' },
+      // Strategy
+      { icon: '🛡', text: '<strong>Shield</strong> blocks one obstacle hit — grab it before a fire zone!' },
+      { icon: '🧲', text: '<strong>Magnet</strong> pulls you 8 tiles forward + auto-collects nearby power-ups!' },
+      { icon: '🦵', text: '<strong>Mega Kick</strong> sends the nearest rival 15 tiles backwards!' },
+      { icon: '💨', text: '<strong>Push Out</strong> shoves a rival to a random lane + stuns them!' },
+      // Events
+      { icon: '🐉', text: 'Watch out for <strong>Dragon Attack</strong> — it stuns 2 random lanes!' },
+      { icon: '🌊', text: '<strong>Speed Wave</strong> pushes everyone +5 tiles forward — free boost!' },
+      { icon: '☄️', text: '<strong>Meteor Shower</strong> can knock you back — stay alert!' },
+      { icon: '🌋', text: '<strong>Earthquake</strong> shuffles everyone to random lanes!' },
+      // General
+      { icon: '🏆', text: 'Race to the <strong>top 3</strong> podium! Like, Gift & Chat to climb!' },
+      { icon: '🏃', text: 'Everyone auto-walks slowly — <strong>Like</strong> to sprint ahead of the pack!' },
+      { icon: '💎', text: 'Your runner joins automatically when you <strong>interact</strong> — like, chat, or gift!' },
+    ];
+    let lastTipIndex = -1;
+    const TIP_INTERVAL = 15000; // show a tip every 15 seconds
+
+    function showRandomTip() {
+      if (players.size === 0) return; // no tips when game is empty
+      let idx;
+      do { idx = Math.floor(Math.random() * GAME_TIPS.length); } while (idx === lastTipIndex && GAME_TIPS.length > 1);
+      lastTipIndex = idx;
+      const tip = GAME_TIPS[idx];
+      showNotif(`${tip.icon} <strong>TIP:</strong> ${tip.text}`, 'tip');
+    }
+
+    setInterval(showRandomTip, TIP_INTERVAL);
 
     // ===== SOCKET.IO =====
     const socket = io();
