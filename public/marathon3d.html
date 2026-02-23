@@ -1786,9 +1786,9 @@
       }
 
       const mesh = createCharacter(id, data.nickname || data.uniqueId || 'Viewer', data.profilePic || '');
-      // New joiners start well behind the leader — they must earn their position
+      // New joiners start slightly behind the leader — visible on camera
       const leader = getLeaderTile();
-      const startTile = Math.max(0, leader - 15);
+      const startTile = Math.max(0, leader - 5);
 
       const lane = Math.floor(Math.random() * LANE_COUNT);
       mesh.position.x = getLaneX(lane);
