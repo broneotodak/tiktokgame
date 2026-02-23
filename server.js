@@ -315,14 +315,14 @@ function stopDemo() {
 
 // ===== Bot Mode (runs alongside live) =====
 const BOT_USERS = [
-  { id: 'bot_1', uniqueId: 'bot_gamer99', nickname: '🤖 GamerBot', isFollower: true, isModerator: false },
-  { id: 'bot_2', uniqueId: 'bot_techbro', nickname: '🤖 TechBot', isFollower: false, isModerator: false },
-  { id: 'bot_3', uniqueId: 'bot_todakfan', nickname: '🤖 TodakBot', isFollower: true, isModerator: false },
-  { id: 'bot_4', uniqueId: 'bot_sniper', nickname: '🤖 SniperBot', isFollower: false, isModerator: false },
-  { id: 'bot_5', uniqueId: 'bot_neon', nickname: '🤖 NeonBot', isFollower: true, isModerator: false },
-  { id: 'bot_6', uniqueId: 'bot_foodie', nickname: '🤖 FoodieBot', isFollower: false, isModerator: false },
-  { id: 'bot_7', uniqueId: 'bot_dev', nickname: '🤖 DevBot', isFollower: true, isModerator: false },
-  { id: 'bot_8', uniqueId: 'bot_alumni', nickname: '🤖 AlumniBot', isFollower: true, isModerator: false },
+  { id: 'bot_1', uniqueId: 'aisyah_kl', nickname: 'Aisyah', isFollower: true, isModerator: false },
+  { id: 'bot_2', uniqueId: 'haziq_gaming', nickname: 'Haziq', isFollower: false, isModerator: false },
+  { id: 'bot_3', uniqueId: 'mei_ling88', nickname: 'Mei Ling', isFollower: true, isModerator: false },
+  { id: 'bot_4', uniqueId: 'arjun_plays', nickname: 'Arjun', isFollower: false, isModerator: false },
+  { id: 'bot_5', uniqueId: 'nurul_amira', nickname: 'Nurul', isFollower: true, isModerator: false },
+  { id: 'bot_6', uniqueId: 'tanaka_yuki', nickname: 'Yuki', isFollower: false, isModerator: false },
+  { id: 'bot_7', uniqueId: 'danish_my', nickname: 'Danish', isFollower: true, isModerator: false },
+  { id: 'bot_8', uniqueId: 'siti_sarah', nickname: 'Siti Sarah', isFollower: true, isModerator: false },
 ];
 
 const BOT_CHATS = [
