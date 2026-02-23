@@ -2426,6 +2426,10 @@
     // ===== SOCKET.IO =====
     const socket = io();
     _hostSocket = socket; // enable dashboard commands
+    let hostUsername = ''; // set when connecting to TikTok
+
+    // Fetch initial config to get default username
+    fetch('/api/config').then(r => r.json()).then(c => { if (c.username) hostUsername = c.username.toLowerCase(); }).catch(() => {});
 
     socket.on('viewer-join', (viewer) => {
       addPlayer(viewer);
@@ -2600,6 +2604,13 @@
         }
       }
 
+      // Show host chat as big banner notification (visible even when TikTok chat is hidden)
+      const isHost = data.isModerator || (data.uniqueId || '').toLowerCase() === hostUsername;
+      const displayComment = data.comment || '';
+      if (isHost && displayComment && !isCommand) {
+        showNotif(`🎙️ <strong>${p.nickname}:</strong> ${displayComment}`, 'event');
+      }
+
       // Show chat bubble for non-command messages (or all messages)
       const chatParent = ud.riderGroup || p.mesh;
       // Remove old chat bubble
@@ -2609,7 +2620,6 @@
       }
       if (ud.chatTimer) clearTimeout(ud.chatTimer);
 
-      const displayComment = data.comment || '';
       if (displayComment && !isCommand) {
         const bubble = createChatBubble(displayComment);
         bubble.position.y = 1.8;
@@ -2670,6 +2680,7 @@
     window.connectTikTok = function() {
       const username = document.getElementById('tiktokUsername').value.trim().replace('@', '');
       if (username) {
+        hostUsername = username.toLowerCase();
         socket.emit('connect-tiktok', username);
         hideConnectModal();
         // Clear existing players
