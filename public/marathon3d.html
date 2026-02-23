@@ -96,6 +96,14 @@
     .guide-show-btn { position: absolute; bottom: 8px; right: 8px; z-index: 101; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.6); border: 1px solid #444; color: #fff; font-size: 14px; cursor: pointer; display: none; align-items: center; justify-content: center; pointer-events: auto; }
     .guide-show-btn.visible { display: flex; }
 
+    /* Stragglers panel — players behind camera */
+    .stragglers { position: absolute; bottom: 60px; left: 8px; z-index: 100; pointer-events: none; display: flex; flex-direction: column; gap: 2px; max-width: 200px; }
+    .straggler-row { display: flex; align-items: center; gap: 6px; padding: 3px 10px; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); border-radius: 8px; border-left: 2px solid rgba(255,255,255,0.2); }
+    .straggler-name { color: rgba(255,255,255,0.7); font-size: 11px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .straggler-dist { color: #fe2c55; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .straggler-mount { font-size: 12px; }
+    body.viewer-mode .stragglers { bottom: 12px; }
+
     /* Host controls - hidden for viewers via ?view param */
     .host-controls { position: absolute; bottom: 45px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
     body.viewer-mode .host-controls { display: none; }
@@ -133,6 +141,10 @@
       .banner { font-size: 16px; padding: 12px 18px; }
       .host-dashboard { width: 240px; }
       .host-dash-toggle.shifted { right: 240px; }
+      .stragglers { bottom: 50px; max-width: 160px; }
+      .straggler-row { padding: 2px 8px; }
+      .straggler-name { font-size: 10px; }
+      .straggler-dist { font-size: 9px; }
       .host-controls { bottom: 55px; gap: 4px; }
       .host-btn { padding: 6px 12px; font-size: 11px; }
       .guide-bar { flex-direction: column; align-items: center; padding: 4px 6px; }
@@ -174,6 +186,7 @@
     <div class="env-badge" id="envBadge">Grasslands</div>
 
     <div class="banner-area" id="bannerArea"></div>
+    <div class="stragglers" id="stragglersPanel"></div>
 
     <!-- Host controls -->
     <div class="host-controls">
@@ -2359,6 +2372,26 @@
           <span class="podium-dist">${Math.floor(p.tilePos * 2)}m</span>
         </div>`;
       }).join('');
+
+      // Stragglers — players behind camera (off-screen)
+      const stragPanel = document.getElementById('stragglersPanel');
+      if (stragPanel && typeof camera !== 'undefined') {
+        const camZ = camera.position.z;
+        const stragglers = sorted.filter(p => p.tilePos * TILE < camZ - 5).slice(-8).reverse();
+        if (stragglers.length > 0) {
+          stragPanel.innerHTML = stragglers.map(p => {
+            const behind = Math.floor((leader - p.tilePos) * 2);
+            const mountIcon = MOUNT_TYPES[p.mountType || 0]?.icon || '🐴';
+            return `<div class="straggler-row">
+              <span class="straggler-mount">${mountIcon}</span>
+              <span class="straggler-name">${p.nickname}</span>
+              <span class="straggler-dist">-${behind}m</span>
+            </div>`;
+          }).join('');
+        } else {
+          stragPanel.innerHTML = '';
+        }
+      }
     }
 
     function showNotif(html, cls = '') {
