@@ -889,9 +889,9 @@
     })();
 
     // Dashboard actions — emit via socket so ALL tabs sync
+    let _hostSocket = null; // set after socket.io connects
     function emitHostCmd(action, data) {
-      const sock = typeof socket !== 'undefined' ? socket : null;
-      if (sock) sock.emit('host-command', { action, data });
+      if (_hostSocket) _hostSocket.emit('host-command', { action, data });
     }
 
     window.dashSetMountAll = function(mountIdx) { emitHostCmd('mount-all', { mountIdx }); };
@@ -2184,11 +2184,7 @@
 
     window.nextEnvironment = function() {
       const nextIdx = (envIndex + 1) % ENVIRONMENTS.length;
-      if (typeof socket !== 'undefined') {
-        socket.emit('host-command', { action: 'change-env', data: { envIdx: nextIdx } });
-      } else {
-        applyEnvironment(nextIdx);
-      }
+      emitHostCmd('change-env', { envIdx: nextIdx });
     };
 
     // ===== ANIMATION =====
@@ -2429,6 +2425,7 @@
 
     // ===== SOCKET.IO =====
     const socket = io();
+    _hostSocket = socket; // enable dashboard commands
 
     socket.on('viewer-join', (viewer) => {
       addPlayer(viewer);
