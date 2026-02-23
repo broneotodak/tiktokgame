@@ -307,6 +307,9 @@
     const STUN_DURATION = 1500;
     const ENV_INTERVAL = 100; // tiles per environment change
     const OBSTACLE_CHANCE = 0.25;
+    let hillsEnabled = false;
+    const HILL_AMPLITUDE = 2.5;
+    const HILL_FREQUENCY = 0.015;
     const MAX_VISIBLE_OBSTACLES = 40;
     const MAX_SCENERY = 60;
 
@@ -2702,8 +2705,9 @@
       const flashColors = ['#fe2c55', '#25f4ee', '#ffd700', '#ff6600', '#a855f7'];
       triggerGiftFlash(flashColors[Math.floor(Math.random() * flashColors.length)]);
 
-      // Gift gives a random mount!
-      const newIdx = swapMount(p, Math.floor(Math.random() * MOUNT_TYPES.length));
+      // Gift gives a deterministic mount (same on all tabs — based on gift data)
+      const mountSeed = ((data.giftId || 0) + (data.timestamp || 0) + parseInt(p.id || '0', 36)) % MOUNT_TYPES.length;
+      const newIdx = swapMount(p, mountSeed);
       const mountDef = MOUNT_TYPES[newIdx];
       showNotif(`<strong>${p.nickname}</strong> rides a ${mountDef.icon} <strong>${mountDef.name}</strong>! (${data.giftName})`, 'gift');
 
@@ -2802,6 +2806,25 @@
     // Host dashboard commands — synced across all tabs
     socket.on('host-command', (cmd) => {
       executeHostCommand(cmd);
+    });
+
+    // State sync — viewer applies positions/mounts from host
+    const isViewerMode = document.body.classList.contains('viewer-mode');
+    socket.on('state-sync', (state) => {
+      if (!isViewerMode) return; // only viewers apply sync
+      if (!state || !state.players) return;
+      state.players.forEach(sp => {
+        const p = players.get(sp.id);
+        if (!p) return;
+        // Smoothly lerp to synced position (avoid snapping)
+        p.targetTile = sp.tilePos;
+        p.lane = sp.lane;
+        if (p.mesh) p.mesh.position.x = getLaneX(sp.lane);
+        // Sync mount if different
+        if (sp.mountType !== undefined && p.mountType !== sp.mountType && p.mesh) {
+          swapMount(p, sp.mountType);
+        }
+      });
     });
 
     socket.on('chat', (data) => {
@@ -2971,6 +2994,7 @@
     // ===== MAIN GAME LOOP =====
     let lastTime = 0;
     let hudTimer = 0;
+    let syncTimer = 0;
 
     function gameLoop(time) {
       requestAnimationFrame(gameLoop);
@@ -3113,6 +3137,15 @@
         hudTimer = 0;
         updateHUD();
         cleanupInactivePlayers(now);
+      }
+
+      // Host broadcasts state to viewers every 3 seconds
+      syncTimer += dt;
+      if (syncTimer > 3 && !isViewerMode && _hostSocket) {
+        syncTimer = 0;
+        const statePayload = [];
+        players.forEach(p => statePayload.push({ id: p.id, tilePos: p.tilePos, lane: p.lane, mountType: p.mountType || 0 }));
+        _hostSocket.emit('state-sync', { players: statePayload, envIndex, gameMode });
       }
 
       renderer.render(scene, camera);

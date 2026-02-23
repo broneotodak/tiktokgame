@@ -333,6 +333,11 @@ io.on('connection', (socket) => {
     io.emit('host-command', cmd);
   });
 
+  // State sync — host broadcasts positions/mounts to viewers
+  socket.on('state-sync', (state) => {
+    socket.broadcast.emit('state-sync', state);
+  });
+
   socket.on('disconnect', () => {
     console.log('🔌 Browser client disconnected');
   });
