@@ -1,4 +1,4 @@
-import 'dotenv/config';
+try { await import('dotenv/config'); } catch(e) { /* dotenv optional in production */ }
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -298,7 +298,7 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔══════════════════════════════════════════════╗
 ║   TikTok Live Overlay Server                 ║
