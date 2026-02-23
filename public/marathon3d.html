@@ -944,47 +944,74 @@
       }
     }
 
-    // Visual inventory indicator above character
+    // Visual inventory indicator floating beside character
     function updateInventorySprite(p) {
       const ud = p.mesh.userData;
-      // Remove old inventory sprite
-      if (ud.inventorySprite) {
-        p.mesh.remove(ud.inventorySprite);
-        ud.inventorySprite = null;
+      // Remove old inventory sprites
+      if (ud.inventorySprites) {
+        ud.inventorySprites.forEach(s => p.mesh.remove(s));
+        ud.inventorySprites = null;
       }
       if (p.inventory.length === 0) return;
 
-      const c = document.createElement('canvas');
-      c.width = 256;
-      c.height = 48;
-      const ctx = c.getContext('2d');
-      // Draw power icons
-      const iconSize = 32;
-      const startX = (256 - p.inventory.length * (iconSize + 4)) / 2;
+      ud.inventorySprites = [];
       p.inventory.forEach((typeIdx, i) => {
         const type = POWERUP_TYPES[typeIdx];
-        // Background circle
-        ctx.fillStyle = '#' + type.color.toString(16).padStart(6, '0') + 'aa';
+        const c = document.createElement('canvas');
+        c.width = 128;
+        c.height = 128;
+        const ctx = c.getContext('2d');
+
+        // Glowing background circle
+        const gradient = ctx.createRadialGradient(64, 64, 20, 64, 64, 60);
+        const hex = '#' + type.color.toString(16).padStart(6, '0');
+        gradient.addColorStop(0, hex + 'ee');
+        gradient.addColorStop(0.6, hex + '88');
+        gradient.addColorStop(1, hex + '00');
+        ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(startX + i * (iconSize + 4) + iconSize / 2, 24, 16, 0, Math.PI * 2);
+        ctx.arc(64, 64, 58, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
+
+        // Inner solid circle
+        ctx.fillStyle = hex + 'cc';
+        ctx.beginPath();
+        ctx.arc(64, 64, 38, 0, Math.PI * 2);
+        ctx.fill();
+
+        // White border ring
+        ctx.strokeStyle = '#ffffffdd';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(64, 64, 38, 0, Math.PI * 2);
         ctx.stroke();
-        // Icon
-        ctx.font = '20px sans-serif';
+
+        // Emoji icon (large)
+        ctx.font = '40px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(type.icon, startX + i * (iconSize + 4) + iconSize / 2, 24);
-      });
+        ctx.fillText(type.icon, 64, 64);
 
-      const tex = new THREE.CanvasTexture(c);
-      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
-      const sprite = new THREE.Sprite(mat);
-      sprite.scale.set(2.2, 0.45, 1);
-      sprite.position.y = 2.85;
-      p.mesh.add(sprite);
-      ud.inventorySprite = sprite;
+        const tex = new THREE.CanvasTexture(c);
+        const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.set(0.7, 0.7, 1);
+        // Float to the right side of character, stacked vertically
+        sprite.position.set(0.9, 0.8 + i * 0.75, 0);
+        sprite.userData = { bobOffset: i * 1.2 }; // for floating animation
+        p.mesh.add(sprite);
+        ud.inventorySprites.push(sprite);
+      });
+    }
+
+    // Animate inventory icons (gentle bob)
+    function animateInventory(p, now) {
+      const ud = p.mesh.userData;
+      if (!ud.inventorySprites) return;
+      ud.inventorySprites.forEach((sprite, i) => {
+        const bob = Math.sin(now * 0.003 + sprite.userData.bobOffset) * 0.1;
+        sprite.position.y = 0.8 + i * 0.75 + bob;
+      });
     }
 
     // ===== CHARACTER FACTORY =====
@@ -1452,6 +1479,9 @@
           spawnTrail(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z - 0.5, color);
         }
       }
+
+      // Animate floating inventory icons
+      animateInventory(p, now);
 
       // Update logical tile position (for collision)
       p.tilePos += (p.targetTile - p.tilePos) * Math.min(1, dt * 5);
