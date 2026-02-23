@@ -9,6 +9,20 @@
     body { background: #000; overflow: hidden; width: 100vw; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     #game-canvas { display: block; width: 100vw; height: 100vh; }
 
+    /* Forced portrait mode (?portrait) — centers a 9:16 frame */
+    body.portrait-mode { display: flex; justify-content: center; align-items: center; }
+    body.portrait-mode #game-canvas { width: auto; height: 100vh; aspect-ratio: 9/16; max-width: 100vw; }
+    body.portrait-mode .game-frame { position: relative; height: 100vh; aspect-ratio: 9/16; max-width: 100vw; overflow: hidden; }
+    body.portrait-mode .hud { left: 0; right: 0; }
+    body.portrait-mode .env-badge { left: 50%; }
+    body.portrait-mode .notif-area { left: 8px; max-width: 90%; }
+    body.portrait-mode .host-controls { left: 50%; }
+    body.portrait-mode .game-guide { left: 0; right: 0; }
+    body.portrait-mode .guide-show-btn { right: 8px; }
+    body.portrait-mode .gift-flash { position: absolute; }
+    body.portrait-mode .powerup-notif { left: 50%; }
+    body.portrait-mode .modal-overlay { position: absolute; }
+
     /* HUD Overlay */
     .hud { position: absolute; top: 0; left: 0; right: 0; padding: 12px 20px; display: flex; justify-content: space-between; align-items: flex-start; z-index: 100; pointer-events: none; }
     .hud-left, .hud-right { pointer-events: auto; }
@@ -99,55 +113,57 @@
   </style>
 </head>
 <body>
-  <canvas id="game-canvas"></canvas>
-  <div class="gift-flash" id="giftFlash"></div>
+  <div class="game-frame" id="gameFrame">
+    <canvas id="game-canvas"></canvas>
+    <div class="gift-flash" id="giftFlash"></div>
 
-  <!-- HUD -->
-  <div class="hud">
-    <div class="hud-left">
-      <div class="hud-badge"><div class="live-dot"></div> <span id="runnerCount">0</span> runners</div>
-      <div class="hud-badge">Leader: <span id="leaderDist">0</span>m</div>
-    </div>
-    <div class="hud-right podium">
-      <div class="podium-title">Top 3</div>
-      <div id="podiumList"></div>
-    </div>
-  </div>
-
-  <div class="env-badge" id="envBadge">Grasslands</div>
-
-  <div class="notif-area" id="notifArea"></div>
-
-  <!-- Host controls -->
-  <div class="host-controls">
-    <button class="host-btn" id="btnDemo" onclick="toggleDemo()">Demo Mode</button>
-    <button class="host-btn" onclick="nextEnvironment()">Change Env</button>
-    <button class="host-btn" onclick="showConnectModal()">Connect TikTok</button>
-  </div>
-
-  <!-- Guide bar (auto-hides after 8s) -->
-  <div class="game-guide" id="gameGuide">
-    <div class="guide-bar">
-      <div class="guide-section guide-highlight"><span class="g-emoji">❤️</span><span class="g-label">Like = Run</span><span class="g-sub">1 tile</span></div>
-      <div class="guide-section"><span class="g-emoji">💬</span><span class="g-label">Chat: jump/left/right</span><span class="g-sub">dodge & move</span></div>
-      <div class="guide-section"><span class="g-emoji">🎁</span><span class="g-label">Gift = Power</span><span class="g-sub">use or get</span></div>
-      <div class="guide-section"><span class="g-emoji">⭐</span><span class="g-label">Follow = +3</span><span class="g-sub">boost</span></div>
-    </div>
-  </div>
-  <button class="guide-show-btn" id="guideShowBtn" onclick="toggleGuide()">?</button>
-  <div class="powerup-notif" id="powerupNotif"></div>
-
-  <!-- Connect Modal -->
-  <div class="modal-overlay" id="connectModal">
-    <div class="modal">
-      <h3>Connect TikTok Live</h3>
-      <input type="text" id="tiktokUsername" placeholder="@username" />
-      <div class="modal-btns">
-        <button class="modal-btn secondary" onclick="hideConnectModal()">Cancel</button>
-        <button class="modal-btn primary" onclick="connectTikTok()">Connect</button>
+    <!-- HUD -->
+    <div class="hud">
+      <div class="hud-left">
+        <div class="hud-badge"><div class="live-dot"></div> <span id="runnerCount">0</span> runners</div>
+        <div class="hud-badge">Leader: <span id="leaderDist">0</span>m</div>
+      </div>
+      <div class="hud-right podium">
+        <div class="podium-title">Top 3</div>
+        <div id="podiumList"></div>
       </div>
     </div>
-  </div>
+
+    <div class="env-badge" id="envBadge">Grasslands</div>
+
+    <div class="notif-area" id="notifArea"></div>
+
+    <!-- Host controls -->
+    <div class="host-controls">
+      <button class="host-btn" id="btnDemo" onclick="toggleDemo()">Demo Mode</button>
+      <button class="host-btn" onclick="nextEnvironment()">Change Env</button>
+      <button class="host-btn" onclick="showConnectModal()">Connect TikTok</button>
+    </div>
+
+    <!-- Guide bar -->
+    <div class="game-guide" id="gameGuide">
+      <div class="guide-bar">
+        <div class="guide-section guide-highlight"><span class="g-emoji">❤️</span><span class="g-label">Like = Run</span><span class="g-sub">1 tile</span></div>
+        <div class="guide-section"><span class="g-emoji">💬</span><span class="g-label">Chat: jump/left/right</span><span class="g-sub">dodge & move</span></div>
+        <div class="guide-section"><span class="g-emoji">🎁</span><span class="g-label">Gift = Power</span><span class="g-sub">use or get</span></div>
+        <div class="guide-section"><span class="g-emoji">⭐</span><span class="g-label">Follow = +3</span><span class="g-sub">boost</span></div>
+      </div>
+    </div>
+    <button class="guide-show-btn" id="guideShowBtn" onclick="toggleGuide()">?</button>
+  <div class="powerup-notif" id="powerupNotif"></div>
+
+    <!-- Connect Modal -->
+    <div class="modal-overlay" id="connectModal">
+      <div class="modal">
+        <h3>Connect TikTok Live</h3>
+        <input type="text" id="tiktokUsername" placeholder="@username" />
+        <div class="modal-btns">
+          <button class="modal-btn secondary" onclick="hideConnectModal()">Cancel</button>
+          <button class="modal-btn primary" onclick="connectTikTok()">Connect</button>
+        </div>
+      </div>
+    </div>
+  </div><!-- end game-frame -->
 
   <script src="/socket.io/socket.io.js"></script>
   <script type="importmap">
@@ -208,8 +224,13 @@
 
     // ===== VIEWER MODE =====
     // ?view=1 hides host controls so viewers see a clean game
-    const isViewerMode = new URLSearchParams(window.location.search).has('view');
+    const params = new URLSearchParams(window.location.search);
+    const isViewerMode = params.has('view');
     if (isViewerMode) document.body.classList.add('viewer-mode');
+
+    // ?portrait forces 9:16 portrait layout for TikTok Live screen capture
+    const isPortraitForced = params.has('portrait');
+    if (isPortraitForced) document.body.classList.add('portrait-mode');
 
     // ===== STATE =====
     const players = new Map();
@@ -350,9 +371,11 @@
 
     // ===== THREE.JS SETUP =====
     const canvas = document.getElementById('game-canvas');
+    const gameFrame = document.getElementById('gameFrame');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
     renderer.setPixelRatio(1);
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    const initSize = getGameSize();
+    renderer.setSize(initSize.width, initSize.height);
     renderer.sortObjects = true;
 
     const scene = new THREE.Scene();
@@ -361,11 +384,20 @@
     scene.fog = new THREE.Fog(env.fog, FOG_NEAR, FOG_FAR);
 
     // Portrait-aware camera: higher FOV and closer for narrow screens
-    function isPortrait() { return window.innerHeight > window.innerWidth * 1.2; }
+    function isPortrait() { return isPortraitForced || window.innerHeight > window.innerWidth * 1.2; }
     function getCameraFOV() { return isPortrait() ? 75 : 60; }
     function getCameraOffset() { return isPortrait() ? { y: 10, z: -8, lookY: 0.5, lookZ: 18 } : { y: 8, z: -12, lookY: 1, lookZ: 25 }; }
+    function getGameSize() {
+      if (isPortraitForced) {
+        const h = window.innerHeight;
+        const w = Math.floor(h * 9 / 16);
+        return { width: Math.min(w, window.innerWidth), height: h };
+      }
+      return { width: window.innerWidth, height: window.innerHeight };
+    }
 
-    const camera = new THREE.PerspectiveCamera(getCameraFOV(), window.innerWidth / window.innerHeight, 0.5, 300);
+    const gs = getGameSize();
+    const camera = new THREE.PerspectiveCamera(getCameraFOV(), gs.width / gs.height, 0.5, 300);
     const camOff = getCameraOffset();
     camera.position.set(0, camOff.y, camOff.z);
     camera.lookAt(0, camOff.lookY, camOff.lookZ);
@@ -1187,11 +1219,8 @@
       body.position.y = 1.2;
       group.add(body);
 
-      // Head (small sphere, mostly hidden behind profile sprite)
-      const headGeo = new THREE.SphereGeometry(0.25, 8, 6);
-      const head = new THREE.Mesh(headGeo, skinMat);
-      head.position.y = 1.9;
-      group.add(head);
+      // Head — hidden, replaced by profile photo sprite
+      const head = null;
 
       // Profile photo sprite on top of head (faces camera automatically)
       const profileSprite = createProfileSprite(color);
@@ -1894,10 +1923,11 @@
 
     // ===== RESIZE =====
     window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+      const sz = getGameSize();
+      camera.aspect = sz.width / sz.height;
       camera.fov = getCameraFOV();
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setSize(sz.width, sz.height);
     });
 
     // ===== MAIN GAME LOOP =====
