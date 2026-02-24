@@ -1,0 +1,64 @@
+SKRIP RAKAMAN SUARA — NEO TODAK
+Untuk ElevenLabs Voice Cloning
+Baca dengan gaya natural, macam cakap dengan kawan.
+Jangan terlalu formal, jangan terlalu rush. Bayangkan tengah live stream.
+
+================================================================
+SKRIP 1: Pembukaan TikTok Live (Casual, Hype)
+================================================================
+
+Assalamualaikum dan selamat malam korang semua! Apa khabar malam ni? Welcome welcome kepada yang baru masuk. Aku Neo, dari Cyberjaya. Malam ni kita lepak santai je, main game sikit, borak sikit. Kalau korang suka apa yang korang nampak, jangan lupa tekan follow tu ya. Share sekali kalau rajin. Okay jom kita start, siapa dah ready? Taip kat chat kalau korang excited!
+
+================================================================
+SKRIP 2: Tentang Todak Studios (Professional, Bangga)
+================================================================
+
+Todak Studios ni sebenarnya bermula dari satu idea yang simple je. Kita nak buat game yang orang Malaysia boleh rasa bangga. Bukan senang tau, nak compete dengan studio besar kat luar negara. Tapi alhamdulillah, team kita memang dedicated. Setiap hari kita push limit, kita belajar benda baru. Dari game design sampai ke programming, semuanya kita handle in-house. Yang penting, kita tak pernah give up. Sebab kita percaya, talent Malaysia ni memang world-class.
+
+================================================================
+SKRIP 3: Reaksi Gaming (Excited, Spontan)
+================================================================
+
+Oh wait wait wait! Kau tengok tu! Dia datang dari belakang bro! Aku tak expect langsung. Okay okay, fokus fokus. Kena dodge ni, kalau tak memang habis. Yes! Lepas! Fuh, nasib baik sempat. Korang nampak tak tadi tu? Itu yang aku suka pasal game ni, unpredictable gila. Satu saat kau rasa confident, lepas tu terus kena surprise. Haha, jantung aku berdebar kejap tadi.
+
+================================================================
+SKRIP 4: Pasal AI dan Teknologi (Thoughtful, Bersemangat)
+================================================================
+
+Aku selalu cakap, AI ni bukan untuk gantikan manusia. AI ni sepatutnya membantu kita jadi lebih productive, lebih creative. Bayangkan kalau kau ada assistant yang ingat semua benda yang kau pernah buat, semua keputusan yang kau pernah ambil. Dia boleh tolong kau buat decision yang lebih baik. Itu yang aku cuba bina sekarang. Digital twin, memory system, semuanya connected. Bukan sebab nak show off, tapi sebab aku percaya teknologi ni boleh ubah cara kita bekerja.
+
+================================================================
+SKRIP 5: Cerita Hidup — Cybercafe Days (Nostalgic, Fun)
+================================================================
+
+Dulu masa sekolah, aku memang budak cybercafe. Pukul tiga habis sekolah, terus pergi CC. Main Counter-Strike, Zero Hour, semua aku bantai. Satu ringgit sejam, kadang-kadang aku boleh duduk sampai malam. Masa tu lah aku mula interested dengan komputer. Bukan just main game, tapi aku nak tahu macam mana benda ni berfungsi. First PC aku, aku assemble sendiri. Pergi Low Yat, beli part satu-satu. Masa tu lah aku sedar, aku bukan sekadar consumer. Aku nak jadi builder.
+
+================================================================
+SKRIP 6: Motivasi dan Nasihat (Reflective, Serius)
+================================================================
+
+Satu benda yang aku belajar sepanjang journey ni, jangan tunggu semua perfect baru nak start. Sebab kalau kau tunggu, memang takkan start langsung. Buat je dulu, improve along the way. Orang akan judge, orang akan cakap macam-macam. Tapi itu bukan masalah kau. Masalah kau cuma satu, which is, kau dah buat ke belum? Kalau belum, start sekarang. Tak kisah lah kecil macam mana pun langkah tu. Yang penting, kau bergerak.
+
+================================================================
+SKRIP 7: Reaction kepada Viewer (Warm, Appreciative)
+================================================================
+
+Weh terima kasih banyak kepada yang baru follow tadi. Serius aku appreciate korang yang spend masa kat sini. Aku tahu korang ada banyak benda lain boleh buat, tapi korang pilih untuk lepak dengan aku. Itu bermakna untuk aku. Dan kepada yang bagi gift tadi, thank you so much. Bukan pasal gift tu, tapi pasal support tu. Korang yang buat aku terus nak buat content. Satu hari nanti, kita akan tengok balik semua ni dan rasa proud.
+
+================================================================
+SKRIP 8: Explain Benda Teknikal (Educational, Clear)
+================================================================
+
+Okay jadi macam ni, aku explain simple. Socket IO ni basically macam walkie-talkie antara server dan browser. Bila satu orang buat sesuatu, contohnya dia tekan like, server akan broadcast kepada semua orang yang connected. Real-time. Tak ada delay. Sebab tu lah bila korang nampak game tu, semua orang bergerak serentak. Semuanya sync melalui server. Concept dia straightforward, tapi implementation dia yang tricky. Kena handle disconnection, kena handle latency, macam-macam.
+
+================================================================
+SKRIP 9: Cerita Pasal Team (Proud, Genuine)
+================================================================
+
+Yang aku paling grateful dalam hidup ni, aku ada team yang betul-betul percaya dengan visi yang sama. Lan Todak, Shaze, Hanis, Fareez, semua orang dalam Todak ni ada cerita masing-masing. Ada yang datang dari background gaming, ada yang dari creative industry. Tapi satu benda yang sama, kita semua nak buat sesuatu yang meaningful. Bukan just kerja untuk gaji, tapi kerja sebab kita passionate. Dan itu yang buat perbezaan antara team biasa dengan team yang luar biasa.
+
+================================================================
+SKRIP 10: Penutup Live Stream (Chill, Heartfelt)
+================================================================
+
+Alright korang, aku rasa kita nak wrap up untuk malam ni. Terima kasih sangat-sangat kepada semua yang join dari awal sampai habis. Korang memang the real ones. Esok atau lusa aku akan live lagi, insyaAllah. Kalau ada apa-apa idea atau suggestion, drop kat comment. Aku baca semua tu. Okay take care semua, jaga kesihatan, jangan tidur lambat sangat. Haha, macam aku boleh cakap kan. Alright, assalamualaikum dan selamat malam. Peace!
