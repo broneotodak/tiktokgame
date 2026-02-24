@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Voice Avatar — TikTok Live</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .header h1 { font-size: 18px; font-weight: 700; }
+    .header .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #ff4444;
+      flex-shrink: 0;
+    }
+    .status-dot.connected { background: #00ff88; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* Controls Bar */
+    .controls {
+      padding: 12px 20px;
+      background: #111;
+      border-bottom: 1px solid #222;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .toggle-btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #fff;
+    }
+    .toggle-btn.off {
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    }
+    .toggle-btn.on {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      animation: glow 2s infinite;
+    }
+    @keyframes glow {
+      0%,100% { box-shadow: 0 0 5px rgba(239,68,68,0.3); }
+      50% { box-shadow: 0 0 20px rgba(239,68,68,0.6); }
+    }
+    .test-btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: #222;
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .test-btn:hover { border-color: #8b5cf6; background: #2a2a2a; }
+    .volume-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #888;
+      font-size: 12px;
+    }
+    .volume-wrap input[type="range"] {
+      width: 100px;
+      accent-color: #8b5cf6;
+    }
+
+    /* Main Content */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    @media (min-width: 768px) {
+      .main { flex-direction: row; }
+    }
+
+    /* Avatar Panel */
+    .avatar-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 20px;
+      min-height: 280px;
+    }
+    .avatar-ring {
+      width: 140px; height: 140px;
+      border-radius: 50%;
+      border: 4px solid #333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 56px;
+      transition: all 0.3s;
+      position: relative;
+      background: #1a1a1a;
+    }
+    .avatar-ring.speaking {
+      border-color: #8b5cf6;
+      box-shadow: 0 0 30px rgba(139,92,246,0.5), 0 0 60px rgba(139,92,246,0.2);
+      animation: speakPulse 0.8s ease-in-out infinite;
+    }
+    @keyframes speakPulse {
+      0%,100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    .commentary-text {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 18px;
+      font-weight: 600;
+      color: #ddd;
+      max-width: 500px;
+      min-height: 54px;
+      line-height: 1.5;
+      transition: opacity 0.3s;
+    }
+    .queue-badge {
+      margin-top: 12px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      background: #222;
+      border: 1px solid #333;
+      font-size: 12px;
+      color: #888;
+    }
+    .queue-badge span { color: #8b5cf6; font-weight: 700; }
+
+    /* Event Log */
+    .event-panel {
+      width: 100%;
+      max-height: 45vh;
+      background: #111;
+      border-top: 1px solid #222;
+      display: flex;
+      flex-direction: column;
+    }
+    @media (min-width: 768px) {
+      .event-panel {
+        width: 380px;
+        max-height: none;
+        border-top: none;
+        border-left: 1px solid #222;
+      }
+    }
+    .event-panel h2 {
+      font-size: 14px;
+      padding: 10px 15px;
+      color: #888;
+      border-bottom: 1px solid #222;
+      display: flex;
+      justify-content: space-between;
+    }
+    .event-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .event-item {
+      padding: 8px 10px;
+      border-radius: 6px;
+      margin-bottom: 3px;
+      font-size: 12px;
+      animation: fadeIn 0.3s;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+    .event-item .ev-icon { flex-shrink: 0; font-size: 14px; }
+    .event-item .ev-body { flex: 1; min-width: 0; }
+    .event-item .ev-name { font-weight: 600; color: #ccc; }
+    .event-item .ev-text { color: #888; }
+    .event-item .ev-ai { color: #a78bfa; font-style: italic; margin-top: 2px; }
+    .event-item .ev-time { color: #555; font-size: 10px; flex-shrink: 0; }
+    .event-item.gift { background: rgba(236,72,153,0.1); }
+    .event-item.follow { background: rgba(139,92,246,0.1); }
+    .event-item.chat { background: rgba(255,255,255,0.03); }
+    .event-item.join { background: rgba(37,244,238,0.05); }
+    .event-item.filtered { opacity: 0.5; }
+
+    /* Stats Bar */
+    .stats-bar {
+      padding: 8px 20px;
+      background: #0d0d0d;
+      border-top: 1px solid #222;
+      display: flex;
+      gap: 20px;
+      font-size: 11px;
+      color: #666;
+      flex-wrap: wrap;
+    }
+    .stats-bar .stat-item span { color: #8b5cf6; font-weight: 700; }
+
+    /* Back link */
+    .back-link {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      color: rgba(255,255,255,0.7);
+      text-decoration: none;
+      font-size: 13px;
+      z-index: 10;
+    }
+    .back-link:hover { color: #fff; }
+
+    /* Enable overlay */
+    .enable-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      gap: 16px;
+    }
+    .enable-overlay.hidden { display: none; }
+    .enable-overlay h2 { font-size: 24px; }
+    .enable-overlay p { color: #888; font-size: 14px; max-width: 400px; text-align: center; }
+    .enable-overlay button {
+      padding: 16px 40px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .enable-overlay button:hover { transform: scale(1.05); }
+  </style>
+</head>
+<body>
+
+  <!-- Autoplay unlock overlay -->
+  <div class="enable-overlay" id="enableOverlay">
+    <h2>AI Voice Avatar</h2>
+    <p>Click below to enable audio playback. Browser requires user interaction before playing sound.</p>
+    <button onclick="enableAudio()">Enable Voice</button>
+  </div>
+
+  <div class="header">
+    <h1>AI Voice Avatar</h1>
+    <div class="status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Connecting...</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="toggle-btn off" id="voiceToggle" onclick="toggleVoice()">Voice OFF</button>
+    <button class="test-btn" id="testBtn" onclick="testVoice()">Test Voice</button>
+    <div class="volume-wrap">
+      <span>Vol</span>
+      <input type="range" id="volumeSlider" min="0" max="100" value="80">
+      <span id="volumeLabel">80%</span>
+    </div>
+    <a href="/" style="margin-left:auto;color:#888;font-size:12px;text-decoration:none;">← Dashboard</a>
+  </div>
+
+  <div class="main">
+    <div class="avatar-panel">
+      <div class="avatar-ring" id="avatarRing">🎙️</div>
+      <div class="commentary-text" id="commentaryText">Waiting for events...</div>
+      <div class="queue-badge">Queue: <span id="queueCount">0</span>/5</div>
+    </div>
+
+    <div class="event-panel">
+      <h2>
+        Event Log
+        <span id="eventCount" style="color:#8b5cf6">0 events</span>
+      </h2>
+      <div class="event-list" id="eventList"></div>
+    </div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-item">Commentaries: <span id="statCommentaries">0</span></div>
+    <div class="stat-item">Chars used: <span id="statChars">0</span></div>
+    <div class="stat-item">Events processed: <span id="statEvents">0</span></div>
+    <div class="stat-item">Events skipped: <span id="statSkipped">0</span></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // ===== State =====
+    let voiceEnabled = false;
+    let audioUnlocked = false;
+    let audioContext = null;
+    const stats = { commentaries: 0, chars: 0, events: 0, skipped: 0 };
+    let totalEventCount = 0;
+
+    // ===== Audio Queue =====
+    const audioQueue = [];
+    let isPlaying = false;
+    const MAX_QUEUE = 5;
+
+    function getVolume() {
+      return parseInt(document.getElementById('volumeSlider').value) / 100;
+    }
+
+    document.getElementById('volumeSlider').addEventListener('input', (e) => {
+      document.getElementById('volumeLabel').textContent = e.target.value + '%';
+    });
+
+    function enqueueAudio(blob, text, isGift) {
+      // If queue full, drop oldest non-gift
+      if (audioQueue.length >= MAX_QUEUE) {
+        const dropIdx = audioQueue.findIndex(item => !item.isGift);
+        if (dropIdx !== -1) {
+          URL.revokeObjectURL(audioQueue[dropIdx].url);
+          audioQueue.splice(dropIdx, 1);
+        } else {
+          // All gifts — drop oldest
+          URL.revokeObjectURL(audioQueue[0].url);
+          audioQueue.shift();
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      audioQueue.push({ url, text, isGift });
+      updateQueueCount();
+      if (!isPlaying) playNext();
+    }
+
+    function playNext() {
+      if (audioQueue.length === 0) {
+        isPlaying = false;
+        document.getElementById('avatarRing').classList.remove('speaking');
+        document.getElementById('commentaryText').textContent = 'Listening...';
+        updateQueueCount();
+        return;
+      }
+      isPlaying = true;
+      const item = audioQueue.shift();
+      updateQueueCount();
+
+      // Show commentary
+      document.getElementById('avatarRing').classList.add('speaking');
+      document.getElementById('commentaryText').textContent = item.text;
+
+      const audio = new Audio(item.url);
+      audio.volume = getVolume();
+      audio.onended = () => {
+        URL.revokeObjectURL(item.url);
+        playNext();
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(item.url);
+        playNext();
+      };
+      audio.play().catch(() => playNext());
+    }
+
+    function updateQueueCount() {
+      document.getElementById('queueCount').textContent = audioQueue.length;
+    }
+
+    // ===== Enable Audio (browser autoplay policy) =====
+    function enableAudio() {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // Play silent buffer to unlock
+      const buf = audioContext.createBuffer(1, 1, 22050);
+      const src = audioContext.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioContext.destination);
+      src.start();
+      audioUnlocked = true;
+      document.getElementById('enableOverlay').classList.add('hidden');
+    }
+
+    // ===== Controls =====
+    function toggleVoice() {
+      voiceEnabled = !voiceEnabled;
+      const btn = document.getElementById('voiceToggle');
+      if (voiceEnabled) {
+        btn.textContent = 'Voice ON';
+        btn.className = 'toggle-btn on';
+      } else {
+        btn.textContent = 'Voice OFF';
+        btn.className = 'toggle-btn off';
+      }
+    }
+
+    async function testVoice() {
+      const btn = document.getElementById('testBtn');
+      btn.textContent = 'Generating...';
+      btn.disabled = true;
+      try {
+        const res = await generateCommentary('gift', {
+          nickname: 'TestUser',
+          giftName: 'Rose',
+          diamondCount: 10,
+          repeatCount: 3,
+        });
+        if (res) {
+          btn.textContent = 'Playing...';
+        } else {
+          btn.textContent = 'Error';
+        }
+      } catch (e) {
+        btn.textContent = 'Error';
+        console.error('Test voice error:', e);
+      }
+      setTimeout(() => {
+        btn.textContent = 'Test Voice';
+        btn.disabled = false;
+      }, 3000);
+    }
+
+    // ===== Commentary Generator =====
+    const recentContext = []; // Last 5 events for context
+    const MAX_CONTEXT = 5;
+
+    async function generateCommentary(eventType, eventData) {
+      try {
+        const res = await fetch('/api/voice/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventType, eventData, recentContext }),
+        });
+
+        if (!res.ok) {
+          console.error('Voice API error:', res.status);
+          return null;
+        }
+
+        const text = decodeURIComponent(res.headers.get('X-Commentary-Text') || '');
+        const blob = await res.blob();
+
+        stats.commentaries++;
+        stats.chars += text.length;
+        updateStats();
+
+        // Add to context
+        recentContext.push(`${eventType}: ${text}`);
+        if (recentContext.length > MAX_CONTEXT) recentContext.shift();
+
+        enqueueAudio(blob, text, eventType === 'gift');
+        return text;
+      } catch (err) {
+        console.error('Generate commentary error:', err);
+        return null;
+      }
+    }
+
+    // ===== Smart Event Filter =====
+    const GAME_COMMANDS = ['jump', 'left', 'right', 'up', 'down', 'run', 'stop'];
+    let lastTier2Time = 0;
+    const TIER2_COOLDOWN = 3000; // 3s
+    let chatCounter = 0;
+    const CHAT_SAMPLE_RATE = 8; // 1 in 8
+    let lastViewerMilestone = 0;
+    const MILESTONE_INTERVAL = 50;
+
+    function shouldProcess(eventType, data) {
+      // Tier 1: Gifts >= 10 diamonds — ALWAYS
+      if (eventType === 'gift' && (data.diamondCount || 0) >= 10) return true;
+
+      // Tier 1b: Gifts < 10 diamonds — with cooldown
+      if (eventType === 'gift') {
+        const now = Date.now();
+        if (now - lastTier2Time > TIER2_COOLDOWN) {
+          lastTier2Time = now;
+          return true;
+        }
+        return false;
+      }
+
+      // Tier 2: Follow, Share — 3s cooldown
+      if (eventType === 'follow' || eventType === 'share') {
+        const now = Date.now();
+        if (now - lastTier2Time > TIER2_COOLDOWN) {
+          lastTier2Time = now;
+          return true;
+        }
+        return false;
+      }
+
+      // Tier 4: Chat — sample 1-in-8, skip game commands
+      if (eventType === 'chat') {
+        const comment = (data.comment || '').toLowerCase().trim();
+        if (GAME_COMMANDS.includes(comment)) return false;
+        chatCounter++;
+        return chatCounter % CHAT_SAMPLE_RATE === 0;
+      }
+
+      // Tier 5: Milestone check
+      if (eventType === 'milestone') return true;
+
+      // Joins handled by batcher — never process individually
+      return false;
+    }
+
+    // ===== Join Batcher =====
+    let joinBatch = [];
+    let joinBatchTimer = null;
+    const JOIN_BATCH_WINDOW = 10000; // 10s
+
+    function addJoinToBatch(data) {
+      joinBatch.push(data.nickname || data.uniqueId || 'Viewer');
+      if (!joinBatchTimer) {
+        joinBatchTimer = setTimeout(flushJoinBatch, JOIN_BATCH_WINDOW);
+      }
+    }
+
+    function flushJoinBatch() {
+      joinBatchTimer = null;
+      if (joinBatch.length === 0) return;
+
+      const count = joinBatch.length;
+      const names = joinBatch.slice(0, 4).join(', ') + (count > 4 ? ` +${count - 4} lagi` : '');
+      joinBatch = [];
+
+      addEventLog('join', '👋', `${count} viewers`, 'joined the live');
+
+      if (voiceEnabled && count >= 2) {
+        generateCommentary('join_batch', { count, names });
+      }
+      stats.events++;
+      updateStats();
+    }
+
+    // ===== Event Log UI =====
+    function addEventLog(type, icon, name, text, aiText) {
+      totalEventCount++;
+      document.getElementById('eventCount').textContent = totalEventCount + ' events';
+
+      const list = document.getElementById('eventList');
+      const item = document.createElement('div');
+      item.className = `event-item ${type}`;
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      item.innerHTML = `
+        <span class="ev-icon">${icon}</span>
+        <div class="ev-body">
+          <span class="ev-name">${name}</span>
+          <span class="ev-text">${text}</span>
+          ${aiText ? `<div class="ev-ai">"${aiText}"</div>` : ''}
+        </div>
+        <span class="ev-time">${timeStr}</span>
+      `;
+      list.prepend(item);
+
+      // Keep max 100 items
+      while (list.children.length > 100) list.removeChild(list.lastChild);
+    }
+
+    function updateEventAiText(eventEl, aiText) {
+      const body = eventEl.querySelector('.ev-body');
+      if (body && aiText) {
+        const aiDiv = document.createElement('div');
+        aiDiv.className = 'ev-ai';
+        aiDiv.textContent = `"${aiText}"`;
+        body.appendChild(aiDiv);
+      }
+    }
+
+    // ===== Stats =====
+    function updateStats() {
+      document.getElementById('statCommentaries').textContent = stats.commentaries;
+      document.getElementById('statChars').textContent = stats.chars.toLocaleString();
+      document.getElementById('statEvents').textContent = stats.events;
+      document.getElementById('statSkipped').textContent = stats.skipped;
+    }
+
+    // ===== Socket.IO =====
+    const socket = io();
+
+    socket.on('connect', () => {
+      document.getElementById('statusDot').classList.add('connected');
+      document.getElementById('statusText').textContent = 'Socket connected';
+    });
+
+    socket.on('disconnect', () => {
+      document.getElementById('statusDot').classList.remove('connected');
+      document.getElementById('statusText').textContent = 'Socket disconnected';
+    });
+
+    socket.on('connection-status', (state) => {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      if (state.connected) {
+        dot.classList.add('connected');
+        text.textContent = `Live: ${state.roomId}`;
+      } else {
+        dot.classList.remove('connected');
+        text.textContent = state.error || 'Disconnected';
+      }
+    });
+
+    // Viewer joins → batch
+    socket.on('viewer-join', (data) => {
+      addJoinToBatch(data);
+    });
+
+    // Chat → filter + process
+    socket.on('chat', (data) => {
+      addEventLog('chat', '💬', data.nickname, data.comment);
+
+      if (voiceEnabled && shouldProcess('chat', data)) {
+        stats.events++;
+        generateCommentary('chat', data).then(aiText => {
+          // AI text already shown via audio queue
+        });
+      } else {
+        stats.skipped++;
+      }
+      updateStats();
+    });
+
+    // Gift → always log, filter for voice
+    socket.on('gift', (data) => {
+      const giftText = `${data.repeatCount}x ${data.giftName} (${data.diamondCount}💎)`;
+      addEventLog('gift', '🎁', data.nickname, giftText);
+
+      if (voiceEnabled && shouldProcess('gift', data)) {
+        stats.events++;
+        generateCommentary('gift', data);
+      } else if (voiceEnabled) {
+        stats.skipped++;
+      }
+      updateStats();
+    });
+
+    // Follow
+    socket.on('follow', (data) => {
+      addEventLog('follow', '⭐', data.nickname, 'followed!');
+
+      if (voiceEnabled && shouldProcess('follow', data)) {
+        stats.events++;
+        generateCommentary('follow', data);
+      } else {
+        stats.skipped++;
+      }
+      updateStats();
+    });
+
+    // Share
+    socket.on('share', (data) => {
+      addEventLog('follow', '🔗', data.nickname, 'shared the live');
+
+      if (voiceEnabled && shouldProcess('share', data)) {
+        stats.events++;
+        generateCommentary('share', data);
+      } else {
+        stats.skipped++;
+      }
+      updateStats();
+    });
+
+    // Room stats → milestone check
+    let currentViewerCount = 0;
+    socket.on('room-stats', (data) => {
+      const newCount = data.viewerCount || 0;
+      const oldMilestone = Math.floor(currentViewerCount / MILESTONE_INTERVAL);
+      const newMilestone = Math.floor(newCount / MILESTONE_INTERVAL);
+      currentViewerCount = newCount;
+
+      if (newMilestone > oldMilestone && newCount >= MILESTONE_INTERVAL) {
+        addEventLog('join', '🎉', 'Milestone!', `${newCount} viewers!`);
+        if (voiceEnabled) {
+          stats.events++;
+          generateCommentary('milestone', { count: newCount });
+          updateStats();
+        }
+      }
+    });
+
+    // Likes — ignore (just count)
+    socket.on('like', () => {});
+
+  </script>
+</body>
+</html>

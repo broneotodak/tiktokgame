@@ -16,13 +16,42 @@ const io = new Server(server, { cors: { origin: '*' } });
 const PORT = process.env.PORT || 3000;
 const USERNAME = process.env.TIKTOK_USERNAME || 'broneotodak';
 
+// ===== AI Voice Avatar =====
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
+const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'lvNyQwaZPcGFiNUWWiVa'; // Johari - Malaysian male, warm & friendly
+
+const VOICE_PERSONALITY_PROMPT = `You are Neo Todak's AI co-host on TikTok Live. You speak casual Manglish — the way Malaysian friends talk. Mix Malay and English naturally in the same sentence. Use words like "weh", "gila", "best ah", "power lah", "lets gooo", "bro" the way real Malaysians do. Keep it SHORT — 10 to 20 words max. Sound like a real person hyping a stream, NOT like a robot reading news. Never use formal Malay. No emojis. Write exactly how it should be SPOKEN out loud.`;
+
+function buildCommentaryPrompt(eventType, eventData, recentContext) {
+  const contextStr = recentContext?.length ? `Recent events: ${recentContext.join('; ')}` : '';
+  switch (eventType) {
+    case 'gift':
+      return `${contextStr}\nEvent: ${eventData.nickname} sent ${eventData.repeatCount}x ${eventData.giftName} (${eventData.diamondCount} diamonds). React with hype and gratitude!`;
+    case 'follow':
+      return `${contextStr}\nEvent: ${eventData.nickname} just followed! Welcome them warmly.`;
+    case 'share':
+      return `${contextStr}\nEvent: ${eventData.nickname} shared the live! Thank them.`;
+    case 'join_batch':
+      return `${contextStr}\nEvent: ${eventData.count} new viewers just joined! Names include: ${eventData.names}. Welcome the crowd.`;
+    case 'chat':
+      return `${contextStr}\nEvent: ${eventData.nickname} said: "${eventData.comment}". Give a short fun reaction.`;
+    case 'milestone':
+      return `${contextStr}\nEvent: Viewer count hit ${eventData.count}! Celebrate this milestone.`;
+    default:
+      return `${contextStr}\nEvent: Something happened on the live stream. Give a hype comment.`;
+  }
+}
+
 // Serve static files
+app.use(express.json());
 app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }));
 
 // Clean URL routes
 app.get('/overlay', (req, res) => res.sendFile(join(__dirname, 'public', 'overlay.html')));
 app.get('/game', (req, res) => res.sendFile(join(__dirname, 'public', 'game.html')));
 app.get('/marathon', (req, res) => res.sendFile(join(__dirname, 'public', 'marathon3d.html')));
+app.get('/voice', (req, res) => res.sendFile(join(__dirname, 'public', 'voice.html')));
 
 // API endpoint to get current config
 app.get('/api/config', (req, res) => {
@@ -41,6 +70,75 @@ app.get('/api/proxy-image', async (req, res) => {
     res.send(Buffer.from(buffer));
   } catch (err) {
     res.status(500).send('Failed to proxy image');
+  }
+});
+
+// POST /api/voice/generate — AI commentary + TTS
+app.post('/api/voice/generate', async (req, res) => {
+  if (!OPENAI_API_KEY || !ELEVENLABS_API_KEY) {
+    return res.status(503).json({ error: 'Voice API keys not configured' });
+  }
+
+  try {
+    const { eventType, eventData, recentContext } = req.body;
+    const userPrompt = buildCommentaryPrompt(eventType, eventData, recentContext || []);
+
+    // Step 1: GPT-4o-mini → commentary text
+    const chatRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: VOICE_PERSONALITY_PROMPT },
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: 80,
+        temperature: 0.9,
+      }),
+    });
+
+    if (!chatRes.ok) {
+      const err = await chatRes.text();
+      console.error('OpenAI error:', err);
+      return res.status(502).json({ error: 'OpenAI API failed' });
+    }
+
+    const chatData = await chatRes.json();
+    const commentary = chatData.choices?.[0]?.message?.content?.trim() || '';
+    if (!commentary) return res.status(500).json({ error: 'Empty commentary' });
+
+    // Step 2: ElevenLabs TTS → audio/mpeg
+    const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': ELEVENLABS_API_KEY,
+      },
+      body: JSON.stringify({
+        text: commentary,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: { stability: 0.3, similarity_boost: 0.85, style: 0.7, use_speaker_boost: true },
+      }),
+    });
+
+    if (!ttsRes.ok) {
+      const err = await ttsRes.text();
+      console.error('ElevenLabs error:', err);
+      return res.status(502).json({ error: 'ElevenLabs TTS failed' });
+    }
+
+    // Stream audio back with commentary text in header
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('X-Commentary-Text', encodeURIComponent(commentary));
+    res.set('Access-Control-Expose-Headers', 'X-Commentary-Text');
+
+    const arrayBuf = await ttsRes.arrayBuffer();
+    res.send(Buffer.from(arrayBuf));
+
+  } catch (err) {
+    console.error('Voice generate error:', err);
+    res.status(500).json({ error: 'Internal voice error' });
   }
 });
 
@@ -482,9 +580,11 @@ server.listen(PORT, '0.0.0.0', () => {
 ║──────────────────────────────────────────────║
 ║   Dashboard:  http://localhost:${PORT}            ║
 ║   Overlay:    http://localhost:${PORT}/overlay     ║
+║   Voice AI:   http://localhost:${PORT}/voice       ║
 ║   Username:   @${USERNAME.padEnd(28)}║
 ║──────────────────────────────────────────────║
-║   EulerStream: ${process.env.EULER_API_KEY ? 'Configured' : 'NOT SET'}                    ║
+║   EulerStream: ${process.env.EULER_API_KEY ? 'Configured ✅' : 'NOT SET ❌'}                 ║
+║   Voice AI:    ${OPENAI_API_KEY && ELEVENLABS_API_KEY ? 'Configured ✅' : 'NOT SET ❌'}                 ║
 ╚══════════════════════════════════════════════╝
   `);
 });
