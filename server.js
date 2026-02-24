@@ -20,32 +20,84 @@ const USERNAME = process.env.TIKTOK_USERNAME || 'broneotodak';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'lvNyQwaZPcGFiNUWWiVa'; // Johari - Malaysian male, warm & friendly
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-const VOICE_PERSONALITY_PROMPT = `You are Neo Todak's AI co-host on TikTok Live. You speak casual Manglish — the way Malaysian friends talk. Mix Malay and English naturally in the same sentence. Use words like "weh", "gila", "best ah", "power lah", "lets gooo", "bro" the way real Malaysians do. Keep it SHORT — 10 to 20 words max. Sound like a real person hyping a stream, NOT like a robot reading news. Never use formal Malay. No emojis. Write exactly how it should be SPOKEN out loud.`;
+// Neo's personality — loaded from Digital Twin on startup, with hardcoded fallback
+let NEO_PERSONALITY_PROMPT = `You ARE Neo Todak (Ahmad Fadli). You're the CEO of Todak Studios and VP of Todak Gaming, streaming live on TikTok. You speak casual Manglish — mix Malay and English the way Malaysian friends actually talk. You're from Cyberjaya. You love AI, gaming, and tech. You're an ambivert — chill but can get hype. Your humor is dry and real, never cringe. Keep responses SHORT — 10 to 25 words max. Sound like a real person talking, NOT reading a script. Vary your language naturally — don't repeat the same slang. No emojis. Write exactly how it should be SPOKEN out loud.`;
+
+// Load Neo's brain from Digital Twin (Supabase)
+async function loadNeoPersonality() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.log('⚠️ No Supabase config — using default Neo personality');
+    return;
+  }
+  try {
+    const headers = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+
+    // Fetch personality traits
+    const personalityRes = await fetch(`${SUPABASE_URL}/rest/v1/neo_personality?select=trait,dimension,value`, { headers });
+    const personality = personalityRes.ok ? await personalityRes.json() : [];
+
+    // Fetch personal/identity facts
+    const factsRes = await fetch(`${SUPABASE_URL}/rest/v1/neo_facts?select=fact,domain&domain=in.(personal,social,gaming,philosophy)&limit=30`, { headers });
+    const facts = factsRes.ok ? await factsRes.json() : [];
+
+    if (personality.length === 0 && facts.length === 0) {
+      console.log('⚠️ No Digital Twin data found — using default personality');
+      return;
+    }
+
+    // Build personality string
+    const traits = personality.map(p => `${p.trait} (${p.dimension}): ${(p.value * 100).toFixed(0)}%`).join('. ');
+    const factsList = facts.map(f => f.fact).join('. ');
+
+    NEO_PERSONALITY_PROMPT = `You ARE Neo Todak (Ahmad Fadli), live on TikTok right now. This is your REAL personality from your Digital Twin:
+
+TRAITS: ${traits}
+
+KEY FACTS: ${factsList}
+
+SPEAKING RULES:
+- You speak casual Manglish — mix Malay and English naturally, the way you talk to friends
+- Don't overuse any particular slang word — vary your language naturally
+- Keep responses SHORT — 10 to 25 words max per response
+- Sound like YOU talking to friends, NOT an AI reading a script
+- No emojis. Write exactly how it should be SPOKEN out loud
+- Be genuine — your humor is dry and real, never fake-hype or repetitive
+- You're the host — own the stream, make people feel welcome`;
+
+    console.log(`🧠 Neo Digital Twin loaded: ${personality.length} traits, ${facts.length} facts`);
+  } catch (err) {
+    console.error('⚠️ Failed to load Digital Twin:', err.message);
+  }
+}
 
 function buildCommentaryPrompt(eventType, eventData, recentContext) {
-  const contextStr = recentContext?.length ? `Recent events: ${recentContext.join('; ')}` : '';
+  const contextStr = recentContext?.length ? `Recent context: ${recentContext.join('; ')}` : '';
   switch (eventType) {
     case 'gift':
-      return `${contextStr}\nEvent: ${eventData.nickname} sent ${eventData.repeatCount}x ${eventData.giftName} (${eventData.diamondCount} diamonds). React with hype and gratitude!`;
+      return `${contextStr}\n${eventData.nickname} sent ${eventData.repeatCount}x ${eventData.giftName} (${eventData.diamondCount} diamonds). Thank them YOUR way — genuine, not over-the-top.`;
     case 'follow':
-      return `${contextStr}\nEvent: ${eventData.nickname} just followed! Welcome them warmly.`;
+      return `${contextStr}\n${eventData.nickname} just followed! Welcome them like a friend joining the group.`;
     case 'share':
-      return `${contextStr}\nEvent: ${eventData.nickname} shared the live! Thank them.`;
+      return `${contextStr}\n${eventData.nickname} shared the live! Thank them casually.`;
     case 'join_batch':
-      return `${contextStr}\nEvent: ${eventData.count} new viewers just joined! Names include: ${eventData.names}. Welcome the crowd.`;
+      return `${contextStr}\n${eventData.count} new viewers just joined! Names: ${eventData.names}. Welcome the crowd casually.`;
     case 'chat':
-      return `${contextStr}\nEvent: ${eventData.nickname} said: "${eventData.comment}". Give a short fun reaction.`;
+      return `${contextStr}\n${eventData.nickname} said: "${eventData.comment}". Respond naturally like you're talking to them.`;
+    case 'chat_batch':
+      return `${contextStr}\nViewers are chatting:\n${eventData.messages}\n\nRespond to ALL of them naturally in one flowing response, like you're reading chat and reacting out loud. Address each person by name. Keep total response under 40 words.`;
     case 'milestone':
-      return `${contextStr}\nEvent: Viewer count hit ${eventData.count}! Celebrate this milestone.`;
+      return `${contextStr}\nViewer count hit ${eventData.count}! Celebrate casually.`;
     default:
-      return `${contextStr}\nEvent: Something happened on the live stream. Give a hype comment.`;
+      return `${contextStr}\nSomething happened on stream. Give a casual comment.`;
   }
 }
 
 // Serve static files
 app.use(express.json());
-app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }));
+app.use(express.static(join(__dirname, 'public'), { extensions: ['html'], etag: false, lastModified: false, setHeaders: (res) => res.set('Cache-Control', 'no-store') }));
 
 // Clean URL routes
 app.get('/overlay', (req, res) => res.sendFile(join(__dirname, 'public', 'overlay.html')));
@@ -75,7 +127,9 @@ app.get('/api/proxy-image', async (req, res) => {
 
 // POST /api/voice/generate — AI commentary + TTS
 app.post('/api/voice/generate', async (req, res) => {
+  console.log('🎙️ Voice API called:', req.body?.eventType);
   if (!OPENAI_API_KEY || !ELEVENLABS_API_KEY) {
+    console.log('❌ API keys missing');
     return res.status(503).json({ error: 'Voice API keys not configured' });
   }
 
@@ -90,10 +144,10 @@ app.post('/api/voice/generate', async (req, res) => {
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: VOICE_PERSONALITY_PROMPT },
+          { role: 'system', content: NEO_PERSONALITY_PROMPT },
           { role: 'user', content: userPrompt }
         ],
-        max_tokens: 80,
+        max_tokens: 120,
         temperature: 0.9,
       }),
     });
@@ -573,6 +627,8 @@ io.on('connection', (socket) => {
   });
 });
 
+// Load Neo's brain before starting
+loadNeoPersonality().then(() => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔══════════════════════════════════════════════╗
@@ -588,3 +644,4 @@ server.listen(PORT, '0.0.0.0', () => {
 ╚══════════════════════════════════════════════╝
   `);
 });
+}); // end loadNeoPersonality

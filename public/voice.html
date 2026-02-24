@@ -285,7 +285,7 @@
   </div>
 
   <div class="controls">
-    <button class="toggle-btn off" id="voiceToggle" onclick="toggleVoice()">Voice OFF</button>
+    <button class="toggle-btn off" id="voiceToggle" onclick="toggleVoice()">🔇 Start Voice AI</button>
     <button class="test-btn" id="testBtn" onclick="testVoice()">Test Voice</button>
     <div class="volume-wrap">
       <span>Vol</span>
@@ -330,7 +330,11 @@
     // ===== Audio Queue =====
     const audioQueue = [];
     let isPlaying = false;
-    const MAX_QUEUE = 5;
+    const MAX_QUEUE = 3;
+
+    // Global cooldown — minimum gap between any commentary
+    let lastCommentaryTime = 0;
+    const GLOBAL_COOLDOWN = 2000; // 2s — just enough to prevent overlap
 
     function getVolume() {
       return parseInt(document.getElementById('volumeSlider').value) / 100;
@@ -410,10 +414,10 @@
       voiceEnabled = !voiceEnabled;
       const btn = document.getElementById('voiceToggle');
       if (voiceEnabled) {
-        btn.textContent = 'Voice ON';
+        btn.textContent = '🔊 Voice AI ON';
         btn.className = 'toggle-btn on';
       } else {
-        btn.textContent = 'Voice OFF';
+        btn.textContent = '🔇 Start Voice AI';
         btn.className = 'toggle-btn off';
       }
     }
@@ -449,6 +453,19 @@
     const MAX_CONTEXT = 5;
 
     async function generateCommentary(eventType, eventData) {
+      // Global cooldown check (big gifts bypass)
+      const now = Date.now();
+      if (eventType !== 'gift' && now - lastCommentaryTime < GLOBAL_COOLDOWN) {
+        console.log('[VOICE] Skipped — cooldown active');
+        stats.skipped++;
+        updateStats();
+        return null;
+      }
+
+      isGenerating = true;
+      const debugEl = document.getElementById('commentaryText');
+      debugEl.textContent = `Generating...`;
+      console.log('[VOICE] Calling /api/voice/generate', eventType, eventData);
       try {
         const res = await fetch('/api/voice/generate', {
           method: 'POST',
@@ -456,13 +473,19 @@
           body: JSON.stringify({ eventType, eventData, recentContext }),
         });
 
+        debugEl.textContent = `[2] API responded: ${res.status}`;
+        console.log('[VOICE] Response status:', res.status);
+
         if (!res.ok) {
-          console.error('Voice API error:', res.status);
+          const errText = await res.text();
+          debugEl.textContent = `API Error ${res.status}: ${errText}`;
+          console.error('Voice API error:', res.status, errText);
           return null;
         }
 
         const text = decodeURIComponent(res.headers.get('X-Commentary-Text') || '');
         const blob = await res.blob();
+        debugEl.textContent = `[3] Got audio: ${blob.size} bytes, text: ${text.slice(0,50)}`;
 
         stats.commentaries++;
         stats.chars += text.length;
@@ -472,26 +495,34 @@
         recentContext.push(`${eventType}: ${text}`);
         if (recentContext.length > MAX_CONTEXT) recentContext.shift();
 
+        lastCommentaryTime = Date.now();
         enqueueAudio(blob, text, eventType === 'gift');
         return text;
       } catch (err) {
+        document.getElementById('commentaryText').textContent = `Error: ${err.message}`;
         console.error('Generate commentary error:', err);
         return null;
+      } finally {
+        isGenerating = false;
       }
     }
 
     // ===== Smart Event Filter =====
     const GAME_COMMANDS = ['jump', 'left', 'right', 'up', 'down', 'run', 'stop'];
     let lastTier2Time = 0;
-    const TIER2_COOLDOWN = 3000; // 3s
-    let chatCounter = 0;
-    const CHAT_SAMPLE_RATE = 8; // 1 in 8
+    const TIER2_COOLDOWN = 5000; // 5s
     let lastViewerMilestone = 0;
     const MILESTONE_INTERVAL = 50;
 
+    // Generation lock — only one API call at a time
+    let isGenerating = false;
+
     function shouldProcess(eventType, data) {
-      // Tier 1: Gifts >= 10 diamonds — ALWAYS
+      // Tier 1: Gifts >= 10 diamonds — ALWAYS, even if generating
       if (eventType === 'gift' && (data.diamondCount || 0) >= 10) return true;
+
+      // Skip if already generating (except big gifts above)
+      if (isGenerating) return false;
 
       // Tier 1b: Gifts < 10 diamonds — with cooldown
       if (eventType === 'gift') {
@@ -513,19 +544,52 @@
         return false;
       }
 
-      // Tier 4: Chat — sample 1-in-8, skip game commands
-      if (eventType === 'chat') {
-        const comment = (data.comment || '').toLowerCase().trim();
-        if (GAME_COMMANDS.includes(comment)) return false;
-        chatCounter++;
-        return chatCounter % CHAT_SAMPLE_RATE === 0;
-      }
-
+      // Tier 4: Chat — handled by chat batcher, not here
       // Tier 5: Milestone check
       if (eventType === 'milestone') return true;
 
-      // Joins handled by batcher — never process individually
+      // Joins/chats handled by batchers
       return false;
+    }
+
+    // ===== Chat Batcher =====
+    let chatBatch = [];
+    let chatBatchTimer = null;
+    const CHAT_BATCH_WINDOW = 4000; // 4s — short batch, respond often
+
+    function addChatToBatch(data) {
+      const comment = (data.comment || '').toLowerCase().trim();
+      if (GAME_COMMANDS.includes(comment)) return; // skip game commands
+
+      chatBatch.push({ nickname: data.nickname, comment: data.comment });
+      if (!chatBatchTimer) {
+        chatBatchTimer = setTimeout(flushChatBatch, CHAT_BATCH_WINDOW);
+      }
+    }
+
+    function flushChatBatch() {
+      chatBatchTimer = null;
+      if (chatBatch.length === 0) return;
+      if (!voiceEnabled) { chatBatch = []; return; }
+      if (isGenerating) {
+        // Retry in 2s if still generating
+        chatBatchTimer = setTimeout(flushChatBatch, 2000);
+        return;
+      }
+
+      const messages = chatBatch.slice();
+      chatBatch = [];
+
+      const chatSummary = messages.map(m => `${m.nickname}: "${m.comment}"`).join(', ');
+      addEventLog('chat', '🗣️', `${messages.length} chats`, 'batched for AI');
+
+      stats.events++;
+      updateStats();
+      generateCommentary('chat_batch', {
+        count: messages.length,
+        messages: chatSummary,
+        latest: messages[messages.length - 1],
+      });
     }
 
     // ===== Join Batcher =====
@@ -630,19 +694,10 @@
       addJoinToBatch(data);
     });
 
-    // Chat → filter + process
+    // Chat → batch then process
     socket.on('chat', (data) => {
       addEventLog('chat', '💬', data.nickname, data.comment);
-
-      if (voiceEnabled && shouldProcess('chat', data)) {
-        stats.events++;
-        generateCommentary('chat', data).then(aiText => {
-          // AI text already shown via audio queue
-        });
-      } else {
-        stats.skipped++;
-      }
-      updateStats();
+      addChatToBatch(data);
     });
 
     // Gift → always log, filter for voice
