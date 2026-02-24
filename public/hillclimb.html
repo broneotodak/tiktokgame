@@ -1047,13 +1047,22 @@ function triggerGiftPower(uniqueId, nickname, diamonds) {
   // Always upgrade character on gift
   if (gifter) upgradeCharacter(gifter);
 
-  // Random gift effect (teleport is rare — only 5%)
+  // Gift tiers based on diamond value:
+  // Small (1-9):    Punch or Boost
+  // Medium (10-99):  Punch, Boost, or Mega Jump
+  // Big (100-499):   Mega Punch + Boost + Jump
+  // VIP (500+):      Teleport to leader + Mega Punch + Boost
   const roll = Math.random();
-  const power = diamonds >= 10 ? 'mega' :
-    roll < 0.35 ? 'punch' :
-    roll < 0.65 ? 'boost' :
-    roll < 0.95 ? 'jump' :
-    'teleport';
+  let power;
+  if (diamonds >= 500) {
+    power = 'teleport'; // VIP — always teleport
+  } else if (diamonds >= 100) {
+    power = 'mega'; // Big gift — mega punch
+  } else if (diamonds >= 10) {
+    power = roll < 0.35 ? 'punch' : roll < 0.65 ? 'boost' : 'jump';
+  } else {
+    power = roll < 0.50 ? 'punch' : 'boost';
+  }
 
   if (power === 'punch' || power === 'mega') {
     // PUNCH — knock nearby players downhill
@@ -1100,18 +1109,32 @@ function triggerGiftPower(uniqueId, nickname, diamonds) {
     showNotif(`<strong>${nickname}</strong> launched 🚀 into the sky + ${steps} steps!`, 'gift');
 
   } else if (power === 'teleport') {
-    // TELEPORT — jump near the leader
+    // VIP TELEPORT (500+ diamonds) — teleport to leader + mega punch + speed boost
     const leaderP = getLeaderProgress();
     if (gifter && leaderP > gifter.progress + 3) {
-      const teleportTo = leaderP - 1 - Math.random() * 3;
+      const teleportTo = leaderP + 2; // Teleport AHEAD of leader
       gifter.progress = teleportTo;
       gifter.targetProgress = teleportTo;
       gifter.model.position.x = teleportTo;
       gifter.model.position.y = getHillY(teleportTo);
     }
-    movePlayer(uniqueId, Math.min(diamonds * 2, 15));
-    showPowerFlash('✨', 'TELEPORT!', nickname);
-    showNotif(`<strong>${nickname}</strong> ✨ teleported near the leader!`, 'gift');
+    // VIP also gets mega punch + big boost
+    const radius = Math.min(10 + diamonds, 30);
+    if (gifter) {
+      const punchAnim = Math.random() > 0.5 ? 'UAL_Punch_Cross' : 'UAL_Punch_Jab';
+      playUAL(gifter, punchAnim);
+      const clip = ualClips[punchAnim];
+      if (clip) setTimeout(() => { if (gifter.ualPlayback) stopUAL(gifter); }, clip.duration * 1000 + 200);
+    }
+    const dropped = powerDropNearby(uniqueId, radius);
+    boostPlayer(uniqueId, 15);
+    movePlayer(uniqueId, 30);
+    showPowerFlash('👑', 'VIP TELEPORT!', nickname);
+    if (dropped.length > 0) {
+      showNotif(`<strong>👑 ${nickname}</strong> VIP teleported to #1 and punched ${dropped.length} players!`, 'gift');
+    } else {
+      showNotif(`<strong>👑 ${nickname}</strong> VIP teleported to the lead!`, 'gift');
+    }
   }
 
   // Every gift always gives some forward movement
