@@ -426,6 +426,12 @@
           <button onclick="window.open(document.getElementById('marathonUrl').value,'_blank')" style="background:#a855f7">Open</button>
         </div>
         <div style="display:flex;gap:8px;align-items:center;width:100%">
+          <span style="color:#22c55e;font-size:11px;width:55px;font-weight:700">Climb:</span>
+          <input type="text" id="hillclimbUrl" readonly style="flex:1;border-color:#22c55e;color:#22c55e">
+          <button onclick="copyUrl('hillclimbUrl')" style="background:#22c55e">Copy</button>
+          <button onclick="window.open(document.getElementById('hillclimbUrl').value,'_blank')" style="background:#22c55e">Open</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;width:100%">
           <span style="color:#ec4899;font-size:11px;width:55px;font-weight:700">Voice:</span>
           <input type="text" id="voiceUrl" readonly style="flex:1;border-color:#ec4899;color:#ec4899">
           <button onclick="copyUrl('voiceUrl')" style="background:#ec4899">Copy</button>
@@ -531,6 +537,7 @@
       document.getElementById('overlayUrl').value = `${window.location.origin}/overlay${roomParam}`;
       document.getElementById('gameUrl').value = `${window.location.origin}/game${roomParam}`;
       document.getElementById('marathonUrl').value = `${window.location.origin}/marathon${roomParam}`;
+      document.getElementById('hillclimbUrl').value = `${window.location.origin}/hillclimb${roomParam}`;
       document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
 
       // Load config

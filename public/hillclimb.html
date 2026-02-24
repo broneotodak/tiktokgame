@@ -308,10 +308,9 @@ function getHillSlope(x) {
 const terrainChunks = new Map(); // chunkIdx → { meshes: [], decos: [] }
 const grassMat = new THREE.MeshStandardMaterial({ color: 0x4CAF50, roughness: 0.85 });
 const dirtMat = new THREE.MeshStandardMaterial({ color: 0x8B6914, roughness: 0.95 });
-const trunkGeo = new THREE.CylinderGeometry(0.12, 0.22, 1.8, 5);
-const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-const leafGeo = new THREE.SphereGeometry(1, 5, 4);
-const leafColors = [0x228B22, 0x2E7D32, 0x1B5E20, 0x33691E, 0x43A047];
+// Nature 3D asset templates (loaded in loadAssets)
+const natureTemplates = { trees: [], pines: [], bushes: [], rocks: [] };
+// Fallback primitives (used if nature assets fail to load)
 const rockGeo = new THREE.DodecahedronGeometry(0.4, 0);
 const rockMat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.9 });
 const flowerGeo = new THREE.SphereGeometry(0.12, 4, 3);
@@ -365,39 +364,64 @@ function buildChunk(chunkIdx) {
     return s - Math.floor(s);
   };
 
-  // Trees
+  // 3D Trees (common trees + pines on sides of the road)
+  const allTrees = [...natureTemplates.trees, ...natureTemplates.pines];
   for (let i = 0; i < 8; i++) {
     const x = startX + rng(i * 3) * CHUNK_LENGTH;
     const side = rng(i * 3 + 1) > 0.5 ? 1 : -1;
-    const z = side * (LANE_WIDTH / 2 + 1.5 + rng(i * 3 + 2) * 5);
+    const z = side * (LANE_WIDTH / 2 + 2 + rng(i * 3 + 2) * 5);
     const y = getHillY(x);
-    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-    trunk.position.set(x, y + 0.9, z);
-    trunk.castShadow = true;
-    scene.add(trunk); objects.push(trunk);
-
-    const s = 0.5 + rng(i * 3 + 50) * 0.7;
-    const lMat = new THREE.MeshStandardMaterial({ color: leafColors[i % leafColors.length] });
-    const leaf = new THREE.Mesh(leafGeo, lMat);
-    leaf.position.set(x, y + 2.2 + s * 0.4, z);
-    leaf.scale.setScalar(s); leaf.castShadow = true;
-    scene.add(leaf); objects.push(leaf);
+    if (allTrees.length > 0) {
+      const template = allTrees[Math.floor(rng(i * 3 + 40) * allTrees.length)];
+      const tree = template.clone();
+      const s = 0.4 + rng(i * 3 + 50) * 0.4;
+      tree.scale.setScalar(s);
+      tree.position.set(x, y, z);
+      tree.rotation.y = rng(i * 3 + 60) * Math.PI * 2;
+      scene.add(tree); objects.push(tree);
+    }
   }
 
-  // Rocks
+  // Bushes (scattered near the road edges)
+  for (let i = 0; i < 4; i++) {
+    const x = startX + rng(i * 4 + 150) * CHUNK_LENGTH;
+    const side = rng(i * 4 + 151) > 0.5 ? 1 : -1;
+    const z = side * (LANE_WIDTH / 2 + 0.8 + rng(i * 4 + 152) * 2);
+    const y = getHillY(x);
+    if (natureTemplates.bushes.length > 0) {
+      const template = natureTemplates.bushes[Math.floor(rng(i * 4 + 153) * natureTemplates.bushes.length)];
+      const bush = template.clone();
+      bush.scale.setScalar(0.3 + rng(i * 4 + 154) * 0.3);
+      bush.position.set(x, y, z);
+      bush.rotation.y = rng(i * 4 + 155) * Math.PI * 2;
+      scene.add(bush); objects.push(bush);
+    }
+  }
+
+  // Rocks (on and near the path)
   for (let i = 0; i < 5; i++) {
     const x = startX + rng(i * 5 + 100) * CHUNK_LENGTH;
     const z = (rng(i * 5 + 101) - 0.5) * LANE_WIDTH * 0.6;
     const y = getHillY(x);
-    const rock = new THREE.Mesh(rockGeo, rockMat);
-    rock.position.set(x, y + 0.15, z);
-    rock.rotation.set(rng(i + 200), rng(i + 201), rng(i + 202));
-    const s = 0.2 + rng(i + 203) * 0.5;
-    rock.scale.set(s, s * 0.6, s);
-    scene.add(rock); objects.push(rock);
+    if (natureTemplates.rocks.length > 0) {
+      const template = natureTemplates.rocks[Math.floor(rng(i * 5 + 102) * natureTemplates.rocks.length)];
+      const rock = template.clone();
+      const s = 0.2 + rng(i + 203) * 0.4;
+      rock.scale.setScalar(s);
+      rock.position.set(x, y, z);
+      rock.rotation.y = rng(i + 204) * Math.PI * 2;
+      scene.add(rock); objects.push(rock);
+    } else {
+      const rock = new THREE.Mesh(rockGeo, rockMat);
+      rock.position.set(x, y + 0.15, z);
+      rock.rotation.set(rng(i + 200), rng(i + 201), rng(i + 202));
+      const s = 0.2 + rng(i + 203) * 0.5;
+      rock.scale.set(s, s * 0.6, s);
+      scene.add(rock); objects.push(rock);
+    }
   }
 
-  // Flowers
+  // Flowers (small colored spheres scattered on the ground)
   for (let i = 0; i < 10; i++) {
     const x = startX + rng(i * 4 + 300) * CHUNK_LENGTH;
     const z = (rng(i * 4 + 301) - 0.5) * LANE_WIDTH * 0.5;
@@ -556,6 +580,26 @@ async function loadAssets() {
       updateProgress(`Loaded ${cls}`);
     } catch (e) { console.warn(`Failed to load ${cls}:`, e.message); loaded++; }
   }
+
+  // Load nature assets (trees, pines, bushes, rocks)
+  const natureAssets = [
+    { type: 'trees', files: ['CommonTree_1', 'CommonTree_2', 'CommonTree_3'] },
+    { type: 'pines', files: ['Pine_1', 'Pine_2'] },
+    { type: 'bushes', files: ['Bush_Common'] },
+    { type: 'rocks', files: ['Rock_Medium_1', 'Rock_Medium_2'] },
+  ];
+  for (const group of natureAssets) {
+    for (const file of group.files) {
+      try {
+        const gltf = await loader.loadAsync(`/nature/${file}.gltf`);
+        gltf.scene.traverse(c => {
+          if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; }
+        });
+        natureTemplates[group.type].push(gltf.scene);
+      } catch (e) { console.warn(`Nature ${file}:`, e.message); }
+    }
+  }
+  console.log('Nature:', Object.entries(natureTemplates).map(([k,v]) => `${k}:${v.length}`).join(', '));
 
   assetsLoaded = true;
   console.log(`Ready: ${Object.keys(characterTemplates).length} chars, ${Object.keys(animationClips).length} anims`);
@@ -1541,6 +1585,12 @@ setInterval(showGuideTip, 8000);
 
 // ===== START =====
 loadAssets().then(() => {
+  // Rebuild initial chunks now that nature assets are loaded
+  for (const [idx] of terrainChunks) {
+    removeChunk(idx);
+  }
+  for (let i = 0; i <= CHUNKS_AHEAD; i++) buildChunk(i);
+
   animate();
   console.log('Hill Climb ready! Keys: T=spawn D=all A=auto L=like J=jump B=boost');
   showNotif('T=spawn | D=all | A=auto-race');
