@@ -1047,12 +1047,12 @@ function triggerGiftPower(uniqueId, nickname, diamonds) {
   // Always upgrade character on gift
   if (gifter) upgradeCharacter(gifter);
 
-  // Random gift effect
+  // Random gift effect (teleport is rare — only 5%)
   const roll = Math.random();
   const power = diamonds >= 10 ? 'mega' :
     roll < 0.35 ? 'punch' :
-    roll < 0.60 ? 'boost' :
-    roll < 0.80 ? 'jump' :
+    roll < 0.65 ? 'boost' :
+    roll < 0.95 ? 'jump' :
     'teleport';
 
   if (power === 'punch' || power === 'mega') {
@@ -1482,11 +1482,101 @@ socket.on('viewer-list', (list) => {
 // ===== MAIN LOOP =====
 let lbTimer = 0;
 
+// ===== RANDOM EVENTS — BOULDERS =====
+const boulders = [];
+let nextBoulderTime = Date.now() + 15000 + Math.random() * 15000; // First boulder in 15-30s
+
+function spawnBoulder() {
+  if (players.size === 0) return;
+
+  // Find the leader to spawn boulder ahead
+  const leaderX = getLeaderProgress();
+  const spawnX = leaderX + 15 + Math.random() * 10; // Spawn ahead of leader
+  const spawnY = getHillY(spawnX) + 1;
+  const laneZ = (Math.random() - 0.5) * LANE_WIDTH * 0.6;
+
+  // Create boulder mesh (use nature rock if available, else primitive)
+  let boulderMesh;
+  if (natureTemplates.rocks.length > 0) {
+    const template = natureTemplates.rocks[Math.floor(Math.random() * natureTemplates.rocks.length)];
+    boulderMesh = template.clone();
+    boulderMesh.scale.setScalar(0.8 + Math.random() * 0.6);
+  } else {
+    boulderMesh = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.8, 1),
+      new THREE.MeshStandardMaterial({ color: 0x665544, roughness: 0.9 })
+    );
+  }
+  boulderMesh.position.set(spawnX, spawnY, laneZ);
+  boulderMesh.castShadow = true;
+  scene.add(boulderMesh);
+
+  boulders.push({
+    mesh: boulderMesh,
+    x: spawnX,
+    z: laneZ,
+    speed: 8 + Math.random() * 6, // Rolling speed downhill
+    life: 6, // Seconds before despawn
+  });
+
+  showNotif('🪨 <strong>BOULDER!</strong> Watch out!', 'event');
+  showPowerFlash('🪨', 'BOULDER!', '');
+}
+
+function updateBoulders(dt) {
+  for (let i = boulders.length - 1; i >= 0; i--) {
+    const b = boulders[i];
+    b.life -= dt;
+    // Roll downhill (decreasing X)
+    b.x -= b.speed * dt;
+    const y = getHillY(b.x);
+    b.mesh.position.set(b.x, y + 0.5, b.z);
+    // Spin the boulder
+    b.mesh.rotation.z -= dt * 5;
+    b.mesh.rotation.x += dt * 2;
+
+    // Hit players in the path
+    players.forEach((p) => {
+      const dx = Math.abs(p.progress - b.x);
+      const dz = Math.abs(p.laneZ - b.z);
+      if (dx < 1.5 && dz < 2 && !p.isJumping) {
+        // Knock player back
+        const knockback = 3 + Math.random() * 3;
+        p.targetProgress = Math.max(0, p.progress - knockback);
+        p.score = Math.max(0, p.score - Math.round(knockback));
+        p.isJumping = true;
+        p.isOnGround = false;
+        p.velocityY = 4 + Math.random() * 3;
+        // Play hit animation
+        const hitAnim = Math.random() > 0.5 ? 'UAL_Hit_Chest' : 'UAL_Hit_Head';
+        playUAL(p, hitAnim);
+        const hitClip = ualClips[hitAnim];
+        if (hitClip) {
+          setTimeout(() => { if (p.ualPlayback) stopUAL(p); }, hitClip.duration * 1000 + 200);
+        }
+      }
+    });
+
+    // Remove expired boulders
+    if (b.life <= 0 || b.x < getLeaderProgress() - 30) {
+      scene.remove(b.mesh);
+      boulders.splice(i, 1);
+    }
+  }
+
+  // Spawn next boulder
+  if (Date.now() > nextBoulderTime && players.size > 0) {
+    spawnBoulder();
+    nextBoulderTime = Date.now() + 20000 + Math.random() * 25000; // Every 20-45s
+  }
+}
+
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
 
   updatePlayers(dt);
+  updateBoulders(dt);
   updateCamera(dt);
 
   lbTimer += dt;
