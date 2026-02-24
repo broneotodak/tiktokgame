@@ -257,7 +257,8 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
+    const ROOM = new URLSearchParams(window.location.search).get('room') || '';
+    const socket = io({ query: { room: ROOM } });
     const characters = new Map();
     const CHAR_COLORS = [
       '#25f4ee', '#fe2c55', '#ffd700', '#00ff88', '#ff6b35',

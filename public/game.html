@@ -4014,7 +4014,8 @@
     }
 
     // ===== SOCKET.IO =====
-    const socket = io();
+    const ROOM = new URLSearchParams(window.location.search).get('room') || '';
+    const socket = io({ query: { room: ROOM } });
 
     socket.on('viewer-join', (viewer) => {
       addPlayer(viewer);

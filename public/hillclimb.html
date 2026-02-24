@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok Hill Climb - KayKit Characters</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; width: 100vw; height: 100vh; }
+
+    /* Portrait game frame — 9:16 centered with black bars */
+    .game-frame {
+      position: relative;
+      width: min(100vw, calc(100vh * 9 / 16));
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+    }
+    #gameCanvas { display: block; width: 100%; height: 100%; }
+
+    /* Loading screen */
+    #loadingScreen {
+      position: absolute; inset: 0; z-index: 1000;
+      background: linear-gradient(135deg, #0a0a2e 0%, #1a0a3e 50%, #0a2a1e 100%);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #fff; transition: opacity 0.8s;
+    }
+    #loadingScreen.hidden { opacity: 0; pointer-events: none; }
+    #loadingScreen h1 { font-size: 2.2em; margin-bottom: 8px; text-shadow: 0 0 20px rgba(37,244,238,0.5); }
+    #loadingScreen .subtitle { font-size: 1em; color: #aaa; margin-bottom: 25px; }
+    .progress-bar { width: 220px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #25f4ee, #fe2c55); width: 0%; transition: width 0.3s; border-radius: 3px; }
+    #loadingText { margin-top: 12px; font-size: 0.85em; color: #888; }
+
+    /* HUD - top bar */
+    #topBar {
+      position: absolute; top: 8px; left: 8px; right: 8px; z-index: 100;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none;
+    }
+    .top-pill {
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+      border-radius: 16px; padding: 5px 12px; border: 1px solid rgba(255,255,255,0.1);
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: #fff; font-weight: 600;
+      pointer-events: auto;
+    }
+    .top-pill .label { color: #888; font-weight: 400; font-size: 10px; }
+    .top-pill.live { border-color: rgba(254,44,85,0.4); }
+    .live-dot { width: 6px; height: 6px; background: #fe2c55; border-radius: 50%; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+    /* Leaderboard - right side */
+    #leaderboard {
+      position: absolute; top: 42px; right: 6px; z-index: 100;
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(10px);
+      border-radius: 10px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.08);
+      min-width: 120px; max-width: 140px;
+    }
+    #leaderboard h3 { font-size: 9px; color: #25f4ee; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; text-align: center; }
+    .lb-entry {
+      display: flex; align-items: center; gap: 4px; padding: 2px 0;
+      font-size: 10px; color: #fff;
+    }
+    .lb-rank { width: 16px; text-align: center; font-weight: 700; color: #ffd700; font-size: 10px; }
+    .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+    .lb-score { font-weight: 600; color: #25f4ee; font-size: 10px; }
+
+    /* Notifications — below the guide tips */
+    #notifications {
+      position: absolute; top: 56%; left: 6px; right: 6px; z-index: 100;
+      display: flex; flex-direction: column; gap: 3px;
+      pointer-events: none;
+    }
+    .notif {
+      padding: 5px 12px; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      border-radius: 10px; border: 1px solid rgba(37,244,238,0.3);
+      animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in 3.5s forwards;
+      font-size: 11px; color: #fff; line-height: 1.3; text-align: center;
+    }
+    .notif strong { color: #25f4ee; }
+    .notif.gift { border-color: rgba(254,44,85,0.5); background: rgba(254,44,85,0.15); }
+    .notif.gift strong { color: #fe2c55; }
+    @keyframes slideIn { from { opacity:0; transform: translateX(-20px); } to { opacity:1; transform: translateX(0); } }
+    @keyframes fadeOut { to { opacity:0; transform: translateY(-10px); } }
+
+    /* Guide tip — rotating single-line banner in middle */
+    #guideTip {
+      position: absolute; top: 52%; left: 6px; right: 6px; z-index: 110;
+      pointer-events: none;
+    }
+    .guide-banner {
+      display: flex; align-items: center; gap: 8px; justify-content: center;
+      padding: 6px 14px; border-radius: 10px;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      border: 1px solid rgba(37,244,238,0.25);
+      animation: tipIn 0.4s ease-out;
+    }
+    .guide-banner.gift-tip {
+      border-color: rgba(254,44,85,0.4);
+      background: rgba(254,44,85,0.12);
+    }
+    .guide-banner .gb-icon { font-size: 14px; flex-shrink: 0; }
+    .guide-banner .gb-text { font-size: 11px; color: #fff; font-weight: 500; }
+    .guide-banner .gb-text strong { color: #25f4ee; }
+    .guide-banner.gift-tip .gb-text strong { color: #fe2c55; }
+    @keyframes tipIn { from { opacity:0; transform: translateY(-10px); } to { opacity:1; transform: translateY(0); } }
+
+    /* Power notification — center screen flash */
+    .power-flash {
+      position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 200; text-align: center; pointer-events: none;
+      animation: powerIn 0.3s ease-out, powerOut 0.5s ease-in 1.5s forwards;
+    }
+    .power-flash .pf-icon { font-size: 40px; display: block; }
+    .power-flash .pf-name {
+      font-size: 14px; font-weight: 700; color: #fff;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+      margin-top: 4px;
+    }
+    .power-flash .pf-by {
+      font-size: 10px; color: #fe2c55; font-weight: 600; margin-top: 2px;
+    }
+    @keyframes powerIn { from { opacity:0; transform: translate(-50%,-50%) scale(0.5); } to { opacity:1; transform: translate(-50%,-50%) scale(1); } }
+    @keyframes powerOut { to { opacity:0; transform: translate(-50%,-50%) scale(1.2) translateY(-20px); } }
+
+    /* Distance tracker — left side vertical bar (mobile-readable) */
+    #distTracker {
+      position: absolute; top: 42px; left: 6px; z-index: 100;
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(10px);
+      border-radius: 12px; padding: 10px 8px; border: 1px solid rgba(255,255,255,0.08);
+      width: 56px; max-height: 55%;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    #distTracker .track-bar {
+      position: relative; width: 5px; flex: 1; min-height: 100px;
+      background: rgba(255,255,255,0.15); border-radius: 3px; margin: 5px 0;
+    }
+    .track-dot {
+      position: absolute; left: 50%; width: 12px; height: 12px;
+      border-radius: 50%; border: 2px solid #fff;
+      transform: translate(-50%, -50%);
+      transition: top 0.5s ease-out;
+    }
+    .track-dot .track-label {
+      position: absolute; left: 18px; top: -5px; white-space: nowrap;
+      font-size: 11px; color: #fff; font-weight: 700;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+      max-width: 70px; overflow: hidden; text-overflow: ellipsis;
+    }
+    .track-dot .track-dist {
+      position: absolute; left: 18px; top: 9px; white-space: nowrap;
+      font-size: 9px; color: #aaa; font-weight: 500;
+    }
+    #distTracker .track-top { font-size: 10px; color: #25f4ee; font-weight: 700; }
+    #distTracker .track-bottom { font-size: 9px; color: #aaa; }
+
+    /* View mode — hide guide in TikTok capture */
+    body.view-mode #guideTip { display: none; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+<div class="game-frame" id="gameFrame">
+  <!-- Guide Tip (rotating banner) -->
+  <div id="guideTip"></div>
+
+  <!-- Loading -->
+  <div id="loadingScreen">
+    <h1>Hill Climb</h1>
+    <div class="subtitle">TikTok Live Interactive</div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div id="loadingText">Loading assets...</div>
+  </div>
+
+  <!-- Top Bar -->
+  <div id="topBar">
+    <div class="top-pill" id="connStatus"><div class="live-dot"></div> Connecting</div>
+    <div class="top-pill"><span class="label">Players</span> <span id="playerCount">0</span></div>
+  </div>
+
+  <!-- Leaderboard -->
+  <div id="leaderboard">
+    <h3>Leaderboard</h3>
+    <div id="lbEntries"></div>
+  </div>
+
+  <!-- Distance Tracker (left bar) -->
+  <div id="distTracker">
+    <div class="track-top">1st</div>
+    <div class="track-bar" id="trackBar"></div>
+    <div class="track-bottom">You</div>
+  </div>
+
+  <!-- Notifications (top, below guide) -->
+  <div id="notifications"></div>
+
+  <canvas id="gameCanvas"></canvas>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+// Note: OrbitControls removed — camera is auto-follow only
+
+// ===== URL PARAMS =====
+const params = new URLSearchParams(window.location.search);
+const VIEW_MODE = params.has('view');
+if (VIEW_MODE) document.body.classList.add('view-mode');
+
+// ===== CONFIG =====
+const LANE_WIDTH = 10;
+const CHAR_SCALE = 0.7;
+const MAX_PLAYERS = 40;
+const STEP_SIZE = 0.6;
+const GRAVITY = -18;
+const JUMP_FORCE = 9;
+const CHUNK_LENGTH = 60;        // Each terrain chunk X-length
+const CHUNKS_AHEAD = 4;         // How many chunks to keep ahead
+const CHUNKS_BEHIND = 1;        // How many chunks to keep behind
+
+const CHAR_CLASSES = ['Barbarian', 'Knight', 'Mage', 'Ranger', 'Rogue', 'Rogue_Hooded'];
+const CHAR_COLORS = [
+  0x25f4ee, 0xfe2c55, 0xffd700, 0x00ff88, 0xff6b35,
+  0xa855f7, 0x06b6d4, 0xf43f5e, 0x84cc16, 0xf59e0b,
+  0x8b5cf6, 0x14b8a6, 0xe11d48, 0xeab308, 0x3b82f6,
+];
+
+// ===== GAME SIZE (9:16 portrait) =====
+function getGameSize() {
+  const frame = document.getElementById('gameFrame');
+  return { width: frame.clientWidth, height: frame.clientHeight };
+}
+
+// ===== THREE.JS SETUP =====
+const canvas = document.getElementById('gameCanvas');
+const sz = getGameSize();
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setSize(sz.width, sz.height);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.3;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x6CB4EE);
+scene.fog = new THREE.FogExp2(0x9DCEFF, 0.006);
+
+const camera = new THREE.PerspectiveCamera(60, sz.width / sz.height, 0.5, 400);
+
+// ===== LIGHTING =====
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+
+const sunLight = new THREE.DirectionalLight(0xfff5e6, 1.6);
+sunLight.position.set(30, 100, 40);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.left = -30;
+sunLight.shadow.camera.right = 30;
+sunLight.shadow.camera.top = 50;
+sunLight.shadow.camera.bottom = -10;
+sunLight.shadow.camera.far = 200;
+scene.add(sunLight);
+scene.add(sunLight.target);
+
+scene.add(new THREE.DirectionalLight(0x88bbff, 0.35).translateX(-20).translateY(30));
+
+// ===== ENDLESS HILL — PROCEDURAL NOISE =====
+// Simple seeded noise for consistent terrain
+function noise(x) {
+  const s1 = Math.sin(x * 0.05) * 8;
+  const s2 = Math.sin(x * 0.13 + 1.7) * 4;
+  const s3 = Math.sin(x * 0.31 + 3.1) * 2;
+  const s4 = Math.sin(x * 0.07 + 0.5) * 6;
+  return s1 + s2 + s3 + s4;
+}
+
+// Hill Y at any X position — endless, gets steeper as X increases
+function getHillY(x) {
+  if (x < 0) return 0;
+  // Base slope: gets steeper the further you go (logarithmic so it doesn't explode)
+  const baseSlope = 0.4 + Math.log2(1 + x * 0.01) * 0.3;
+  const base = x * baseSlope;
+  // Bumps from noise
+  const bumps = noise(x);
+  return Math.max(0, base + bumps);
+}
+
+function getHillSlope(x) {
+  const dx = 0.3;
+  return Math.atan2(getHillY(x + dx) - getHillY(x - dx), dx * 2);
+}
+
+// ===== TERRAIN CHUNK SYSTEM =====
+const terrainChunks = new Map(); // chunkIdx → { meshes: [], decos: [] }
+const grassMat = new THREE.MeshStandardMaterial({ color: 0x4CAF50, roughness: 0.85 });
+const dirtMat = new THREE.MeshStandardMaterial({ color: 0x8B6914, roughness: 0.95 });
+const trunkGeo = new THREE.CylinderGeometry(0.12, 0.22, 1.8, 5);
+const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+const leafGeo = new THREE.SphereGeometry(1, 5, 4);
+const leafColors = [0x228B22, 0x2E7D32, 0x1B5E20, 0x33691E, 0x43A047];
+const rockGeo = new THREE.DodecahedronGeometry(0.4, 0);
+const rockMat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.9 });
+const flowerGeo = new THREE.SphereGeometry(0.12, 4, 3);
+const flowerColors = [0xff6b9d, 0xffd93d, 0xff6b35, 0xc084fc, 0xfb7185];
+
+function buildChunk(chunkIdx) {
+  if (terrainChunks.has(chunkIdx)) return;
+  const startX = chunkIdx * CHUNK_LENGTH;
+  const endX = startX + CHUNK_LENGTH;
+  const objects = [];
+
+  // Build terrain profile for this chunk
+  const segments = 60;
+  const shape = new THREE.Shape();
+  shape.moveTo(startX, -20);
+  for (let i = 0; i <= segments; i++) {
+    const x = startX + (i / segments) * CHUNK_LENGTH;
+    shape.lineTo(x, getHillY(x));
+  }
+  shape.lineTo(endX, -20);
+  shape.lineTo(startX, -20);
+
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: LANE_WIDTH, bevelEnabled: false });
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, grassMat);
+  mesh.receiveShadow = true;
+  mesh.position.z = -LANE_WIDTH / 2;
+  scene.add(mesh);
+  objects.push(mesh);
+
+  // Dirt layer
+  const dShape = new THREE.Shape();
+  dShape.moveTo(startX, -20);
+  for (let i = 0; i <= segments; i++) {
+    const x = startX + (i / segments) * CHUNK_LENGTH;
+    dShape.lineTo(x, getHillY(x) - 0.8);
+  }
+  dShape.lineTo(endX, -20);
+  dShape.lineTo(startX, -20);
+  const dGeo = new THREE.ExtrudeGeometry(dShape, { depth: LANE_WIDTH + 2, bevelEnabled: false });
+  const dMesh = new THREE.Mesh(dGeo, dirtMat);
+  dMesh.position.z = -LANE_WIDTH / 2 - 1;
+  dMesh.position.y = -0.3;
+  scene.add(dMesh);
+  objects.push(dMesh);
+
+  // Decorations — seeded by chunkIdx for consistency
+  const seed = chunkIdx * 7919;
+  const rng = (i) => {
+    const s = Math.sin(seed + i * 9973) * 43758.5453;
+    return s - Math.floor(s);
+  };
+
+  // Trees
+  for (let i = 0; i < 8; i++) {
+    const x = startX + rng(i * 3) * CHUNK_LENGTH;
+    const side = rng(i * 3 + 1) > 0.5 ? 1 : -1;
+    const z = side * (LANE_WIDTH / 2 + 1.5 + rng(i * 3 + 2) * 5);
+    const y = getHillY(x);
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.set(x, y + 0.9, z);
+    trunk.castShadow = true;
+    scene.add(trunk); objects.push(trunk);
+
+    const s = 0.5 + rng(i * 3 + 50) * 0.7;
+    const lMat = new THREE.MeshStandardMaterial({ color: leafColors[i % leafColors.length] });
+    const leaf = new THREE.Mesh(leafGeo, lMat);
+    leaf.position.set(x, y + 2.2 + s * 0.4, z);
+    leaf.scale.setScalar(s); leaf.castShadow = true;
+    scene.add(leaf); objects.push(leaf);
+  }
+
+  // Rocks
+  for (let i = 0; i < 5; i++) {
+    const x = startX + rng(i * 5 + 100) * CHUNK_LENGTH;
+    const z = (rng(i * 5 + 101) - 0.5) * LANE_WIDTH * 0.6;
+    const y = getHillY(x);
+    const rock = new THREE.Mesh(rockGeo, rockMat);
+    rock.position.set(x, y + 0.15, z);
+    rock.rotation.set(rng(i + 200), rng(i + 201), rng(i + 202));
+    const s = 0.2 + rng(i + 203) * 0.5;
+    rock.scale.set(s, s * 0.6, s);
+    scene.add(rock); objects.push(rock);
+  }
+
+  // Flowers
+  for (let i = 0; i < 10; i++) {
+    const x = startX + rng(i * 4 + 300) * CHUNK_LENGTH;
+    const z = (rng(i * 4 + 301) - 0.5) * LANE_WIDTH * 0.5;
+    const y = getHillY(x);
+    const fMat = new THREE.MeshStandardMaterial({ color: flowerColors[i % flowerColors.length] });
+    const flower = new THREE.Mesh(flowerGeo, fMat);
+    flower.position.set(x, y + 0.12, z);
+    scene.add(flower); objects.push(flower);
+  }
+
+  // Altitude markers every chunk
+  const alt = Math.round(getHillY(startX + CHUNK_LENGTH / 2));
+  if (chunkIdx > 0 && chunkIdx % 2 === 0) {
+    const mc = document.createElement('canvas');
+    mc.width = 256; mc.height = 128;
+    const mctx = mc.getContext('2d');
+    mctx.font = 'bold 60px Segoe UI';
+    mctx.textAlign = 'center';
+    mctx.fillStyle = 'rgba(255,255,255,0.7)';
+    mctx.fillText(`${alt}m`, 128, 80);
+    const mSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(mc), transparent: true
+    }));
+    const mx = startX + CHUNK_LENGTH / 2;
+    mSprite.position.set(mx, getHillY(mx) + 4, 0);
+    mSprite.scale.set(3, 1.5, 1);
+    scene.add(mSprite); objects.push(mSprite);
+  }
+
+  terrainChunks.set(chunkIdx, { objects });
+}
+
+function removeChunk(chunkIdx) {
+  const chunk = terrainChunks.get(chunkIdx);
+  if (!chunk) return;
+  chunk.objects.forEach(obj => {
+    scene.remove(obj);
+    if (obj.geometry) obj.geometry.dispose();
+  });
+  terrainChunks.delete(chunkIdx);
+}
+
+function updateTerrain(leaderX) {
+  const currentChunk = Math.floor(leaderX / CHUNK_LENGTH);
+  // Build chunks ahead
+  for (let i = currentChunk - CHUNKS_BEHIND; i <= currentChunk + CHUNKS_AHEAD; i++) {
+    if (i >= 0) buildChunk(i);
+  }
+  // Remove far behind chunks
+  for (const [idx] of terrainChunks) {
+    if (idx < currentChunk - CHUNKS_BEHIND - 1) removeChunk(idx);
+  }
+}
+
+// Build initial chunks
+for (let i = 0; i <= CHUNKS_AHEAD; i++) buildChunk(i);
+
+// Clouds (always around camera)
+const clouds = [];
+const cloudGeo = new THREE.SphereGeometry(1, 5, 3);
+const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
+for (let i = 0; i < 12; i++) {
+  const group = new THREE.Group();
+  for (let j = 0; j < 2 + Math.floor(Math.random() * 3); j++) {
+    const c = new THREE.Mesh(cloudGeo, cloudMat);
+    c.position.set(j * 1.3, Math.random() * 0.3, Math.random() * 0.6);
+    c.scale.set(1 + Math.random() * 0.5, 0.4 + Math.random() * 0.3, 0.6 + Math.random() * 0.3);
+    group.add(c);
+  }
+  group.position.set(i * 15 - 30, 30 + Math.random() * 30, (Math.random() - 0.5) * 50);
+  group.userData.speed = 0.01 + Math.random() * 0.02;
+  group.userData.baseOffset = i * 15 - 30;
+  scene.add(group);
+  clouds.push(group);
+}
+
+// ===== LOAD CHARACTER ASSETS =====
+const loader = new GLTFLoader();
+const characterTemplates = {};
+const animationClips = {};
+let assetsLoaded = false;
+
+async function loadAssets() {
+  const totalAssets = CHAR_CLASSES.length + 3; // +2 KayKit rigs +1 UAL
+  let loaded = 0;
+  function updateProgress(text) {
+    loaded++;
+    document.getElementById('progressFill').style.width = Math.round((loaded / totalAssets) * 100) + '%';
+    document.getElementById('loadingText').textContent = text;
+  }
+
+  try {
+    const g = await loader.loadAsync('/characters/Rig_Medium_General.glb');
+    g.animations.forEach(clip => { animationClips[clip.name] = clip; });
+    updateProgress(`General anims (${g.animations.length})`);
+  } catch (e) { loaded++; }
+
+  try {
+    const m = await loader.loadAsync('/characters/Rig_Medium_MovementBasic.glb');
+    m.animations.forEach(clip => { animationClips[clip.name] = clip; });
+    updateProgress(`Movement anims (${m.animations.length})`);
+  } catch (e) { loaded++; }
+
+  // Load UAL (Universal Animation Library) and retarget to KayKit bones
+  const UAL_BONE_MAP = {
+    'pelvis': 'hips', 'spine_01': 'spine', 'spine_02': 'spine', 'spine_03': 'chest',
+    'Head': 'head', 'neck_01': 'chest',
+    'upperarm_l': 'upperarm.l', 'upperarm_r': 'upperarm.r',
+    'lowerarm_l': 'lowerarm.l', 'lowerarm_r': 'lowerarm.r',
+    'hand_l': 'hand.l', 'hand_r': 'hand.r',
+    'thigh_l': 'upperleg.l', 'thigh_r': 'upperleg.r',
+    'calf_l': 'lowerleg.l', 'calf_r': 'lowerleg.r',
+    'foot_l': 'foot.l', 'foot_r': 'foot.r',
+    'ball_l': 'toes.l', 'ball_r': 'toes.r',
+  };
+
+  function retargetClip(clip) {
+    const newTracks = [];
+    for (const track of clip.tracks) {
+      // Track name format: "boneName.property" (e.g. "pelvis.quaternion")
+      const dotIdx = track.name.indexOf('.');
+      const boneName = track.name.substring(0, dotIdx);
+      const prop = track.name.substring(dotIdx);
+      const mappedBone = UAL_BONE_MAP[boneName];
+      if (mappedBone) {
+        const newTrack = track.clone();
+        newTrack.name = mappedBone + prop;
+        newTracks.push(newTrack);
+      }
+      // Skip bones with no mapping (fingers, clavicles, etc.)
+    }
+    return new THREE.AnimationClip(clip.name, clip.duration, newTracks);
+  }
+
+  try {
+    const ual = await loader.loadAsync('/characters/UAL1_Standard.glb');
+    let retargeted = 0;
+    ual.animations.forEach(clip => {
+      const rc = retargetClip(clip);
+      if (rc.tracks.length > 0) {
+        animationClips['UAL_' + clip.name] = rc;
+        retargeted++;
+      }
+    });
+    updateProgress(`UAL anims (${retargeted} retargeted)`);
+    console.log('UAL retargeted:', retargeted, 'animations →', Object.keys(animationClips).filter(k => k.startsWith('UAL_')));
+  } catch (e) { console.warn('UAL load failed:', e); loaded++; }
+
+  console.log('All animations:', Object.keys(animationClips));
+
+  for (const cls of CHAR_CLASSES) {
+    try {
+      const gltf = await loader.loadAsync(`/characters/${cls}.glb`);
+      gltf.scene.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+      characterTemplates[cls] = gltf.scene;
+      updateProgress(`Loaded ${cls}`);
+    } catch (e) { loaded++; }
+  }
+
+  assetsLoaded = true;
+  console.log(`Ready: ${Object.keys(characterTemplates).length} chars, ${Object.keys(animationClips).length} anims`);
+  setTimeout(() => document.getElementById('loadingScreen').classList.add('hidden'), 400);
+}
+
+// ===== PLAYER MANAGEMENT =====
+const players = new Map();
+
+function hashCode(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  return Math.abs(hash);
+}
+
+function createPlayer(viewer) {
+  if (players.has(viewer.uniqueId)) return players.get(viewer.uniqueId);
+  if (players.size >= MAX_PLAYERS) {
+    let minP = Infinity, minK = null;
+    players.forEach((p, k) => { if (p.progress < minP) { minP = p.progress; minK = k; } });
+    if (minK) removePlayer(minK);
+  }
+
+  const hash = hashCode(viewer.uniqueId);
+  const className = CHAR_CLASSES[hash % CHAR_CLASSES.length];
+  const color = CHAR_COLORS[hash % CHAR_COLORS.length];
+  const laneIdx = players.size % 5;
+  const laneZ = (laneIdx - 2) * (LANE_WIDTH / 6);
+
+  let model, mixer = null;
+  const animations = {};
+
+  let headBone = null;
+  let upperArmL = null, upperArmR = null;
+  let lowerArmL = null, lowerArmR = null;
+  let spineBone = null;
+
+  if (characterTemplates[className]) {
+    model = SkeletonUtils.clone(characterTemplates[className]);
+    model.scale.setScalar(CHAR_SCALE);
+
+    model.traverse(child => {
+      if (child.isMesh && child.material) {
+        child.material = child.material.clone();
+        child.material.color.lerp(new THREE.Color(color), 0.15);
+      }
+      if (child.isBone) {
+        if (child.name === 'head') headBone = child;
+        if (child.name === 'upperarm.l') upperArmL = child;
+        if (child.name === 'upperarm.r') upperArmR = child;
+        if (child.name === 'lowerarm.l') lowerArmL = child;
+        if (child.name === 'lowerarm.r') lowerArmR = child;
+        if (child.name === 'spine') spineBone = child;
+      }
+    });
+
+    mixer = new THREE.AnimationMixer(model);
+    const animMap = {
+      idle: 'Idle_A', run: 'Running_A', jump: 'Jump_Full_Short',
+      hit: 'Hit_A', spawn: 'Spawn_Ground',
+    };
+    for (const [key, clipName] of Object.entries(animMap)) {
+      if (animationClips[clipName]) {
+        animations[key] = mixer.clipAction(animationClips[clipName]);
+        if (key === 'idle' || key === 'run') {
+          animations[key].setLoop(THREE.LoopRepeat);
+        } else {
+          animations[key].setLoop(THREE.LoopOnce);
+          animations[key].clampWhenFinished = true;
+        }
+      }
+    }
+
+    // Spawn → idle
+    if (animations.spawn) {
+      animations.spawn.reset().play();
+      mixer.addEventListener('finished', (e) => {
+        if (e.action === animations.spawn && animations.idle) {
+          animations.spawn.stop();
+          animations.idle.reset().fadeIn(0.3).play();
+        }
+      });
+    } else if (animations.idle) {
+      animations.idle.play();
+    }
+  } else {
+    model = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.8, 0.4), new THREE.MeshStandardMaterial({ color }));
+    body.position.y = 0.6; body.castShadow = true; model.add(body);
+    const hd = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 5), new THREE.MeshStandardMaterial({ color }));
+    hd.position.y = 1.2; hd.castShadow = true; model.add(hd);
+  }
+
+  // Name label
+  const nc = document.createElement('canvas');
+  nc.width = 512; nc.height = 128;
+  const ctx = nc.getContext('2d');
+  const displayName = (viewer.nickname || viewer.uniqueId).slice(0, 14);
+  ctx.font = 'bold 42px Segoe UI, sans-serif';
+  const textW = Math.min(ctx.measureText(displayName).width + 40, 500);
+  const pillX = (512 - textW) / 2;
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.roundRect(pillX, 20, textW, 80, 40);
+  ctx.fill();
+  ctx.strokeStyle = '#' + color.toString(16).padStart(6, '0');
+  ctx.lineWidth = 3;
+  ctx.roundRect(pillX, 20, textW, 80, 40);
+  ctx.stroke();
+  ctx.font = 'bold 42px Segoe UI, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(displayName, 256, 72);
+  const nameSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(nc), transparent: true, depthTest: false
+  }));
+  nameSprite.scale.set(2.5, 0.6, 1);
+  nameSprite.position.y = 2.4;
+  nameSprite.renderOrder = 999;
+  model.add(nameSprite);
+
+  // Spawn near the back of the pack (not far behind leader)
+  const leaderP = getLeaderProgress();
+  let backP = Infinity;
+  players.forEach(p => { if (p.progress < backP) backP = p.progress; });
+  if (backP === Infinity) backP = 0;
+  const startX = Math.max(0, Math.min(backP, leaderP - 3) + Math.random() * 2);
+  model.position.set(startX, getHillY(startX), laneZ);
+  scene.add(model);
+
+  const player = {
+    uniqueId: viewer.uniqueId,
+    nickname: viewer.nickname || viewer.uniqueId,
+    model, mixer, animations, headBone,
+    upperArmL, upperArmR, lowerArmL, lowerArmR, spineBone,
+    currentAnim: animations.spawn ? 'spawn' : 'idle',
+    progress: startX, targetProgress: startX, laneZ,
+    velocityY: 0, isJumping: false, isOnGround: true,
+    color, className, score: 0, speedBoost: 0,
+    lastActive: Date.now(),
+    chatSprite: null, chatTimeout: null,
+  };
+
+  players.set(viewer.uniqueId, player);
+  updatePlayerCount();
+  return player;
+}
+
+function removePlayer(uniqueId) {
+  const p = players.get(uniqueId);
+  if (!p) return;
+  scene.remove(p.model);
+  if (p.mixer) p.mixer.stopAllAction();
+  players.delete(uniqueId);
+  updatePlayerCount();
+}
+
+function getLeaderProgress() {
+  let max = 0;
+  players.forEach(p => { if (p.progress > max) max = p.progress; });
+  return max;
+}
+
+// Chat bubble as 3D sprite above character
+function showChatBubble(uniqueId, text) {
+  const player = players.get(uniqueId);
+  if (!player) return;
+
+  // Remove existing bubble
+  if (player.chatSprite) {
+    player.model.remove(player.chatSprite);
+    player.chatSprite = null;
+  }
+  if (player.chatTimeout) clearTimeout(player.chatTimeout);
+
+  // Create chat canvas
+  const cc = document.createElement('canvas');
+  cc.width = 512; cc.height = 128;
+  const ctx = cc.getContext('2d');
+  const msg = text.slice(0, 20);
+  ctx.font = 'bold 32px Segoe UI, sans-serif';
+  const tw = Math.min(ctx.measureText(msg).width + 30, 490);
+  const px = (512 - tw) / 2;
+  // Bubble background
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.roundRect(px, 20, tw, 70, 35);
+  ctx.fill();
+  // Text
+  ctx.font = 'bold 32px Segoe UI, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#333';
+  ctx.fillText(msg, 256, 65);
+
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(cc), transparent: true, depthTest: false
+  }));
+  sprite.scale.set(2.2, 0.55, 1);
+  sprite.position.y = 3.2; // Above the name label
+  sprite.renderOrder = 1000;
+  player.model.add(sprite);
+  player.chatSprite = sprite;
+
+  // Remove after 4s
+  player.chatTimeout = setTimeout(() => {
+    if (player.chatSprite === sprite) {
+      player.model.remove(sprite);
+      player.chatSprite = null;
+    }
+  }, 4000);
+}
+
+function playAnimation(player, animName) {
+  if (!player.mixer || !player.animations[animName] || player.currentAnim === animName) return;
+  // If currently in random animation, stop all actions first (random clip isn't in animations map)
+  if (player.currentAnim === '_random') {
+    player.mixer.stopAllAction();
+  } else {
+    const cur = player.animations[player.currentAnim];
+    if (cur) cur.fadeOut(0.2);
+  }
+  player.animations[animName].reset().fadeIn(0.2).play();
+  player.currentAnim = animName;
+  player.nextRandomAnim = null; // Reset random timer when transitioning
+}
+
+// ===== GAME ACTIONS =====
+function movePlayer(uniqueId, steps) {
+  const p = players.get(uniqueId);
+  if (!p) return;
+  const boost = p.speedBoost > 0 ? 1.5 : 1;
+  p.targetProgress += steps * STEP_SIZE * boost;
+  p.score += steps;
+  p.lastActive = Date.now();
+  playAnimation(p, 'run');
+}
+
+function jumpPlayer(uniqueId) {
+  const p = players.get(uniqueId);
+  if (!p || p.isJumping) return;
+  p.isJumping = true; p.isOnGround = false;
+  p.velocityY = JUMP_FORCE;
+  p.lastActive = Date.now();
+  playAnimation(p, 'jump');
+  p.targetProgress += STEP_SIZE * 0.5;
+}
+
+function boostPlayer(uniqueId, seconds) {
+  const p = players.get(uniqueId);
+  if (!p) return;
+  p.speedBoost = Math.max(p.speedBoost, seconds);
+  p.lastActive = Date.now();
+}
+
+// ===== GIFT POWERS =====
+function showPowerFlash(icon, name, byName) {
+  const frame = document.getElementById('gameFrame');
+  const el = document.createElement('div');
+  el.className = 'power-flash';
+  el.innerHTML = `<span class="pf-icon">${icon}</span><div class="pf-name">${name}</div><div class="pf-by">by ${byName}</div>`;
+  frame.appendChild(el);
+  setTimeout(() => el.remove(), 2500);
+}
+
+// DROP NEARBY: knocks back players near the gifter
+function powerDropNearby(gifterUniqueId, radius) {
+  const gifter = players.get(gifterUniqueId);
+  if (!gifter) return;
+
+  const gx = gifter.progress;
+  const dropped = [];
+
+  players.forEach((p) => {
+    if (p.uniqueId === gifterUniqueId) return;  // Don't drop yourself
+    const dist = Math.abs(p.progress - gx);
+    if (dist < radius) {
+      // Knock them back — further back the closer they are
+      const knockback = (radius - dist) * 1.5;
+      p.targetProgress = Math.max(0, p.progress - knockback);
+      p.score = Math.max(0, p.score - Math.round(knockback));
+
+      // Launch them in the air (hit feel)
+      p.isJumping = true;
+      p.isOnGround = false;
+      p.velocityY = 6 + Math.random() * 4;
+
+      // Play hit animation
+      playAnimation(p, 'hit');
+
+      // After hit animation, go back to idle/run
+      if (p.mixer) {
+        const onHitDone = (e) => {
+          if (e.action === p.animations.hit) {
+            p.mixer.removeEventListener('finished', onHitDone);
+            if (Math.abs(p.progress - p.targetProgress) > 0.1) {
+              playAnimation(p, 'run');
+            } else {
+              playAnimation(p, 'idle');
+            }
+          }
+        };
+        p.mixer.addEventListener('finished', onHitDone);
+      }
+
+      dropped.push(p.nickname);
+    }
+  });
+
+  return dropped;
+}
+
+// Random power from gift
+function triggerGiftPower(uniqueId, nickname, diamonds) {
+  // For now: all gifts trigger "Drop Nearby" — more powers coming
+  const radius = Math.min(5 + diamonds * 2, 20);  // Drop radius scales with gift value
+  const dropped = powerDropNearby(uniqueId, radius);
+
+  showPowerFlash('💥', 'EARTHQUAKE DROP!', nickname);
+
+  if (dropped.length > 0) {
+    showNotif(`<strong>${nickname}</strong> dropped ${dropped.length} player${dropped.length > 1 ? 's' : ''}!`, 'gift');
+  } else {
+    showNotif(`<strong>${nickname}</strong> used Drop — but nobody was nearby!`, 'gift');
+  }
+
+  // Also give the gifter a speed boost + forward movement
+  boostPlayer(uniqueId, Math.min(diamonds * 2, 15));
+  movePlayer(uniqueId, diamonds * 2);
+}
+
+// ===== UPDATE LOOP =====
+const clock = new THREE.Clock();
+
+function updatePlayers(dt) {
+  players.forEach(player => {
+    // Smooth toward target
+    if (Math.abs(player.progress - player.targetProgress) > 0.01) {
+      player.progress += (player.targetProgress - player.progress) * Math.min(1, 5 * dt);
+    } else if (player.currentAnim === 'run' && !player.isJumping) {
+      playAnimation(player, 'idle');
+    }
+
+    const hillY = getHillY(player.progress);
+    const slope = getHillSlope(player.progress);
+
+    // Gravity / jump
+    if (!player.isOnGround) {
+      player.velocityY += GRAVITY * dt;
+      player.model.position.y += player.velocityY * dt;
+      if (player.model.position.y <= hillY) {
+        player.model.position.y = hillY;
+        player.velocityY = 0;
+        player.isOnGround = true;
+        player.isJumping = false;
+        playAnimation(player, Math.abs(player.progress - player.targetProgress) > 0.1 ? 'run' : 'idle');
+      }
+    } else {
+      player.model.position.y = hillY;
+    }
+
+    player.model.position.x = player.progress;
+
+    // Face right (uphill) — no body tilt, stay upright
+    player.model.rotation.y = Math.PI * 0.5;
+    player.model.rotation.z = 0;
+    player.model.rotation.x = 0;
+
+    // Running animation speed scales with slope steepness
+    if (player.mixer && player.animations.run) {
+      const steepness = Math.abs(slope);
+      player.animations.run.timeScale = Math.max(0.5, 1.0 - steepness * 0.5);
+    }
+
+    // Store slope for post-animation arm climbing pose
+    player._currentSlope = slope;
+
+    // Speed boost glow
+    if (player.speedBoost > 0) {
+      player.speedBoost -= dt;
+      player.model.traverse(c => {
+        if (c.isMesh && c.material.emissive) {
+          c.material.emissive.setHex(0xffaa00);
+          c.material.emissiveIntensity = 0.3;
+        }
+      });
+    } else {
+      player.model.traverse(c => {
+        if (c.isMesh && c.material.emissive) c.material.emissiveIntensity = 0;
+      });
+    }
+
+    if (player.mixer) player.mixer.update(dt);
+
+    // Head random look — glance left/right (skip during jump/hit to avoid spin)
+    if (player.headBone && !player.isJumping && player.currentAnim !== 'hit' && player.currentAnim !== '_random') {
+      // Initialize look state once
+      if (player.headLookTarget === undefined) {
+        player.headLookTarget = (Math.random() - 0.5) * 0.7;
+        player.headLookOffset = 0;
+        player.headLookTimer = Date.now() + 2000 + Math.random() * 3000;
+      }
+      // Smoothly move toward target
+      player.headLookOffset += (player.headLookTarget - player.headLookOffset) * 0.04;
+      // Pick new random direction every 3-6 seconds
+      if (Date.now() > player.headLookTimer) {
+        player.headLookTarget = (Math.random() - 0.5) * 0.7; // -0.35 to +0.35 rad
+        player.headLookTimer = Date.now() + 3000 + Math.random() * 3000;
+      }
+      // Add offset on top of animation (read anim value, add offset, set)
+      player.headBone.rotation.y = player.headBone.rotation.y + player.headLookOffset;
+    }
+
+    // CLIMBING POSE — read animation value, add offset, set (no accumulation)
+    const climbFactor = Math.max(0, Math.min(1, (Math.abs(player._currentSlope || 0) - 0.2) / 0.6));
+
+    if (climbFactor > 0.01 && (player.currentAnim === 'run' || player.currentAnim === 'idle')) {
+      if (player.upperArmL) player.upperArmL.rotation.z = player.upperArmL.rotation.z + (-1.3 * climbFactor);
+      if (player.upperArmR) player.upperArmR.rotation.z = player.upperArmR.rotation.z + (1.3 * climbFactor);
+      if (player.lowerArmL) player.lowerArmL.rotation.z = player.lowerArmL.rotation.z + (-0.5 * climbFactor);
+      if (player.lowerArmR) player.lowerArmR.rotation.z = player.lowerArmR.rotation.z + (0.5 * climbFactor);
+      if (player.spineBone) player.spineBone.rotation.x = player.spineBone.rotation.x + (-0.2 * climbFactor);
+    }
+
+    // Random idle animations — play random anim when idle for a while
+    if (player.currentAnim === 'idle' && player.mixer) {
+      if (!player.nextRandomAnim) {
+        // Schedule next random animation 3-8 seconds from now
+        player.nextRandomAnim = Date.now() + 3000 + Math.random() * 5000;
+      }
+      if (Date.now() > player.nextRandomAnim) {
+        // Filter to only animations that actually loaded
+        const randomPool = [
+          'Interact', 'Throw', 'Use_Item', 'PickUp', 'Idle_B', 'Walking_B',
+          'UAL_Dance_Loop', 'UAL_Punch_Jab', 'UAL_Punch_Cross', 'UAL_Roll',
+          'UAL_Idle_Talking_Loop', 'UAL_Spell_Simple_Shoot',
+        ].filter(name => animationClips[name]);
+        if (randomPool.length === 0) { player.nextRandomAnim = Date.now() + 10000; }
+        const pick = randomPool[Math.floor(Math.random() * randomPool.length)];
+        if (pick && animationClips[pick]) {
+          console.log(`🎭 ${player.nickname} plays: ${pick}`);
+          // Play the random animation once, then go back to idle
+          const action = player.mixer.clipAction(animationClips[pick]);
+          action.setLoop(THREE.LoopOnce);
+          action.clampWhenFinished = true;
+
+          // Fade out current idle
+          if (player.animations.idle) player.animations.idle.fadeOut(0.3);
+          action.reset().fadeIn(0.3).play();
+          player.currentAnim = '_random'; // Mark as doing random anim
+
+          const onDone = (e) => {
+            if (e.action === action) {
+              player.mixer.removeEventListener('finished', onDone);
+              action.fadeOut(0.3);
+              if (player.animations.idle) {
+                player.animations.idle.reset().fadeIn(0.3).play();
+              }
+              player.currentAnim = 'idle';
+              player.nextRandomAnim = Date.now() + 3000 + Math.random() * 5000;
+            }
+          };
+          player.mixer.addEventListener('finished', onDone);
+        }
+        player.nextRandomAnim = Date.now() + 6000 + Math.random() * 8000; // Fallback if clip missing
+      }
+    } else {
+      player.nextRandomAnim = null; // Reset timer when not idle
+    }
+  });
+}
+
+// ===== CAMERA — PORTRAIT CLOSE-UP =====
+let camTarget = new THREE.Vector3(5, 8, 0);
+
+function updateCamera(dt) {
+  const leaderX = getLeaderProgress();
+
+  if (players.size === 0) {
+    const idlePos = new THREE.Vector3(5, 10, 12);
+    camera.position.lerp(idlePos, dt * 0.5);
+    camTarget.lerp(new THREE.Vector3(10, 5, 0), dt * 0.5);
+    camera.lookAt(camTarget);
+    return;
+  }
+
+  let leader = null, maxP = -1;
+  players.forEach(p => { if (p.progress > maxP) { maxP = p.progress; leader = p; } });
+
+  if (leader) {
+    const lx = leader.model.position.x;
+    const ly = leader.model.position.y;
+
+    const camPos = new THREE.Vector3(lx - 4, ly + 7, 18);
+    const lookAt = new THREE.Vector3(lx + 3, ly + 1, 0);
+
+    camera.position.lerp(camPos, dt * 2.5);
+    camTarget.lerp(lookAt, dt * 3);
+    camera.lookAt(camTarget);
+
+    sunLight.position.set(lx + 15, ly + 50, 25);
+    sunLight.target.position.set(lx, ly, 0);
+    sunLight.target.updateMatrixWorld();
+  }
+
+  // Update terrain chunks around leader
+  updateTerrain(leaderX);
+
+  // Move clouds relative to camera
+  clouds.forEach(cloud => {
+    cloud.position.x += cloud.userData.speed;
+    // Keep clouds in visible range around the camera
+    if (cloud.position.x > camera.position.x + 60) {
+      cloud.position.x = camera.position.x - 40;
+      cloud.position.y = camera.position.y + 10 + Math.random() * 25;
+    }
+  });
+}
+
+// ===== LEADERBOARD =====
+function updateLeaderboard() {
+  const sorted = [...players.values()].sort((a, b) => b.progress - a.progress).slice(0, 6);
+  document.getElementById('lbEntries').innerHTML = sorted.map((p, i) => {
+    const alt = Math.round(getHillY(p.progress));
+    const medal = i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+    return `<div class="lb-entry">
+      <span class="lb-rank">${medal}</span>
+      <span class="lb-name">${p.nickname}</span>
+      <span class="lb-score">${alt}m</span>
+    </div>`;
+  }).join('');
+}
+
+function updatePlayerCount() {
+  document.getElementById('playerCount').textContent = players.size;
+}
+
+// Distance tracker — vertical bar showing all players' relative positions
+function updateDistTracker() {
+  const bar = document.getElementById('trackBar');
+  if (!bar) return;
+  // Remove old dots
+  bar.querySelectorAll('.track-dot').forEach(d => d.remove());
+
+  if (players.size === 0) return;
+
+  const sorted = [...players.values()].sort((a, b) => b.progress - a.progress);
+  const maxP = sorted[0].progress;
+  const minP = sorted[sorted.length - 1].progress;
+  const range = Math.max(maxP - minP, 5); // Minimum range of 5 to avoid divide by zero
+
+  // Show up to 10 players on the tracker
+  sorted.slice(0, 10).forEach((p, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'track-dot';
+    dot.style.background = '#' + p.color.toString(16).padStart(6, '0');
+    // Top = leader (0%), bottom = furthest behind (100%)
+    const pct = ((maxP - p.progress) / range) * 100;
+    dot.style.top = Math.min(95, Math.max(2, pct)) + '%';
+
+    // Label + distance from leader
+    const distFromLeader = Math.round(getHillY(maxP) - getHillY(p.progress));
+    const label = document.createElement('span');
+    label.className = 'track-label';
+    label.textContent = p.nickname.slice(0, 8);
+    dot.appendChild(label);
+
+    if (i > 0) {
+      const dist = document.createElement('span');
+      dist.className = 'track-dist';
+      dist.textContent = `-${distFromLeader}m`;
+      dot.appendChild(dist);
+    }
+
+    bar.appendChild(dot);
+  });
+
+  // Update top/bottom labels
+  const topAlt = Math.round(getHillY(maxP));
+  document.querySelector('#distTracker .track-top').textContent = `${topAlt}m`;
+  const bottomAlt = Math.round(getHillY(minP));
+  document.querySelector('#distTracker .track-bottom').textContent = `${bottomAlt}m`;
+}
+
+// ===== NOTIFICATIONS =====
+function showNotif(text, type = '') {
+  const container = document.getElementById('notifications');
+  const el = document.createElement('div');
+  el.className = `notif ${type}`;
+  el.innerHTML = text;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 4500);
+  // Keep max 3 notifications (top area is tighter)
+  while (container.children.length > 3) container.removeChild(container.firstChild);
+}
+
+// ===== TIPS =====
+// ===== SOCKET.IO =====
+const ROOM = params.get('room') || '';
+const socket = io({ query: { room: ROOM } });
+
+socket.on('connect', () => {
+  const el = document.getElementById('connStatus');
+  el.innerHTML = '<div class="live-dot"></div> Connected';
+});
+socket.on('disconnect', () => {
+  document.getElementById('connStatus').innerHTML = 'Disconnected';
+});
+socket.on('tiktok-connected', () => {
+  document.getElementById('connStatus').innerHTML = '<div class="live-dot"></div> LIVE';
+});
+socket.on('tiktok-disconnected', () => {
+  document.getElementById('connStatus').innerHTML = 'Stream ended';
+});
+
+socket.on('viewer-join', (viewer) => {
+  if (!assetsLoaded) return;
+  createPlayer(viewer);
+  showNotif(`<strong>${viewer.nickname || viewer.uniqueId}</strong> joined!`);
+});
+
+socket.on('chat', (data) => {
+  if (!assetsLoaded) return;
+  createPlayer({ uniqueId: data.uniqueId, nickname: data.nickname || data.uniqueId });
+  jumpPlayer(data.uniqueId);
+  movePlayer(data.uniqueId, 1);
+  // Show chat bubble above character
+  if (data.comment) showChatBubble(data.uniqueId, data.comment);
+});
+
+socket.on('like', (data) => {
+  if (!assetsLoaded) return;
+  createPlayer({ uniqueId: data.uniqueId, nickname: data.nickname || data.uniqueId });
+  movePlayer(data.uniqueId, data.likeCount || 1);
+});
+
+socket.on('gift', (data) => {
+  if (!assetsLoaded) return;
+  createPlayer({ uniqueId: data.uniqueId, nickname: data.nickname || data.uniqueId });
+  const diamonds = data.diamondCount || 1;
+  // Gift = trigger power!
+  triggerGiftPower(data.uniqueId, data.nickname || data.uniqueId, diamonds);
+});
+
+socket.on('follow', (data) => {
+  if (!assetsLoaded) return;
+  createPlayer({ uniqueId: data.uniqueId, nickname: data.nickname || data.uniqueId });
+  movePlayer(data.uniqueId, 5);
+  showNotif(`<strong>${data.nickname}</strong> +5 steps!`);
+});
+
+socket.on('share', (data) => {
+  if (!assetsLoaded) return;
+  createPlayer({ uniqueId: data.uniqueId, nickname: data.nickname || data.uniqueId });
+  movePlayer(data.uniqueId, 3);
+  showNotif(`<strong>${data.nickname}</strong> +3 steps!`);
+});
+
+socket.on('viewer-list', (list) => {
+  if (!assetsLoaded) return;
+  list.forEach(v => createPlayer(v));
+});
+
+// ===== MAIN LOOP =====
+let lbTimer = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  updatePlayers(dt);
+  updateCamera(dt);
+
+  lbTimer += dt;
+  if (lbTimer > 0.5) {
+    lbTimer = 0;
+    updateLeaderboard();
+    updateDistTracker();
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ===== RESIZE =====
+window.addEventListener('resize', () => {
+  const sz = getGameSize();
+  camera.aspect = sz.width / sz.height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(sz.width, sz.height);
+});
+
+// ===== LOCAL TEST KEYS =====
+const TEST_NAMES = [
+  'AzureDragon', 'NeonKnight', 'CyberWolf', 'StormRider', 'PixelQueen',
+  'ShadowFox', 'CosmicAce', 'IronPhoenix', 'FrostBite', 'ThunderCat',
+  'BlazeRunner', 'LunarEcho', 'NovaStar', 'VortexKing', 'CrimsonTide',
+];
+let testIdx = 0;
+let autoInterval = null;
+
+window.addEventListener('keydown', (e) => {
+  if (!assetsLoaded) return;
+
+  if (e.key === 't' || e.key === 'T') {
+    const name = TEST_NAMES[testIdx % TEST_NAMES.length];
+    testIdx++;
+    createPlayer({ uniqueId: `test_${name.toLowerCase()}`, nickname: name });
+    showNotif(`<strong>${name}</strong> joined!`);
+    movePlayer(`test_${name.toLowerCase()}`, 1 + Math.floor(Math.random() * 3));
+  }
+
+  if (e.key === 'l' || e.key === 'L') {
+    players.forEach(p => movePlayer(p.uniqueId, 1 + Math.floor(Math.random() * 3)));
+  }
+
+  if (e.key === 'j' || e.key === 'J') {
+    players.forEach(p => jumpPlayer(p.uniqueId));
+  }
+
+  if (e.key === 'b' || e.key === 'B') {
+    // Test: random player triggers Drop power
+    const arr = [...players.values()];
+    if (arr.length) {
+      const p = arr[Math.floor(Math.random() * arr.length)];
+      triggerGiftPower(p.uniqueId, p.nickname, 3);
+    }
+  }
+
+  if (e.key === 'a' || e.key === 'A') {
+    if (autoInterval) { clearInterval(autoInterval); autoInterval = null; showNotif('Auto stopped'); return; }
+    for (let i = 0; i < 6; i++) {
+      const name = TEST_NAMES[testIdx % TEST_NAMES.length];
+      testIdx++;
+      createPlayer({ uniqueId: `test_${name.toLowerCase()}`, nickname: name });
+    }
+    showNotif('Auto-race! Press A to stop');
+    autoInterval = setInterval(() => {
+      players.forEach(p => {
+        if (Math.random() < 0.6) movePlayer(p.uniqueId, 1 + Math.floor(Math.random() * 2));
+        if (Math.random() < 0.1) jumpPlayer(p.uniqueId);
+        if (Math.random() < 0.03) boostPlayer(p.uniqueId, 3);
+      });
+    }, 500);
+  }
+
+  if (e.key === 'd' || e.key === 'D') {
+    CHAR_CLASSES.forEach((cls, i) => {
+      createPlayer({ uniqueId: `demo_${cls.toLowerCase()}`, nickname: cls });
+      movePlayer(`demo_${cls.toLowerCase()}`, 2 + i * 3);
+    });
+    showNotif('All 6 classes spawned!');
+  }
+});
+
+// ===== ROTATING GUIDE TIPS =====
+const GUIDE_TIPS = [
+  { icon: '♥', text: 'Tap <strong>Like</strong> to climb the hill!', cls: '' },
+  { icon: '💬', text: '<strong>Comment</strong> to jump forward!', cls: '' },
+  { icon: '🎁', text: '<strong>Send Gift</strong> — Drop nearby players!', cls: 'gift-tip' },
+  { icon: '➕', text: '<strong>Follow</strong> for +5 bonus steps!', cls: '' },
+  { icon: '🏔️', text: 'Keep climbing — the hill never ends!', cls: '' },
+  { icon: '💥', text: 'Gifts knock back nearby climbers!', cls: 'gift-tip' },
+];
+let guideTipIdx = 0;
+function showGuideTip() {
+  const container = document.getElementById('guideTip');
+  if (!container) return;
+  const tip = GUIDE_TIPS[guideTipIdx % GUIDE_TIPS.length];
+  guideTipIdx++;
+  container.innerHTML = `<div class="guide-banner ${tip.cls}"><span class="gb-icon">${tip.icon}</span><span class="gb-text">${tip.text}</span></div>`;
+  // Auto-remove after 5s
+  setTimeout(() => { container.innerHTML = ''; }, 5000);
+}
+// Show first tip after 2s, then rotate every 8s
+setTimeout(showGuideTip, 2000);
+setInterval(showGuideTip, 8000);
+
+// ===== START =====
+loadAssets().then(() => {
+  animate();
+  console.log('Hill Climb ready! Keys: T=spawn D=all A=auto L=like J=jump B=boost');
+  showNotif('T=spawn | D=all | A=auto-race');
+});
+
+</script>
+</body>
+</html>

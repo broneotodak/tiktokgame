@@ -470,7 +470,7 @@
         const res = await fetch('/api/voice/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ eventType, eventData, recentContext }),
+          body: JSON.stringify({ eventType, eventData, recentContext, room: ROOM }),
         });
 
         debugEl.textContent = `[2] API responded: ${res.status}`;
@@ -664,8 +664,11 @@
       document.getElementById('statSkipped').textContent = stats.skipped;
     }
 
+    // ===== Room param for multi-host =====
+    const ROOM = new URLSearchParams(window.location.search).get('room') || '';
+
     // ===== Socket.IO =====
-    const socket = io();
+    const socket = io({ query: { room: ROOM } });
 
     socket.on('connect', () => {
       document.getElementById('statusDot').classList.add('connected');

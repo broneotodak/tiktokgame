@@ -14,6 +14,64 @@
       display: flex;
       flex-direction: column;
     }
+
+    /* PIN Login Overlay */
+    .pin-overlay {
+      position: fixed;
+      inset: 0;
+      background: #0a0a0a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      gap: 20px;
+    }
+    .pin-overlay.hidden { display: none; }
+    .pin-overlay h1 {
+      font-size: 28px;
+      background: linear-gradient(135deg, #25f4ee, #fe2c55);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .pin-overlay p { color: #888; font-size: 14px; }
+    .pin-form {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .pin-form input {
+      padding: 14px 20px;
+      border-radius: 12px;
+      border: 2px solid #333;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 18px;
+      text-align: center;
+      letter-spacing: 4px;
+      width: 200px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .pin-form input:focus { border-color: #25f4ee; }
+    .pin-form button {
+      padding: 14px 28px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, #25f4ee, #fe2c55);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .pin-form button:hover { opacity: 0.9; }
+    .pin-error {
+      color: #fe2c55;
+      font-size: 13px;
+      min-height: 20px;
+    }
+
     .header {
       background: linear-gradient(135deg, #25f4ee, #fe2c55);
       padding: 15px 20px;
@@ -24,6 +82,13 @@
       gap: 8px;
     }
     .header h1 { font-size: clamp(16px, 4vw, 24px); font-weight: 700; }
+    .header .room-badge {
+      padding: 4px 10px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
     .status {
       display: flex;
       align-items: center;
@@ -266,11 +331,37 @@
       font-size: 12px;
       white-space: nowrap;
     }
+
+    /* Cost bar */
+    .cost-bar {
+      padding: 6px 15px;
+      background: #0d0d0d;
+      border-top: 1px solid #222;
+      display: flex;
+      gap: 15px;
+      font-size: 11px;
+      color: #666;
+      flex-wrap: wrap;
+    }
+    .cost-bar span { color: #25f4ee; font-weight: 700; }
   </style>
 </head>
 <body>
+
+  <!-- PIN Login Overlay -->
+  <div class="pin-overlay" id="pinOverlay">
+    <h1>TikTok Live Dashboard</h1>
+    <p>Enter your host PIN to access the dashboard</p>
+    <div class="pin-form">
+      <input type="password" id="pinInput" placeholder="PIN" maxlength="20" autocomplete="off">
+      <button onclick="submitPin()">Login</button>
+    </div>
+    <div class="pin-error" id="pinError"></div>
+  </div>
+
   <div class="header">
     <h1>TikTok Live Dashboard</h1>
+    <span class="room-badge" id="roomBadge" style="display:none"></span>
     <div class="status">
       <div class="status-dot" id="statusDot"></div>
       <span id="statusText">Disconnected</span>
@@ -341,41 +432,197 @@
           <button onclick="window.open(document.getElementById('voiceUrl').value,'_blank')" style="background:#ec4899">Open</button>
         </div>
       </div>
+      <div class="cost-bar" id="costBar" style="display:none">
+        Cost: OpenAI <span id="costOpenai">$0.00</span> | ElevenLabs <span id="costElevenlabs">$0.00</span> | Total <span id="costTotal">$0.00</span> | Calls <span id="costCalls">0</span>
+      </div>
     </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
+    // ===== Multi-Host: Room & PIN =====
+    let ROOM = '';
+    let HOST_PIN = '';
+    let HOST_NAME = '';
+    let socket = null;
+
+    // Check if PIN login is needed
+    async function initDashboard() {
+      // Try fetching sessions to see if multi-host is active
+      try {
+        const res = await fetch('/api/sessions');
+        const sessions = await res.json();
+        // If HOST_PINS are configured, require login
+        // We detect this by trying auth with empty pin
+        const testRes = await fetch('/api/host/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: '__test__' }),
+        });
+        const testData = await testRes.json();
+
+        if (testRes.status === 401) {
+          // Multi-host mode — show PIN overlay
+          document.getElementById('pinOverlay').classList.remove('hidden');
+          document.getElementById('pinInput').focus();
+          return;
+        }
+      } catch (e) {
+        // Fallback: no PIN needed
+      }
+
+      // Single-host mode or no PINs — skip login
+      document.getElementById('pinOverlay').classList.add('hidden');
+      startDashboard('', 'Host');
+    }
+
+    async function submitPin() {
+      const pin = document.getElementById('pinInput').value.trim();
+      if (!pin) return;
+
+      const errorEl = document.getElementById('pinError');
+      errorEl.textContent = '';
+
+      try {
+        const res = await fetch('/api/host/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorEl.textContent = data.error || 'Invalid PIN';
+          return;
+        }
+
+        HOST_PIN = pin;
+        ROOM = data.room;
+        HOST_NAME = data.hostName;
+        document.getElementById('pinOverlay').classList.add('hidden');
+        startDashboard(ROOM, HOST_NAME);
+      } catch (err) {
+        errorEl.textContent = 'Connection error';
+      }
+    }
+
+    // Enter key on PIN input
+    document.getElementById('pinInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submitPin();
+    });
+
+    function startDashboard(room, hostName) {
+      ROOM = room;
+      HOST_NAME = hostName;
+
+      // Show room badge
+      if (room) {
+        const badge = document.getElementById('roomBadge');
+        badge.style.display = 'inline-block';
+        badge.textContent = `${hostName} (@${room})`;
+      }
+
+      // Connect socket with room
+      socket = io({ query: { room: ROOM } });
+      setupSocketEvents();
+
+      // Set URLs with room param
+      const roomParam = ROOM ? `?room=${ROOM}` : '';
+      document.getElementById('overlayUrl').value = `${window.location.origin}/overlay${roomParam}`;
+      document.getElementById('gameUrl').value = `${window.location.origin}/game${roomParam}`;
+      document.getElementById('marathonUrl').value = `${window.location.origin}/marathon${roomParam}`;
+      document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
+
+      // Load config
+      fetch(`/api/config?room=${ROOM}`).then(r => r.json()).then(config => {
+        document.getElementById('usernameInput').value = config.username;
+      });
+
+      // Start cost polling if room is set
+      if (ROOM) {
+        document.getElementById('costBar').style.display = 'flex';
+        setInterval(updateCost, 10000);
+        updateCost();
+      }
+    }
+
     let stats = { viewers: 0, joined: 0, chats: 0, gifts: 0, likes: 0 };
     const viewerMap = new Map();
 
-    // Set overlay URL
-    document.getElementById('overlayUrl').value = `${window.location.origin}/overlay`;
+    function setupSocketEvents() {
+      socket.on('connection-status', (state) => {
+        const dot = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        const btn = document.getElementById('connectBtn');
+        if (state.connected) {
+          dot.classList.add('connected');
+          text.textContent = `Connected (Room: ${state.roomId})`;
+          btn.textContent = 'Reconnect';
+          btn.disabled = false;
+        } else {
+          dot.classList.remove('connected');
+          text.textContent = state.error || 'Disconnected';
+          btn.textContent = 'Connect';
+          btn.disabled = false;
+        }
+      });
 
-    // Load config
-    fetch('/api/config').then(r => r.json()).then(config => {
-      document.getElementById('usernameInput').value = config.username;
-    });
+      socket.on('viewer-list', (list) => {
+        list.forEach(v => addViewerCard(v));
+        stats.joined = list.length;
+        updateStats();
+      });
+
+      socket.on('viewer-join', (viewer) => {
+        addViewerCard(viewer);
+        addFeedItem('join', viewer.profilePic, viewer.nickname, 'joined the live');
+        stats.joined++;
+        updateStats();
+      });
+
+      socket.on('chat', (data) => {
+        addFeedItem('chat', data.profilePic, data.nickname, data.comment);
+        stats.chats++;
+        updateStats();
+      });
+
+      socket.on('gift', (data) => {
+        addFeedItem('gift', data.profilePic, data.nickname,
+          `sent ${data.repeatCount}x ${data.giftName} (${data.diamondCount} diamonds)`);
+        stats.gifts++;
+        updateStats();
+      });
+
+      socket.on('like', (data) => {
+        stats.likes = data.totalLikes || stats.likes + 1;
+        updateStats();
+      });
+
+      socket.on('follow', (data) => {
+        addFeedItem('follow', data.profilePic, data.nickname, 'followed you!');
+      });
+
+      socket.on('share', (data) => {
+        addFeedItem('share', data.profilePic, data.nickname, 'shared the live');
+      });
+
+      socket.on('room-stats', (data) => {
+        stats.viewers = data.viewerCount;
+        updateStats();
+      });
+    }
 
     function connectTikTok() {
       const username = document.getElementById('usernameInput').value.trim().replace('@', '');
       if (!username) return;
       document.getElementById('connectBtn').disabled = true;
       document.getElementById('connectBtn').textContent = 'Connecting...';
-      socket.emit('connect-tiktok', username);
+      socket.emit('connect-tiktok', { username, pin: HOST_PIN, room: ROOM });
     }
 
     function proxyImg(url) {
       if (!url) return '';
       return `/api/proxy-image?url=${encodeURIComponent(url)}`;
-    }
-
-    function timeAgo(ts) {
-      const s = Math.floor((Date.now() - ts) / 1000);
-      if (s < 60) return `${s}s`;
-      if (s < 3600) return `${Math.floor(s/60)}m`;
-      return `${Math.floor(s/3600)}h`;
     }
 
     function addViewerCard(viewer) {
@@ -411,7 +658,6 @@
         <div class="feed-time">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>
       `;
       list.prepend(item);
-      // Keep max 200 items
       while (list.children.length > 200) list.removeChild(list.lastChild);
     }
 
@@ -422,73 +668,6 @@
       document.getElementById('giftCount').textContent = stats.gifts;
       document.getElementById('likeCount').textContent = stats.likes;
     }
-
-    // Socket events
-    socket.on('connection-status', (state) => {
-      const dot = document.getElementById('statusDot');
-      const text = document.getElementById('statusText');
-      const btn = document.getElementById('connectBtn');
-      if (state.connected) {
-        dot.classList.add('connected');
-        text.textContent = `Connected (Room: ${state.roomId})`;
-        btn.textContent = 'Reconnect';
-        btn.disabled = false;
-      } else {
-        dot.classList.remove('connected');
-        text.textContent = state.error || 'Disconnected';
-        btn.textContent = 'Connect';
-        btn.disabled = false;
-      }
-    });
-
-    socket.on('viewer-list', (list) => {
-      list.forEach(v => addViewerCard(v));
-      stats.joined = list.length;
-      updateStats();
-    });
-
-    socket.on('viewer-join', (viewer) => {
-      addViewerCard(viewer);
-      addFeedItem('join', viewer.profilePic, viewer.nickname, 'joined the live');
-      stats.joined++;
-      updateStats();
-    });
-
-    socket.on('chat', (data) => {
-      addFeedItem('chat', data.profilePic, data.nickname, data.comment);
-      stats.chats++;
-      updateStats();
-    });
-
-    socket.on('gift', (data) => {
-      addFeedItem('gift', data.profilePic, data.nickname,
-        `sent ${data.repeatCount}x ${data.giftName} (${data.diamondCount} diamonds)`);
-      stats.gifts++;
-      updateStats();
-    });
-
-    socket.on('like', (data) => {
-      stats.likes = data.totalLikes || stats.likes + 1;
-      updateStats();
-    });
-
-    socket.on('follow', (data) => {
-      addFeedItem('follow', data.profilePic, data.nickname, 'followed you!');
-    });
-
-    socket.on('share', (data) => {
-      addFeedItem('share', data.profilePic, data.nickname, 'shared the live');
-    });
-
-    socket.on('room-stats', (data) => {
-      stats.viewers = data.viewerCount;
-      updateStats();
-    });
-
-    // Set game URLs
-    document.getElementById('gameUrl').value = `${window.location.origin}/game`;
-    document.getElementById('marathonUrl').value = `${window.location.origin}/marathon`;
-    document.getElementById('voiceUrl').value = `${window.location.origin}/voice`;
 
     function copyUrl(id) {
       const url = document.getElementById(id).value;
@@ -503,26 +682,41 @@
       demoActive = !demoActive;
       const btn = document.getElementById('demoBtn');
       if (demoActive) {
-        socket.emit('start-demo');
+        socket.emit('start-demo', { room: ROOM });
         btn.textContent = 'Stop Demo';
         btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
-        // Clear existing viewers
         document.getElementById('viewerGrid').innerHTML = '';
         document.getElementById('feedList').innerHTML = '';
         viewerMap.clear();
         stats = { viewers: 0, joined: 0, chats: 0, gifts: 0, likes: 0 };
         updateStats();
       } else {
-        socket.emit('stop-demo');
+        socket.emit('stop-demo', { room: ROOM });
         btn.textContent = 'Demo Mode';
         btn.style.background = 'linear-gradient(135deg, #a855f7, #6366f1)';
       }
+    }
+
+    async function updateCost() {
+      if (!ROOM) return;
+      try {
+        const res = await fetch(`/api/session/${ROOM}/cost`);
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('costOpenai').textContent = data.estimate.openai;
+        document.getElementById('costElevenlabs').textContent = data.estimate.elevenlabs;
+        document.getElementById('costTotal').textContent = data.estimate.total;
+        document.getElementById('costCalls').textContent = data.cost.voiceCalls;
+      } catch (e) { /* ignore */ }
     }
 
     // Enter key to connect
     document.getElementById('usernameInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') connectTikTok();
     });
+
+    // Init
+    initDashboard();
   </script>
 </body>
 </html>

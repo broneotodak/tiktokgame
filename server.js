@@ -23,6 +23,80 @@ const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'yXG8bh6LkPVmQb2P
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+// ===== Multi-Host: Parse HOST_PINS =====
+// Format: HOST_PINS=name:pin:username,name2:pin2:username2
+const HOST_PINS = {};
+if (process.env.HOST_PINS) {
+  process.env.HOST_PINS.split(',').forEach(entry => {
+    const [name, pin, username] = entry.trim().split(':');
+    if (name && pin && username) {
+      HOST_PINS[pin] = { name, username };
+    }
+  });
+  console.log(`🔑 Loaded ${Object.keys(HOST_PINS).length} host PIN(s): ${Object.values(HOST_PINS).map(h => h.name).join(', ')}`);
+}
+
+// ===== StreamSession Class =====
+class StreamSession {
+  constructor(username, pin, hostName) {
+    this.username = username;      // TikTok username = room ID
+    this.pin = pin;                // Host's auth PIN
+    this.hostName = hostName;      // Display name
+    this.viewers = new Map();      // Isolated viewer tracking
+    this.connection = null;        // TikTok live connection
+    this.connectionState = { connected: false, roomId: null, error: null };
+    this.cost = { openaiTokens: 0, elevenlabsChars: 0, voiceCalls: 0 };
+    this.createdAt = Date.now();
+    this.demoActive = false;
+    this.demoInterval = null;
+    this.demoJoinTimer = null;
+    this.demoStopped = false;
+    this.demoViewerIdx = 0;
+    this.demoViewerCount = 0;
+    this.botsActive = false;
+    this.botInterval = null;
+    this.botActionInterval = null;
+    this.botJoinTimer = null;
+    this.botJoinIdx = 0;
+  }
+
+  toJSON() {
+    return {
+      room: this.username,
+      hostName: this.hostName,
+      viewerCount: this.viewers.size,
+      connected: this.connectionState.connected,
+      roomId: this.connectionState.roomId,
+      cost: this.cost,
+      costEstimate: this.getCostEstimate(),
+      createdAt: this.createdAt,
+      demoActive: this.demoActive,
+      botsActive: this.botsActive,
+    };
+  }
+
+  getCostEstimate() {
+    // GPT-4o-mini: ~$0.15/1M input, ~$0.60/1M output tokens
+    // ElevenLabs: ~$0.30/1K chars
+    const openaiCost = (this.cost.openaiTokens / 1_000_000) * 0.375; // avg input+output
+    const elevenlabsCost = (this.cost.elevenlabsChars / 1000) * 0.30;
+    return {
+      openai: `$${openaiCost.toFixed(4)}`,
+      elevenlabs: `$${elevenlabsCost.toFixed(4)}`,
+      total: `$${(openaiCost + elevenlabsCost).toFixed(4)}`,
+    };
+  }
+}
+
+// Sessions map — keyed by TikTok username (= room ID)
+const sessions = new Map();
+
+// Helper: get or create session for a room (backward compat: empty room = default)
+function getSession(room) {
+  if (!room) room = '__default__';
+  return sessions.get(room) || null;
+}
+
 // Neo's personality — loaded from Digital Twin on startup, with hardcoded fallback
 let NEO_PERSONALITY_PROMPT = `You ARE Neo Todak (Ahmad Fadli). You're the CEO of Todak Studios and VP of Todak Gaming, streaming live on TikTok. You speak casual Manglish — mix Malay and English the way Malaysian friends actually talk. You're from Cyberjaya. You love AI, gaming, and tech. You're an ambivert — chill but can get hype. Your humor is dry and real, never cringe. Keep responses SHORT — 10 to 25 words max. Sound like a real person talking, NOT reading a script. Vary your language naturally — don't repeat the same slang. No emojis. Write exactly how it should be SPOKEN out loud.`;
 
@@ -104,10 +178,61 @@ app.get('/overlay', (req, res) => res.sendFile(join(__dirname, 'public', 'overla
 app.get('/game', (req, res) => res.sendFile(join(__dirname, 'public', 'game.html')));
 app.get('/marathon', (req, res) => res.sendFile(join(__dirname, 'public', 'marathon3d.html')));
 app.get('/voice', (req, res) => res.sendFile(join(__dirname, 'public', 'voice.html')));
+app.get('/hillclimb', (req, res) => res.sendFile(join(__dirname, 'public', 'hillclimb.html')));
 
 // API endpoint to get current config
 app.get('/api/config', (req, res) => {
-  res.json({ username: USERNAME, connected: !!tiktokConnection });
+  const room = req.query.room;
+  const session = getSession(room);
+  res.json({
+    username: session ? session.username : USERNAME,
+    connected: session ? session.connectionState.connected : false,
+    room: session ? session.username : '',
+  });
+});
+
+// ===== Multi-Host API =====
+
+// POST /api/host/auth — validate PIN, create/get session
+app.post('/api/host/auth', (req, res) => {
+  const { pin } = req.body;
+  if (!pin) return res.status(400).json({ error: 'PIN required' });
+
+  // If no HOST_PINS configured, accept any PIN (single-host backward compat)
+  if (Object.keys(HOST_PINS).length === 0) {
+    // Single-host mode — create default session
+    const room = USERNAME;
+    if (!sessions.has(room)) {
+      sessions.set(room, new StreamSession(room, pin, 'Host'));
+    }
+    return res.json({ ok: true, room, hostName: 'Host' });
+  }
+
+  const hostConfig = HOST_PINS[pin];
+  if (!hostConfig) {
+    return res.status(401).json({ error: 'Invalid PIN' });
+  }
+
+  const { name, username } = hostConfig;
+  if (!sessions.has(username)) {
+    sessions.set(username, new StreamSession(username, pin, name));
+    console.log(`🏠 New session created: ${name} (@${username})`);
+  }
+
+  res.json({ ok: true, room: username, hostName: name });
+});
+
+// GET /api/sessions — list active sessions (public, no secrets)
+app.get('/api/sessions', (req, res) => {
+  const list = Array.from(sessions.values()).map(s => s.toJSON());
+  res.json(list);
+});
+
+// GET /api/session/:room/cost — cost estimate for a session
+app.get('/api/session/:room/cost', (req, res) => {
+  const session = sessions.get(req.params.room);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+  res.json({ room: session.username, cost: session.cost, estimate: session.getCostEstimate() });
 });
 
 // Proxy TikTok profile images to avoid CORS issues
@@ -125,19 +250,19 @@ app.get('/api/proxy-image', async (req, res) => {
   }
 });
 
-// POST /api/voice/generate — AI commentary + TTS
+// POST /api/voice/generate — AI commentary + TTS (with per-session cost tracking)
 app.post('/api/voice/generate', async (req, res) => {
-  console.log('🎙️ Voice API called:', req.body?.eventType);
+  console.log('🎙️ Voice API called:', req.body?.eventType, 'room:', req.body?.room);
   if (!OPENAI_API_KEY || !ELEVENLABS_API_KEY) {
     console.log('❌ API keys missing');
     return res.status(503).json({ error: 'Voice API keys not configured' });
   }
 
   try {
-    const { eventType, eventData, recentContext } = req.body;
+    const { eventType, eventData, recentContext, room } = req.body;
     const userPrompt = buildCommentaryPrompt(eventType, eventData, recentContext || []);
 
-    // Step 1: GPT-4o-mini → commentary text
+    // Step 1: GPT-4o-mini -> commentary text
     const chatRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
@@ -162,7 +287,15 @@ app.post('/api/voice/generate', async (req, res) => {
     const commentary = chatData.choices?.[0]?.message?.content?.trim() || '';
     if (!commentary) return res.status(500).json({ error: 'Empty commentary' });
 
-    // Step 2: ElevenLabs TTS → audio/mpeg
+    // Track cost per session
+    const session = getSession(room);
+    if (session) {
+      const usage = chatData.usage || {};
+      session.cost.openaiTokens += (usage.prompt_tokens || 0) + (usage.completion_tokens || 0);
+      session.cost.voiceCalls++;
+    }
+
+    // Step 2: ElevenLabs TTS -> audio/mpeg
     const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`, {
       method: 'POST',
       headers: {
@@ -182,6 +315,11 @@ app.post('/api/voice/generate', async (req, res) => {
       return res.status(502).json({ error: 'ElevenLabs TTS failed' });
     }
 
+    // Track ElevenLabs chars
+    if (session) {
+      session.cost.elevenlabsChars += commentary.length;
+    }
+
     // Stream audio back with commentary text in header
     res.set('Content-Type', 'audio/mpeg');
     res.set('X-Commentary-Text', encodeURIComponent(commentary));
@@ -196,17 +334,14 @@ app.post('/api/voice/generate', async (req, res) => {
   }
 });
 
-// Track viewers
-const viewers = new Map();
-let tiktokConnection = null;
-let connectionState = { connected: false, roomId: null, error: null };
-
-function connectToTikTok(username) {
+// ===== TikTok Connection (scoped to session) =====
+function connectToTikTok(session) {
   // Set EulerStream API key if available (required for signing)
   if (process.env.EULER_API_KEY) {
     SignConfig.apiKey = process.env.EULER_API_KEY;
   }
 
+  const username = session.username;
   const connection = new TikTokLiveConnection(username, {
     enableExtendedGiftInfo: true,
   });
@@ -216,27 +351,26 @@ function connectToTikTok(username) {
 
   connection.connect().then(state => {
     console.log(`✅ Connected to @${username} (Room ID: ${state.roomId})`);
-    connectionState = { connected: true, roomId: state.roomId, error: null };
-    io.emit('connection-status', connectionState);
-    // Start grace period — events before this are historical replay
+    session.connectionState = { connected: true, roomId: state.roomId, error: null };
+    io.to(session.username).emit('connection-status', session.connectionState);
+    // Also emit to default room for backward compat
+    io.to('__default__').emit('connection-status', session.connectionState);
     connectionReadyAt = Date.now() + 3000;
     console.log('⏳ Grace period: ignoring replay events for 3 seconds...');
     setTimeout(() => console.log('✅ Grace period ended — processing live events'), 3000);
   }).catch(err => {
     console.error('❌ Connection failed:', err.message);
-    connectionState = { connected: false, roomId: null, error: err.message };
-    io.emit('connection-status', connectionState);
+    session.connectionState = { connected: false, roomId: null, error: err.message };
+    io.to(session.username).emit('connection-status', session.connectionState);
+    io.to('__default__').emit('connection-status', session.connectionState);
   });
 
   function isLiveEvent() {
     return Date.now() >= connectionReadyAt;
   }
 
-  // Helper to extract user info from event data
   function extractUser(data) {
-    // v2 API: user data may be nested under different structures
     const user = data.user || data;
-    // Profile pic can be in many places depending on API version
     const profilePic = user.profilePicture?.url?.[0]
       || user.profilePicture?.urls?.[0]
       || user.profilePictureUrl
@@ -257,44 +391,44 @@ function connectToTikTok(username) {
     };
   }
 
-  // Track user from any event (so viewer-list works after page refresh)
   function trackViewer(user) {
     if (!user.id) return;
-    const existing = viewers.get(user.id);
+    const existing = session.viewers.get(user.id);
     if (!existing) {
-      viewers.set(user.id, { ...user, joinedAt: Date.now() });
+      session.viewers.set(user.id, { ...user, joinedAt: Date.now() });
     } else {
       existing.lastSeen = Date.now();
     }
   }
 
-  // Viewer joins
+  // Emit to session room + default room
+  function emitToRoom(event, data) {
+    io.to(session.username).emit(event, data);
+    io.to('__default__').emit(event, data);
+  }
+
   connection.on('member', (data) => {
     const user = extractUser(data);
     trackViewer(user);
-    if (!isLiveEvent()) return; // skip replay
+    if (!isLiveEvent()) return;
     console.log(`👋 ${user.nickname} (@${user.uniqueId}) joined`);
-    io.emit('viewer-join', { ...user, joinedAt: Date.now() });
+    emitToRoom('viewer-join', { ...user, joinedAt: Date.now() });
   });
 
-  // Chat messages
   connection.on('chat', (data) => {
     const user = extractUser(data);
     trackViewer(user);
-    if (!isLiveEvent()) return; // skip replay
+    if (!isLiveEvent()) return;
     const msg = { ...user, comment: data.comment || '', timestamp: Date.now() };
     console.log(`💬 ${msg.nickname}: ${msg.comment}`);
-    io.emit('chat', msg);
+    emitToRoom('chat', msg);
   });
 
-  // Gifts
   connection.on('gift', (data) => {
-    // Only emit when gift streak ends or for non-streakable gifts
     if (data.giftType === 1 && !data.repeatEnd) return;
-
     const user = extractUser(data);
     trackViewer(user);
-    if (!isLiveEvent()) return; // skip replay
+    if (!isLiveEvent()) return;
     const gift = {
       ...user,
       giftName: data.giftName || 'Gift',
@@ -305,15 +439,14 @@ function connectToTikTok(username) {
       timestamp: Date.now(),
     };
     console.log(`🎁 ${gift.nickname} sent ${gift.repeatCount}x ${gift.giftName}`);
-    io.emit('gift', gift);
+    emitToRoom('gift', gift);
   });
 
-  // Likes
   connection.on('like', (data) => {
     const user = extractUser(data);
     trackViewer(user);
-    if (!isLiveEvent()) return; // skip replay
-    io.emit('like', {
+    if (!isLiveEvent()) return;
+    emitToRoom('like', {
       ...user,
       likeCount: data.likeCount || 1,
       totalLikes: data.totalLikeCount || 0,
@@ -321,54 +454,49 @@ function connectToTikTok(username) {
     });
   });
 
-  // Follow (v2 has separate event)
   connection.on('follow', (data) => {
     const user = extractUser(data);
     trackViewer(user);
-    if (!isLiveEvent()) return; // skip replay
+    if (!isLiveEvent()) return;
     console.log(`⭐ ${user.nickname} followed!`);
-    io.emit('follow', { ...user, timestamp: Date.now() });
+    emitToRoom('follow', { ...user, timestamp: Date.now() });
   });
 
-  // Share (v2 has separate event)
   connection.on('share', (data) => {
     const user = extractUser(data);
-    if (!isLiveEvent()) return; // skip replay
-    io.emit('share', user);
+    if (!isLiveEvent()) return;
+    emitToRoom('share', user);
   });
 
-  // Social (fallback for older API)
   connection.on('social', (data) => {
     const user = extractUser(data);
-    if (!isLiveEvent()) return; // skip replay
+    if (!isLiveEvent()) return;
     if (data.displayType?.includes('follow')) {
-      io.emit('follow', { ...user, timestamp: Date.now() });
+      emitToRoom('follow', { ...user, timestamp: Date.now() });
     }
     if (data.displayType?.includes('share')) {
-      io.emit('share', user);
+      emitToRoom('share', user);
     }
   });
 
-  // Room stats
   connection.on('roomUser', (data) => {
-    io.emit('room-stats', { viewerCount: data.viewerCount });
+    emitToRoom('room-stats', { viewerCount: data.viewerCount });
   });
 
-  // Disconnection
   connection.on('disconnected', () => {
-    console.log('⚠️ Disconnected from TikTok Live');
-    connectionState = { connected: false, roomId: null, error: 'Disconnected' };
-    io.emit('connection-status', connectionState);
+    console.log(`⚠️ Disconnected from TikTok Live (@${username})`);
+    session.connectionState = { connected: false, roomId: null, error: 'Disconnected' };
+    emitToRoom('connection-status', session.connectionState);
   });
 
   connection.on('error', (err) => {
-    console.error('❌ Error:', err.message);
+    console.error(`❌ Error (@${username}):`, err.message);
   });
 
-  tiktokConnection = connection;
+  session.connection = connection;
 }
 
-// ===== Demo Mode =====
+// ===== Demo Mode (scoped to session) =====
 const DEMO_USERS = [
   { id: 'd1', uniqueId: 'gamer_girl99', nickname: 'GamerGirl', isFollower: true, isModerator: false },
   { id: 'd2', uniqueId: 'tech_bro_my', nickname: 'TechBro MY', isFollower: false, isModerator: false },
@@ -394,78 +522,72 @@ const DEMO_CHATS = [
 
 const DEMO_GIFTS = ['Rose', 'Ice Cream Cone', 'GG', 'Doughnut', 'TikTok'];
 
-let demoInterval = null;
-let demoJoinTimer = null;
-let demoStopped = false;
-let demoViewerIdx = 0;
-let demoViewerCount = 0;
+function emitToSession(session, event, data) {
+  io.to(session.username).emit(event, data);
+  io.to('__default__').emit(event, data);
+}
 
-function startDemo() {
-  console.log('🎮 Demo mode started — simulating live viewers');
-  connectionState = { connected: true, roomId: 'DEMO-MODE', error: null };
-  io.emit('connection-status', connectionState);
-  demoViewerIdx = 0;
-  demoViewerCount = 0;
-  demoStopped = false;
+function startDemo(session) {
+  console.log(`🎮 Demo mode started for @${session.username}`);
+  session.connectionState = { connected: true, roomId: 'DEMO-MODE', error: null };
+  emitToSession(session, 'connection-status', session.connectionState);
+  session.demoViewerIdx = 0;
+  session.demoViewerCount = 0;
+  session.demoStopped = false;
+  session.demoActive = true;
 
-  // Stagger viewer joins every 2-5 seconds
   function scheduleNextJoin() {
-    if (demoStopped || demoViewerIdx >= DEMO_USERS.length) return;
+    if (session.demoStopped || session.demoViewerIdx >= DEMO_USERS.length) return;
     const delay = 2000 + Math.random() * 3000;
-    demoJoinTimer = setTimeout(() => {
-      if (demoStopped) return;
-      const user = DEMO_USERS[demoViewerIdx++];
+    session.demoJoinTimer = setTimeout(() => {
+      if (session.demoStopped) return;
+      const user = DEMO_USERS[session.demoViewerIdx++];
       const viewer = { ...user, profilePic: '', joinedAt: Date.now() };
-      viewers.set(viewer.id, viewer);
-      demoViewerCount++;
-      io.emit('viewer-join', viewer);
-      io.emit('room-stats', { viewerCount: demoViewerCount });
+      session.viewers.set(viewer.id, viewer);
+      session.demoViewerCount++;
+      emitToSession(session, 'viewer-join', viewer);
+      emitToSession(session, 'room-stats', { viewerCount: session.demoViewerCount });
       scheduleNextJoin();
     }, delay);
   }
   scheduleNextJoin();
 
-  // Random chats every 3-6 seconds
-  demoInterval = setInterval(() => {
-    if (demoStopped) return;
-    const activeViewers = Array.from(viewers.values());
+  session.demoInterval = setInterval(() => {
+    if (session.demoStopped) return;
+    const activeViewers = Array.from(session.viewers.values());
     if (activeViewers.length === 0) return;
 
     const roll = Math.random();
     const user = activeViewers[Math.floor(Math.random() * activeViewers.length)];
 
     if (roll < 0.6) {
-      // Chat message
       const comment = DEMO_CHATS[Math.floor(Math.random() * DEMO_CHATS.length)];
-      io.emit('chat', { ...user, comment, timestamp: Date.now() });
+      emitToSession(session, 'chat', { ...user, comment, timestamp: Date.now() });
     } else if (roll < 0.8) {
-      // Like
-      io.emit('like', { ...user, likeCount: Math.floor(Math.random() * 5) + 1, totalLikes: Math.floor(Math.random() * 500), timestamp: Date.now() });
+      emitToSession(session, 'like', { ...user, likeCount: Math.floor(Math.random() * 5) + 1, totalLikes: Math.floor(Math.random() * 500), timestamp: Date.now() });
     } else if (roll < 0.92) {
-      // Gift
       const giftName = DEMO_GIFTS[Math.floor(Math.random() * DEMO_GIFTS.length)];
-      io.emit('gift', { ...user, giftName, diamondCount: Math.floor(Math.random() * 100) + 1, repeatCount: Math.floor(Math.random() * 3) + 1, giftPictureUrl: '', timestamp: Date.now() });
+      emitToSession(session, 'gift', { ...user, giftName, diamondCount: Math.floor(Math.random() * 100) + 1, repeatCount: Math.floor(Math.random() * 3) + 1, giftPictureUrl: '', timestamp: Date.now() });
     } else {
-      // Follow
-      io.emit('follow', { ...user, timestamp: Date.now() });
+      emitToSession(session, 'follow', { ...user, timestamp: Date.now() });
     }
   }, 3000 + Math.random() * 3000);
 }
 
-function stopDemo() {
-  demoStopped = true;
-  if (demoInterval) clearInterval(demoInterval);
-  demoInterval = null;
-  if (demoJoinTimer) clearTimeout(demoJoinTimer);
-  demoJoinTimer = null;
-  // Remove only demo users (id starts with 'd'), not bots or real users
-  DEMO_USERS.forEach(u => viewers.delete(u.id));
-  connectionState = { connected: false, roomId: null, error: null };
-  io.emit('connection-status', connectionState);
-  console.log('🛑 Demo mode stopped');
+function stopDemo(session) {
+  session.demoStopped = true;
+  session.demoActive = false;
+  if (session.demoInterval) clearInterval(session.demoInterval);
+  session.demoInterval = null;
+  if (session.demoJoinTimer) clearTimeout(session.demoJoinTimer);
+  session.demoJoinTimer = null;
+  DEMO_USERS.forEach(u => session.viewers.delete(u.id));
+  session.connectionState = { connected: false, roomId: null, error: null };
+  emitToSession(session, 'connection-status', session.connectionState);
+  console.log(`🛑 Demo mode stopped for @${session.username}`);
 }
 
-// ===== Bot Mode (runs alongside live) =====
+// ===== Bot Mode (scoped to session) =====
 const BOT_USERS = [
   { id: 'bot_1', uniqueId: 'aisyah_kl', nickname: 'Aisyah', isFollower: true, isModerator: false },
   { id: 'bot_2', uniqueId: 'haziq_gaming', nickname: 'Haziq', isFollower: false, isModerator: false },
@@ -486,153 +608,194 @@ const BOT_CHATS = [
 
 const BOT_COMMANDS = ['jump', 'left', 'right'];
 
-let botInterval = null;
-let botActionInterval = null;
-let botJoinTimer = null;
-let botActive = false;
-let botJoinIdx = 0;
+function startBots(session) {
+  if (session.botsActive) return;
+  session.botsActive = true;
+  session.botJoinIdx = 0;
+  console.log(`🤖 Bot mode started for @${session.username}`);
 
-function startBots() {
-  if (botActive) return;
-  botActive = true;
-  botJoinIdx = 0;
-  console.log('🤖 Bot mode started — adding bots alongside live');
-
-  // Stagger bot joins every 1-3 seconds
   function scheduleNextBot() {
-    if (!botActive || botJoinIdx >= BOT_USERS.length) return;
+    if (!session.botsActive || session.botJoinIdx >= BOT_USERS.length) return;
     const delay = 1000 + Math.random() * 2000;
-    botJoinTimer = setTimeout(() => {
-      if (!botActive) return;
-      const user = BOT_USERS[botJoinIdx++];
+    session.botJoinTimer = setTimeout(() => {
+      if (!session.botsActive) return;
+      const user = BOT_USERS[session.botJoinIdx++];
       const viewer = { ...user, profilePic: '', joinedAt: Date.now() };
-      viewers.set(viewer.id, viewer);
-      io.emit('viewer-join', viewer);
+      session.viewers.set(viewer.id, viewer);
+      emitToSession(session, 'viewer-join', viewer);
       scheduleNextBot();
     }, delay);
   }
   scheduleNextBot();
 
-  // Bots chat/like/gift every 3-6 seconds (vibes)
-  botInterval = setInterval(() => {
-    if (!botActive) return;
-    const bots = BOT_USERS.filter(b => viewers.has(b.id));
+  session.botInterval = setInterval(() => {
+    if (!session.botsActive) return;
+    const bots = BOT_USERS.filter(b => session.viewers.has(b.id));
     if (bots.length === 0) return;
 
     const bot = bots[Math.floor(Math.random() * bots.length)];
     const roll = Math.random();
 
     if (roll < 0.5) {
-      // Casual chat (shows bubble)
       const comment = BOT_CHATS[Math.floor(Math.random() * BOT_CHATS.length)];
-      io.emit('chat', { ...bot, profilePic: '', comment, timestamp: Date.now() });
+      emitToSession(session, 'chat', { ...bot, profilePic: '', comment, timestamp: Date.now() });
     } else if (roll < 0.85) {
-      // Like (speed boost)
-      io.emit('like', { ...bot, profilePic: '', likeCount: Math.floor(Math.random() * 3) + 1, totalLikes: Math.floor(Math.random() * 200), timestamp: Date.now() });
+      emitToSession(session, 'like', { ...bot, profilePic: '', likeCount: Math.floor(Math.random() * 3) + 1, totalLikes: Math.floor(Math.random() * 200), timestamp: Date.now() });
     } else {
-      // Gift (mount)
       const giftName = DEMO_GIFTS[Math.floor(Math.random() * DEMO_GIFTS.length)];
-      io.emit('gift', { ...bot, profilePic: '', giftName, giftId: Date.now(), diamondCount: Math.floor(Math.random() * 50) + 1, repeatCount: 1, giftPictureUrl: '', timestamp: Date.now() });
+      emitToSession(session, 'gift', { ...bot, profilePic: '', giftName, giftId: Date.now(), diamondCount: Math.floor(Math.random() * 50) + 1, repeatCount: 1, giftPictureUrl: '', timestamp: Date.now() });
     }
   }, 3000 + Math.random() * 3000);
 
-  // Bots dodge obstacles every 1-2 seconds (survival)
-  botActionInterval = setInterval(() => {
-    if (!botActive) return;
-    const bots = BOT_USERS.filter(b => viewers.has(b.id));
+  session.botActionInterval = setInterval(() => {
+    if (!session.botsActive) return;
+    const bots = BOT_USERS.filter(b => session.viewers.has(b.id));
     if (bots.length === 0) return;
 
-    // Pick 1-3 random bots to act this tick
     const actCount = 1 + Math.floor(Math.random() * Math.min(3, bots.length));
     const shuffled = bots.sort(() => Math.random() - 0.5);
     for (let i = 0; i < actCount; i++) {
       const bot = shuffled[i];
       const cmd = BOT_COMMANDS[Math.floor(Math.random() * BOT_COMMANDS.length)];
-      io.emit('chat', { ...bot, profilePic: '', comment: cmd, timestamp: Date.now() });
+      emitToSession(session, 'chat', { ...bot, profilePic: '', comment: cmd, timestamp: Date.now() });
     }
   }, 1000 + Math.random() * 1000);
 }
 
-function stopBots() {
-  botActive = false;
-  if (botInterval) clearInterval(botInterval);
-  botInterval = null;
-  if (botActionInterval) clearInterval(botActionInterval);
-  botActionInterval = null;
-  if (botJoinTimer) clearTimeout(botJoinTimer);
-  botJoinTimer = null;
-  // Remove only bot viewers from server tracking
-  BOT_USERS.forEach(b => viewers.delete(b.id));
-  // Tell clients to remove bots
-  io.emit('bots-removed', BOT_USERS.map(b => b.id));
-  console.log('🛑 Bots removed');
+function stopBots(session) {
+  session.botsActive = false;
+  if (session.botInterval) clearInterval(session.botInterval);
+  session.botInterval = null;
+  if (session.botActionInterval) clearInterval(session.botActionInterval);
+  session.botActionInterval = null;
+  if (session.botJoinTimer) clearTimeout(session.botJoinTimer);
+  session.botJoinTimer = null;
+  BOT_USERS.forEach(b => session.viewers.delete(b.id));
+  emitToSession(session, 'bots-removed', BOT_USERS.map(b => b.id));
+  console.log(`🛑 Bots removed for @${session.username}`);
 }
 
-// Socket.IO connection handling
+// ===== Socket.IO connection handling =====
 io.on('connection', (socket) => {
-  console.log(`🔌 Browser client connected`);
+  // Read room from handshake query
+  const room = socket.handshake.query.room || '';
+  const socketRoom = room || '__default__';
+  socket.join(socketRoom);
+  console.log(`🔌 Client connected (room: ${socketRoom})`);
 
-  // Send current state
-  socket.emit('connection-status', connectionState);
-  socket.emit('viewer-list', Array.from(viewers.values()));
+  // Find session for this room
+  const session = sessions.get(room) || sessions.get('__default__');
 
-  // Allow browser to trigger connection with custom username
-  socket.on('connect-tiktok', (username) => {
-    stopDemo();
-    stopBots();
-    if (tiktokConnection) {
-      try { tiktokConnection.disconnect(); } catch (e) { /* ignore */ }
+  // Send current state for the session
+  if (session) {
+    socket.emit('connection-status', session.connectionState);
+    socket.emit('viewer-list', Array.from(session.viewers.values()));
+  } else {
+    socket.emit('connection-status', { connected: false, roomId: null, error: null });
+    socket.emit('viewer-list', []);
+  }
+
+  // Connect to TikTok (requires PIN for multi-host, or works freely in single-host)
+  socket.on('connect-tiktok', (data) => {
+    // data can be string (old: username) or object (new: { username, pin, room })
+    let targetUsername, pin, targetRoom;
+    if (typeof data === 'object' && data !== null) {
+      targetUsername = data.username;
+      pin = data.pin;
+      targetRoom = data.room;
+    } else {
+      targetUsername = data;
+      targetRoom = room;
     }
-    viewers.clear();
-    connectToTikTok(username || USERNAME);
-  });
 
-  // Demo mode toggle (standalone — disconnects live + removes bots)
-  socket.on('start-demo', () => {
-    stopDemo();
-    stopBots();
-    if (tiktokConnection) {
-      try { tiktokConnection.disconnect(); } catch (e) { /* ignore */ }
-      tiktokConnection = null;
+    // Find or validate session
+    let sess = sessions.get(targetRoom);
+    if (!sess) {
+      // Single-host backward compat: create session on the fly
+      const effectiveUsername = targetUsername || USERNAME;
+      sess = new StreamSession(effectiveUsername, '', 'Host');
+      sessions.set(effectiveUsername, sess);
+      // Also put in default slot
+      sessions.set('__default__', sess);
+      socket.join(effectiveUsername);
     }
-    viewers.clear();
-    startDemo();
+
+    stopDemo(sess);
+    stopBots(sess);
+    if (sess.connection) {
+      try { sess.connection.disconnect(); } catch (e) { /* ignore */ }
+    }
+    sess.viewers.clear();
+    connectToTikTok(sess);
   });
 
-  socket.on('stop-demo', () => {
-    stopDemo();
+  // Demo mode (scoped to session)
+  socket.on('start-demo', (data) => {
+    const targetRoom = (typeof data === 'object' && data?.room) ? data.room : room;
+    let sess = sessions.get(targetRoom) || sessions.get('__default__');
+    if (!sess) {
+      sess = new StreamSession(targetRoom || USERNAME, '', 'Host');
+      sessions.set(sess.username, sess);
+      sessions.set('__default__', sess);
+      socket.join(sess.username);
+    }
+    stopDemo(sess);
+    stopBots(sess);
+    if (sess.connection) {
+      try { sess.connection.disconnect(); } catch (e) { /* ignore */ }
+      sess.connection = null;
+    }
+    sess.viewers.clear();
+    startDemo(sess);
   });
 
-  // Bot mode — runs alongside live connection
-  socket.on('start-bots', () => {
-    startBots();
-  });
-  socket.on('stop-bots', () => {
-    stopBots();
+  socket.on('stop-demo', (data) => {
+    const targetRoom = (typeof data === 'object' && data?.room) ? data.room : room;
+    const sess = sessions.get(targetRoom) || sessions.get('__default__');
+    if (sess) stopDemo(sess);
   });
 
-  // Host dashboard commands — broadcast to ALL clients (including viewers)
+  socket.on('start-bots', (data) => {
+    const targetRoom = (typeof data === 'object' && data?.room) ? data.room : room;
+    const sess = sessions.get(targetRoom) || sessions.get('__default__');
+    if (sess) startBots(sess);
+  });
+
+  socket.on('stop-bots', (data) => {
+    const targetRoom = (typeof data === 'object' && data?.room) ? data.room : room;
+    const sess = sessions.get(targetRoom) || sessions.get('__default__');
+    if (sess) stopBots(sess);
+  });
+
+  // Host dashboard commands — scoped to room
   socket.on('host-command', (cmd) => {
-    console.log(`🎛️ Host command: ${cmd.action}`, cmd.data || '');
-    io.emit('host-command', cmd);
+    console.log(`🎛️ Host command (${socketRoom}): ${cmd.action}`, cmd.data || '');
+    io.to(socketRoom).emit('host-command', cmd);
+    if (socketRoom !== '__default__') {
+      io.to('__default__').emit('host-command', cmd);
+    }
   });
 
-  // State sync — host broadcasts positions/mounts to viewers
+  // State sync — host broadcasts positions/mounts to room
   socket.on('state-sync', (state) => {
-    socket.broadcast.emit('state-sync', state);
+    socket.to(socketRoom).emit('state-sync', state);
+    if (socketRoom !== '__default__') {
+      socket.to('__default__').emit('state-sync', state);
+    }
   });
 
   socket.on('disconnect', () => {
-    console.log('🔌 Browser client disconnected');
+    console.log(`🔌 Client disconnected (room: ${socketRoom})`);
   });
 });
 
 // Load Neo's brain before starting
 loadNeoPersonality().then(() => {
 server.listen(PORT, '0.0.0.0', () => {
+  const pinCount = Object.keys(HOST_PINS).length;
   console.log(`
 ╔══════════════════════════════════════════════╗
-║   TikTok Live Overlay Server                 ║
+║   TikTok Live Multi-Host Server              ║
 ║──────────────────────────────────────────────║
 ║   Dashboard:  http://localhost:${PORT}            ║
 ║   Overlay:    http://localhost:${PORT}/overlay     ║
@@ -641,6 +804,7 @@ server.listen(PORT, '0.0.0.0', () => {
 ║──────────────────────────────────────────────║
 ║   EulerStream: ${process.env.EULER_API_KEY ? 'Configured ✅' : 'NOT SET ❌'}                 ║
 ║   Voice AI:    ${OPENAI_API_KEY && ELEVENLABS_API_KEY ? 'Configured ✅' : 'NOT SET ❌'}                 ║
+║   Host PINs:   ${pinCount > 0 ? `${pinCount} configured ✅` : 'None (single-host) ⚠️'}             ║
 ╚══════════════════════════════════════════════╝
   `);
 });
