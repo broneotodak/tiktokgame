@@ -1404,8 +1404,33 @@ function updatePlayers(dt) {
   });
 }
 
-// ===== CAMERA — PORTRAIT CLOSE-UP =====
+// ===== CAMERA — CINEMATIC PORTRAIT =====
 let camTarget = new THREE.Vector3(5, 8, 0);
+
+// Camera shot presets: { offset: [dx, dy, dz], look: [dx, dy], weight, lerpSpeed }
+// offset = camera position relative to leader, look = lookAt relative to leader
+const CAM_SHOTS = [
+  { name: 'default',   offset: [-4, 7, 18],  look: [3, 1],   weight: 45, lerp: 2.5, dur: [8, 14] },
+  { name: 'wide',      offset: [-8, 6, 22],  look: [0, 0],   weight: 15, lerp: 1.8, dur: [5, 8] },
+  { name: 'close',     offset: [-2, 4, 12],  look: [3, 1.5], weight: 12, lerp: 2.0, dur: [4, 7] },
+  { name: 'high',      offset: [-10, 16, 14],look: [2, -2],  weight: 10, lerp: 1.5, dur: [4, 6] },
+  { name: 'front',     offset: [6, 5, 14],   look: [-2, 1],  weight: 8,  lerp: 1.8, dur: [3, 5] },
+  { name: 'low',       offset: [-3, 2, 10],  look: [2, 2],   weight: 10, lerp: 2.0, dur: [4, 6] },
+];
+const CAM_TOTAL_WEIGHT = CAM_SHOTS.reduce((s, c) => s + c.weight, 0);
+
+let currentShot = CAM_SHOTS[0];
+let shotTimer = 10; // seconds until next camera change
+let camLerpSpeed = 2.5;
+
+function pickNextShot() {
+  let r = Math.random() * CAM_TOTAL_WEIGHT;
+  for (const shot of CAM_SHOTS) {
+    r -= shot.weight;
+    if (r <= 0) return shot;
+  }
+  return CAM_SHOTS[0];
+}
 
 function updateCamera(dt) {
   const leaderX = getLeaderProgress();
@@ -1418,18 +1443,29 @@ function updateCamera(dt) {
     return;
   }
 
+  // Shot timer — switch camera angle periodically
+  shotTimer -= dt;
+  if (shotTimer <= 0) {
+    currentShot = pickNextShot();
+    camLerpSpeed = currentShot.lerp;
+    const [minD, maxD] = currentShot.dur;
+    shotTimer = minD + Math.random() * (maxD - minD);
+  }
+
   let leader = null, maxP = -1;
   players.forEach(p => { if (p.progress > maxP) { maxP = p.progress; leader = p; } });
 
   if (leader) {
     const lx = leader.model.position.x;
     const ly = leader.model.position.y;
+    const [ox, oy, oz] = currentShot.offset;
+    const [lkx, lky] = currentShot.look;
 
-    const camPos = new THREE.Vector3(lx - 4, ly + 7, 18);
-    const lookAt = new THREE.Vector3(lx + 3, ly + 1, 0);
+    const camPos = new THREE.Vector3(lx + ox, ly + oy, oz);
+    const lookAt = new THREE.Vector3(lx + lkx, ly + lky, 0);
 
-    camera.position.lerp(camPos, dt * 2.5);
-    camTarget.lerp(lookAt, dt * 3);
+    camera.position.lerp(camPos, dt * camLerpSpeed);
+    camTarget.lerp(lookAt, dt * (camLerpSpeed + 0.5));
     camera.lookAt(camTarget);
 
     sunLight.position.set(lx + 15, ly + 50, 25);
@@ -1443,7 +1479,6 @@ function updateCamera(dt) {
   // Move clouds relative to camera
   clouds.forEach(cloud => {
     cloud.position.x += cloud.userData.speed;
-    // Keep clouds in visible range around the camera
     if (cloud.position.x > camera.position.x + 60) {
       cloud.position.x = camera.position.x - 40;
       cloud.position.y = camera.position.y + 10 + Math.random() * 25;
