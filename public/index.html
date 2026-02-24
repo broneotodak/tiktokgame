@@ -454,30 +454,17 @@
 
     // Check if PIN login is needed
     async function initDashboard() {
-      // Try fetching sessions to see if multi-host is active
       try {
-        const res = await fetch('/api/sessions');
-        const sessions = await res.json();
-        // If HOST_PINS are configured, require login
-        // We detect this by trying auth with empty pin
-        const testRes = await fetch('/api/host/auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin: '__test__' }),
-        });
-        const testData = await testRes.json();
-
-        if (testRes.status === 401) {
-          // Multi-host mode — show PIN overlay
+        const res = await fetch('/api/auth/check');
+        const { needsPin } = await res.json();
+        if (needsPin) {
           document.getElementById('pinOverlay').classList.remove('hidden');
           document.getElementById('pinInput').focus();
           return;
         }
-      } catch (e) {
-        // Fallback: no PIN needed
-      }
+      } catch (e) {}
 
-      // Single-host mode or no PINs — skip login
+      // No PIN needed — skip login
       document.getElementById('pinOverlay').classList.add('hidden');
       startDashboard('', 'Host');
     }
@@ -503,10 +490,19 @@
         }
 
         HOST_PIN = pin;
-        ROOM = data.room;
-        HOST_NAME = data.hostName;
         document.getElementById('pinOverlay').classList.add('hidden');
-        startDashboard(ROOM, HOST_NAME);
+
+        if (data.mode === 'host' && data.room) {
+          // Pre-configured host — room & username already set
+          ROOM = data.room;
+          HOST_NAME = data.hostName;
+          startDashboard(ROOM, HOST_NAME);
+        } else {
+          // Access mode — host types their own username, room created on connect
+          HOST_NAME = '';
+          ROOM = '';
+          startDashboard('', '');
+        }
       } catch (err) {
         errorEl.textContent = 'Connection error';
       }
@@ -624,6 +620,28 @@
       if (!username) return;
       document.getElementById('connectBtn').disabled = true;
       document.getElementById('connectBtn').textContent = 'Connecting...';
+
+      // If no room yet (access mode), set room to the username they typed
+      if (!ROOM) {
+        ROOM = username;
+        HOST_NAME = username;
+        // Rejoin socket to the correct room
+        socket.disconnect();
+        socket = io({ query: { room: ROOM } });
+        setupSocketEvents();
+        // Update URLs with room param
+        const roomParam = `?room=${ROOM}`;
+        document.getElementById('overlayUrl').value = `${window.location.origin}/overlay${roomParam}`;
+        document.getElementById('gameUrl').value = `${window.location.origin}/game${roomParam}`;
+        document.getElementById('marathonUrl').value = `${window.location.origin}/marathon${roomParam}`;
+        document.getElementById('hillclimbUrl').value = `${window.location.origin}/hillclimb${roomParam}`;
+        document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
+        // Update room badge
+        const badge = document.getElementById('roomBadge');
+        badge.style.display = 'inline-block';
+        badge.textContent = `@${ROOM}`;
+      }
+
       socket.emit('connect-tiktok', { username, pin: HOST_PIN, room: ROOM });
     }
 

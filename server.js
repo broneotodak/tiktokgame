@@ -25,7 +25,9 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_
 
 // ===== Multi-Host: Parse HOST_PINS =====
 // Format: HOST_PINS=name:pin:username,name2:pin2:username2
+// Or simple gate: ACCESS_PIN=mypin (shared PIN for all hosts)
 const HOST_PINS = {};
+const ACCESS_PIN = process.env.ACCESS_PIN || '';
 if (process.env.HOST_PINS) {
   process.env.HOST_PINS.split(',').forEach(entry => {
     const [name, pin, username] = entry.trim().split(':');
@@ -34,6 +36,9 @@ if (process.env.HOST_PINS) {
     }
   });
   console.log(`🔑 Loaded ${Object.keys(HOST_PINS).length} host PIN(s): ${Object.values(HOST_PINS).map(h => h.name).join(', ')}`);
+}
+if (ACCESS_PIN) {
+  console.log(`🔐 Access PIN gate enabled`);
 }
 
 // ===== StreamSession Class =====
@@ -198,28 +203,34 @@ app.post('/api/host/auth', (req, res) => {
   const { pin } = req.body;
   if (!pin) return res.status(400).json({ error: 'PIN required' });
 
-  // If no HOST_PINS configured, accept any PIN (single-host backward compat)
-  if (Object.keys(HOST_PINS).length === 0) {
-    // Single-host mode — create default session
-    const room = USERNAME;
-    if (!sessions.has(room)) {
-      sessions.set(room, new StreamSession(room, pin, 'Host'));
-    }
-    return res.json({ ok: true, room, hostName: 'Host' });
+  // No security configured — skip auth
+  if (Object.keys(HOST_PINS).length === 0 && !ACCESS_PIN) {
+    return res.json({ ok: true, room: '', hostName: 'Host', mode: 'open' });
   }
 
+  // Check ACCESS_PIN (shared gate PIN — host types their own username after)
+  if (ACCESS_PIN && pin === ACCESS_PIN) {
+    return res.json({ ok: true, room: '', hostName: '', mode: 'access' });
+  }
+
+  // Check HOST_PINS (pre-configured host with assigned username)
   const hostConfig = HOST_PINS[pin];
-  if (!hostConfig) {
-    return res.status(401).json({ error: 'Invalid PIN' });
+  if (hostConfig) {
+    const { name, username } = hostConfig;
+    if (!sessions.has(username)) {
+      sessions.set(username, new StreamSession(username, pin, name));
+      console.log(`🏠 New session created: ${name} (@${username})`);
+    }
+    return res.json({ ok: true, room: username, hostName: name, mode: 'host' });
   }
 
-  const { name, username } = hostConfig;
-  if (!sessions.has(username)) {
-    sessions.set(username, new StreamSession(username, pin, name));
-    console.log(`🏠 New session created: ${name} (@${username})`);
-  }
+  return res.status(401).json({ error: 'Invalid PIN' });
+});
 
-  res.json({ ok: true, room: username, hostName: name });
+// GET /api/auth/check — check if PIN is required
+app.get('/api/auth/check', (req, res) => {
+  const needsPin = Object.keys(HOST_PINS).length > 0 || !!ACCESS_PIN;
+  res.json({ needsPin });
 });
 
 // GET /api/sessions — list active sessions (public, no secrets)
@@ -711,13 +722,20 @@ io.on('connection', (socket) => {
     // Find or validate session
     let sess = sessions.get(targetRoom);
     if (!sess) {
-      // Single-host backward compat: create session on the fly
+      // Validate PIN before creating new session
+      const validPin = !ACCESS_PIN && Object.keys(HOST_PINS).length === 0 // no auth needed
+        || (ACCESS_PIN && pin === ACCESS_PIN) // access PIN matches
+        || HOST_PINS[pin]; // host PIN matches
+      if (!validPin) {
+        io.to(socket.id).emit('tiktok-error', { message: 'Invalid PIN — cannot create session' });
+        return;
+      }
       const effectiveUsername = targetUsername || USERNAME;
-      sess = new StreamSession(effectiveUsername, '', 'Host');
+      sess = new StreamSession(effectiveUsername, pin, targetUsername || 'Host');
       sessions.set(effectiveUsername, sess);
-      // Also put in default slot
-      sessions.set('__default__', sess);
+      if (!targetRoom) sessions.set('__default__', sess);
       socket.join(effectiveUsername);
+      console.log(`🏠 New session: @${effectiveUsername} (access mode)`);
     }
 
     stopDemo(sess);
