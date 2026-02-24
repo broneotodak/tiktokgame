@@ -1546,7 +1546,7 @@ function spawnHazard() {
 
   if (isAnimal) {
     const animal = animalTemplates[Math.floor(Math.random() * animalTemplates.length)];
-    mesh = animal.scene.clone();
+    mesh = SkeletonUtils.clone(animal.scene);
     mesh.scale.setScalar(animal.scale);
     emoji = animal.emoji;
     label = animal.name;
