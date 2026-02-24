@@ -230,6 +230,8 @@ const CHUNKS_AHEAD = 4;         // How many chunks to keep ahead
 const CHUNKS_BEHIND = 1;        // How many chunks to keep behind
 
 const CHAR_CLASSES = ['Barbarian', 'Knight', 'Mage', 'Ranger', 'Rogue', 'Rogue_Hooded'];
+const SPECIAL_CLASSES = ['Skeleton_Mage', 'Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Warrior'];
+const ALL_CLASSES = [...CHAR_CLASSES, ...SPECIAL_CLASSES];
 const CHAR_COLORS = [
   0x25f4ee, 0xfe2c55, 0xffd700, 0x00ff88, 0xff6b35,
   0xa855f7, 0x06b6d4, 0xf43f5e, 0x84cc16, 0xf59e0b,
@@ -476,10 +478,23 @@ for (let i = 0; i < 12; i++) {
 const loader = new GLTFLoader();
 const characterTemplates = {};
 const animationClips = {};
+const ualClips = {};
+const UAL_BONE_MAP = {
+  'spine_01': 'spine', 'spine_02': 'spine', 'spine_03': 'chest',
+  'Head': 'head', 'neck_01': 'chest',
+  'upperarm_l': 'upperarm.l', 'upperarm_r': 'upperarm.r',
+  'lowerarm_l': 'lowerarm.l', 'lowerarm_r': 'lowerarm.r',
+  'hand_l': 'hand.l', 'hand_r': 'hand.r',
+  'thigh_l': 'upperleg.l', 'thigh_r': 'upperleg.r',
+  'calf_l': 'lowerleg.l', 'calf_r': 'lowerleg.r',
+  'foot_l': 'foot.l', 'foot_r': 'foot.r',
+  'ball_l': 'toes.l', 'ball_r': 'toes.r',
+  // NOTE: 'pelvis' → 'hips' is SKIPPED to prevent 90° root rotation
+};
 let assetsLoaded = false;
 
 async function loadAssets() {
-  const totalAssets = CHAR_CLASSES.length + 3; // +2 KayKit rigs +1 UAL
+  const totalAssets = ALL_CLASSES.length + 3; // +2 KayKit rigs +1 UAL
   let loaded = 0;
   function updateProgress(text) {
     loaded++;
@@ -487,6 +502,7 @@ async function loadAssets() {
     document.getElementById('loadingText').textContent = text;
   }
 
+  // KayKit clips — load as-is (GLTFLoader handles dot-named bones internally)
   try {
     const g = await loader.loadAsync('/characters/Rig_Medium_General.glb');
     g.animations.forEach(clip => { animationClips[clip.name] = clip; });
@@ -499,60 +515,46 @@ async function loadAssets() {
     updateProgress(`Movement anims (${m.animations.length})`);
   } catch (e) { loaded++; }
 
-  // Load UAL (Universal Animation Library) and retarget to KayKit bones
-  const UAL_BONE_MAP = {
-    'pelvis': 'hips', 'spine_01': 'spine', 'spine_02': 'spine', 'spine_03': 'chest',
-    'Head': 'head', 'neck_01': 'chest',
-    'upperarm_l': 'upperarm.l', 'upperarm_r': 'upperarm.r',
-    'lowerarm_l': 'lowerarm.l', 'lowerarm_r': 'lowerarm.r',
-    'hand_l': 'hand.l', 'hand_r': 'hand.r',
-    'thigh_l': 'upperleg.l', 'thigh_r': 'upperleg.r',
-    'calf_l': 'lowerleg.l', 'calf_r': 'lowerleg.r',
-    'foot_l': 'foot.l', 'foot_r': 'foot.r',
-    'ball_l': 'toes.l', 'ball_r': 'toes.r',
-  };
+  // UAL bone map and ualClips are at module scope (above loadAssets)
 
-  function retargetClip(clip) {
-    const newTracks = [];
+  function parseUALClip(clip) {
+    const tracks = [];
     for (const track of clip.tracks) {
-      // Track name format: "boneName.property" (e.g. "pelvis.quaternion")
-      const dotIdx = track.name.indexOf('.');
-      const boneName = track.name.substring(0, dotIdx);
-      const prop = track.name.substring(dotIdx);
-      const mappedBone = UAL_BONE_MAP[boneName];
-      if (mappedBone) {
-        const newTrack = track.clone();
-        newTrack.name = mappedBone + prop;
-        newTracks.push(newTrack);
+      if (!track.name.endsWith('.quaternion')) continue; // Only rotations
+      const boneName = track.name.substring(0, track.name.indexOf('.'));
+      const kaykitBone = UAL_BONE_MAP[boneName];
+      if (kaykitBone) {
+        tracks.push({
+          kaykitBone,
+          interpolant: track.createInterpolant(),
+        });
       }
-      // Skip bones with no mapping (fingers, clavicles, etc.)
     }
-    return new THREE.AnimationClip(clip.name, clip.duration, newTracks);
+    return { name: clip.name, duration: clip.duration, tracks };
   }
 
   try {
     const ual = await loader.loadAsync('/characters/UAL1_Standard.glb');
-    let retargeted = 0;
     ual.animations.forEach(clip => {
-      const rc = retargetClip(clip);
-      if (rc.tracks.length > 0) {
-        animationClips['UAL_' + clip.name] = rc;
-        retargeted++;
+      const parsed = parseUALClip(clip);
+      if (parsed.tracks.length > 0) {
+        ualClips['UAL_' + clip.name] = parsed;
       }
     });
-    updateProgress(`UAL anims (${retargeted} retargeted)`);
-    console.log('UAL retargeted:', retargeted, 'animations →', Object.keys(animationClips).filter(k => k.startsWith('UAL_')));
+    updateProgress(`UAL anims (${Object.keys(ualClips).length} parsed)`);
+    console.log('UAL parsed:', Object.keys(ualClips).length, 'clips →', Object.keys(ualClips).slice(0, 8));
   } catch (e) { console.warn('UAL load failed:', e); loaded++; }
 
-  console.log('All animations:', Object.keys(animationClips));
+  console.log('KayKit animations:', Object.keys(animationClips));
+  console.log('UAL animations:', Object.keys(ualClips));
 
-  for (const cls of CHAR_CLASSES) {
+  for (const cls of ALL_CLASSES) {
     try {
       const gltf = await loader.loadAsync(`/characters/${cls}.glb`);
       gltf.scene.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
       characterTemplates[cls] = gltf.scene;
       updateProgress(`Loaded ${cls}`);
-    } catch (e) { loaded++; }
+    } catch (e) { console.warn(`Failed to load ${cls}:`, e.message); loaded++; }
   }
 
   assetsLoaded = true;
@@ -569,7 +571,7 @@ function hashCode(str) {
   return Math.abs(hash);
 }
 
-function createPlayer(viewer) {
+function createPlayer(viewer, forceClass) {
   if (players.has(viewer.uniqueId)) return players.get(viewer.uniqueId);
   if (players.size >= MAX_PLAYERS) {
     let minP = Infinity, minK = null;
@@ -578,7 +580,7 @@ function createPlayer(viewer) {
   }
 
   const hash = hashCode(viewer.uniqueId);
-  const className = CHAR_CLASSES[hash % CHAR_CLASSES.length];
+  const className = forceClass || CHAR_CLASSES[hash % CHAR_CLASSES.length];
   const color = CHAR_COLORS[hash % CHAR_COLORS.length];
   const laneIdx = players.size % 5;
   const laneZ = (laneIdx - 2) * (LANE_WIDTH / 6);
@@ -590,6 +592,7 @@ function createPlayer(viewer) {
   let upperArmL = null, upperArmR = null;
   let lowerArmL = null, lowerArmR = null;
   let spineBone = null;
+  let boneMap = {};
 
   if (characterTemplates[className]) {
     model = SkeletonUtils.clone(characterTemplates[className]);
@@ -608,6 +611,12 @@ function createPlayer(viewer) {
         if (child.name === 'lowerarm.r') lowerArmR = child;
         if (child.name === 'spine') spineBone = child;
       }
+    });
+
+    // Build bone map for UAL manual playback (name → bone reference)
+    const boneMap = {};
+    model.traverse(child => {
+      if (child.isBone) boneMap[child.name] = child;
     });
 
     mixer = new THREE.AnimationMixer(model);
@@ -686,7 +695,7 @@ function createPlayer(viewer) {
   const player = {
     uniqueId: viewer.uniqueId,
     nickname: viewer.nickname || viewer.uniqueId,
-    model, mixer, animations, headBone,
+    model, mixer, animations, headBone, boneMap: boneMap || {},
     upperArmL, upperArmR, lowerArmL, lowerArmR, spineBone,
     currentAnim: animations.spawn ? 'spawn' : 'idle',
     progress: startX, targetProgress: startX, laneZ,
@@ -708,6 +717,118 @@ function removePlayer(uniqueId) {
   if (p.mixer) p.mixer.stopAllAction();
   players.delete(uniqueId);
   updatePlayerCount();
+}
+
+// Upgrade a player's character model to a random special class (gift reward)
+function upgradeCharacter(player) {
+  if (!player || SPECIAL_CLASSES.includes(player.className)) return; // Already special
+  const newClass = SPECIAL_CLASSES[Math.floor(Math.random() * SPECIAL_CLASSES.length)];
+  if (!characterTemplates[newClass]) return;
+
+  // Save position state
+  const pos = player.model.position.clone();
+  const rotY = player.model.rotation.y;
+
+  // Remove old model
+  scene.remove(player.model);
+  if (player.mixer) player.mixer.stopAllAction();
+
+  // Build new model
+  const model = SkeletonUtils.clone(characterTemplates[newClass]);
+  model.scale.setScalar(CHAR_SCALE);
+
+  let headBone = null, upperArmL = null, upperArmR = null;
+  let lowerArmL = null, lowerArmR = null, spineBone = null;
+  const boneMap = {};
+
+  model.traverse(child => {
+    if (child.isMesh && child.material) {
+      child.material = child.material.clone();
+      child.material.color.lerp(new THREE.Color(player.color), 0.15);
+    }
+    if (child.isBone) {
+      boneMap[child.name] = child;
+      if (child.name === 'head') headBone = child;
+      if (child.name === 'upperarm.l') upperArmL = child;
+      if (child.name === 'upperarm.r') upperArmR = child;
+      if (child.name === 'lowerarm.l') lowerArmL = child;
+      if (child.name === 'lowerarm.r') lowerArmR = child;
+      if (child.name === 'spine') spineBone = child;
+    }
+  });
+
+  // Setup animations
+  const mixer = new THREE.AnimationMixer(model);
+  const animations = {};
+  const animMap = {
+    idle: 'Idle_A', run: 'Running_A', jump: 'Jump_Full_Short',
+    hit: 'Hit_A', spawn: 'Spawn_Ground',
+  };
+  for (const [key, clipName] of Object.entries(animMap)) {
+    if (animationClips[clipName]) {
+      animations[key] = mixer.clipAction(animationClips[clipName]);
+      if (key === 'idle' || key === 'run') {
+        animations[key].setLoop(THREE.LoopRepeat);
+      } else {
+        animations[key].setLoop(THREE.LoopOnce);
+        animations[key].clampWhenFinished = true;
+      }
+    }
+  }
+
+  // Re-add name sprite
+  const nc = document.createElement('canvas');
+  nc.width = 512; nc.height = 128;
+  const ctx = nc.getContext('2d');
+  const displayName = player.nickname.slice(0, 14);
+  ctx.font = 'bold 42px Segoe UI, sans-serif';
+  const textW = Math.min(ctx.measureText(displayName).width + 40, 500);
+  const pillX = (512 - textW) / 2;
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.roundRect(pillX, 20, textW, 80, 40);
+  ctx.fill();
+  ctx.strokeStyle = '#' + player.color.toString(16).padStart(6, '0');
+  ctx.lineWidth = 3;
+  ctx.roundRect(pillX, 20, textW, 80, 40);
+  ctx.stroke();
+  ctx.font = 'bold 42px Segoe UI, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(displayName, 256, 72);
+  const nameSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(nc), transparent: true, depthTest: false
+  }));
+  nameSprite.scale.set(2.5, 0.6, 1);
+  nameSprite.position.y = 2.4;
+  nameSprite.renderOrder = 999;
+  model.add(nameSprite);
+
+  // Restore position
+  model.position.copy(pos);
+  model.rotation.y = rotY;
+  scene.add(model);
+
+  // Update player refs
+  player.model = model;
+  player.mixer = mixer;
+  player.animations = animations;
+  player.headBone = headBone;
+  player.boneMap = boneMap;
+  player.upperArmL = upperArmL;
+  player.upperArmR = upperArmR;
+  player.lowerArmL = lowerArmL;
+  player.lowerArmR = lowerArmR;
+  player.spineBone = spineBone;
+  player.className = newClass;
+  player.ualPlayback = null;
+
+  // Start idle
+  if (animations.idle) {
+    animations.idle.reset().play();
+    player.currentAnim = 'idle';
+  }
+
+  console.log(`⚔️ ${player.nickname} upgraded to ${newClass}!`);
 }
 
 function getLeaderProgress() {
@@ -838,22 +959,15 @@ function powerDropNearby(gifterUniqueId, radius) {
       p.isOnGround = false;
       p.velocityY = 6 + Math.random() * 4;
 
-      // Play hit animation
-      playAnimation(p, 'hit');
-
-      // After hit animation, go back to idle/run
-      if (p.mixer) {
-        const onHitDone = (e) => {
-          if (e.action === p.animations.hit) {
-            p.mixer.removeEventListener('finished', onHitDone);
-            if (Math.abs(p.progress - p.targetProgress) > 0.1) {
-              playAnimation(p, 'run');
-            } else {
-              playAnimation(p, 'idle');
-            }
-          }
-        };
-        p.mixer.addEventListener('finished', onHitDone);
+      // Play UAL hit animation on the victim!
+      const hitAnim = Math.random() > 0.5 ? 'UAL_Hit_Chest' : 'UAL_Hit_Head';
+      playUAL(p, hitAnim);
+      // Return to normal after hit finishes
+      const hitClip = ualClips[hitAnim];
+      if (hitClip) {
+        setTimeout(() => {
+          if (p.ualPlayback) stopUAL(p);
+        }, hitClip.duration * 1000 + 200);
       }
 
       dropped.push(p.nickname);
@@ -863,18 +977,52 @@ function powerDropNearby(gifterUniqueId, radius) {
   return dropped;
 }
 
+// Play a UAL animation on a single player (manual bone playback)
+function playUAL(player, clipName) {
+  const clip = ualClips[clipName];
+  if (!clip || !player.mixer) return;
+  // Stop KayKit mixer
+  player.mixer.stopAllAction();
+  player.ualPlayback = { clip, time: 0, loop: clipName.includes('Loop') };
+  player.currentAnim = '_ual';
+}
+
+// Stop UAL playback and return to idle/run
+function stopUAL(player) {
+  player.ualPlayback = null;
+  if (player.animations.idle) {
+    player.animations.idle.reset().fadeIn(0.3).play();
+    player.currentAnim = 'idle';
+  }
+}
+
 // Random power from gift
 function triggerGiftPower(uniqueId, nickname, diamonds) {
-  // For now: all gifts trigger "Drop Nearby" — more powers coming
-  const radius = Math.min(5 + diamonds * 2, 20);  // Drop radius scales with gift value
+  const gifter = players.get(uniqueId);
+  const radius = Math.min(5 + diamonds * 2, 20);
+
+  // Gifter gets upgraded to special character + plays PUNCH animation!
+  if (gifter) {
+    upgradeCharacter(gifter);
+    const punchAnim = Math.random() > 0.5 ? 'UAL_Punch_Cross' : 'UAL_Punch_Jab';
+    playUAL(gifter, punchAnim);
+    // Return to normal after punch finishes
+    const clip = ualClips[punchAnim];
+    if (clip) {
+      setTimeout(() => {
+        if (gifter.ualPlayback) stopUAL(gifter);
+      }, clip.duration * 1000 + 200);
+    }
+  }
+
   const dropped = powerDropNearby(uniqueId, radius);
 
-  showPowerFlash('💥', 'EARTHQUAKE DROP!', nickname);
+  showPowerFlash('👊', 'POWER PUNCH!', nickname);
 
   if (dropped.length > 0) {
-    showNotif(`<strong>${nickname}</strong> dropped ${dropped.length} player${dropped.length > 1 ? 's' : ''}!`, 'gift');
+    showNotif(`<strong>${nickname}</strong> punched ${dropped.length} player${dropped.length > 1 ? 's' : ''} downhill!`, 'gift');
   } else {
-    showNotif(`<strong>${nickname}</strong> used Drop — but nobody was nearby!`, 'gift');
+    showNotif(`<strong>${nickname}</strong> punched the air — nobody nearby!`, 'gift');
   }
 
   // Also give the gifter a speed boost + forward movement
@@ -943,10 +1091,36 @@ function updatePlayers(dt) {
       });
     }
 
-    if (player.mixer) player.mixer.update(dt);
+    // UAL manual playback — directly set bone quaternions (bypasses PropertyBinding)
+    if (player.ualPlayback) {
+      player.ualPlayback.time += dt;
+      if (player.ualPlayback.time >= player.ualPlayback.clip.duration) {
+        if (player.ualPlayback.loop) {
+          player.ualPlayback.time %= player.ualPlayback.clip.duration;
+        } else {
+          // Animation finished — go back to idle
+          player.ualPlayback = null;
+          if (player.animations.idle) {
+            player.animations.idle.reset().fadeIn(0.3).play();
+            player.currentAnim = 'idle';
+          }
+        }
+      }
+      if (player.ualPlayback) {
+        for (const t of player.ualPlayback.clip.tracks) {
+          const bone = player.boneMap[t.kaykitBone];
+          if (bone) {
+            const result = t.interpolant.evaluate(player.ualPlayback.time);
+            bone.quaternion.set(result[0], result[1], result[2], result[3]);
+          }
+        }
+      }
+    } else if (player.mixer) {
+      player.mixer.update(dt);
+    }
 
-    // Head random look — glance left/right (skip during jump/hit to avoid spin)
-    if (player.headBone && !player.isJumping && player.currentAnim !== 'hit' && player.currentAnim !== '_random') {
+    // Head random look — glance left/right (skip during jump/hit/UAL to avoid conflicts)
+    if (player.headBone && !player.isJumping && !player.ualPlayback && player.currentAnim !== 'hit' && player.currentAnim !== '_random') {
       // Initialize look state once
       if (player.headLookTarget === undefined) {
         player.headLookTarget = (Math.random() - 0.5) * 0.7;
@@ -967,7 +1141,7 @@ function updatePlayers(dt) {
     // CLIMBING POSE — read animation value, add offset, set (no accumulation)
     const climbFactor = Math.max(0, Math.min(1, (Math.abs(player._currentSlope || 0) - 0.2) / 0.6));
 
-    if (climbFactor > 0.01 && (player.currentAnim === 'run' || player.currentAnim === 'idle')) {
+    if (climbFactor > 0.01 && !player.ualPlayback && (player.currentAnim === 'run' || player.currentAnim === 'idle')) {
       if (player.upperArmL) player.upperArmL.rotation.z = player.upperArmL.rotation.z + (-1.3 * climbFactor);
       if (player.upperArmR) player.upperArmR.rotation.z = player.upperArmR.rotation.z + (1.3 * climbFactor);
       if (player.lowerArmL) player.lowerArmL.rotation.z = player.lowerArmL.rotation.z + (-0.5 * climbFactor);
@@ -982,11 +1156,9 @@ function updatePlayers(dt) {
         player.nextRandomAnim = Date.now() + 3000 + Math.random() * 5000;
       }
       if (Date.now() > player.nextRandomAnim) {
-        // Filter to only animations that actually loaded
+        // KayKit random anims only (UAL uses separate playback system)
         const randomPool = [
           'Interact', 'Throw', 'Use_Item', 'PickUp', 'Idle_B', 'Walking_B',
-          'UAL_Dance_Loop', 'UAL_Punch_Jab', 'UAL_Punch_Cross', 'UAL_Roll',
-          'UAL_Idle_Talking_Loop', 'UAL_Spell_Simple_Shoot',
         ].filter(name => animationClips[name]);
         if (randomPool.length === 0) { player.nextRandomAnim = Date.now() + 10000; }
         const pick = randomPool[Math.floor(Math.random() * randomPool.length)];
@@ -1297,11 +1469,50 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (e.key === 'd' || e.key === 'D') {
-    CHAR_CLASSES.forEach((cls, i) => {
-      createPlayer({ uniqueId: `demo_${cls.toLowerCase()}`, nickname: cls });
+    ALL_CLASSES.forEach((cls, i) => {
+      createPlayer({ uniqueId: `demo_${cls.toLowerCase()}`, nickname: cls }, cls);
       movePlayer(`demo_${cls.toLowerCase()}`, 2 + i * 3);
     });
-    showNotif('All 6 classes spawned!');
+    showNotif(`All ${ALL_CLASSES.length} classes spawned!`);
+  }
+
+  // ===== FIGHTING ANIMATION TEST KEYS =====
+  // 1-9 = trigger UAL animations on ALL players (manual bone playback)
+  const UAL_TEST_MAP = {
+    '1': 'UAL_Punch_Jab',
+    '2': 'UAL_Punch_Cross',
+    '3': 'UAL_Sword_Attack',
+    '4': 'UAL_Roll',
+    '5': 'UAL_Spell_Simple_Shoot',
+    '6': 'UAL_Dance_Loop',
+    '7': 'UAL_Hit_Chest',
+    '8': 'UAL_Hit_Head',
+    '9': 'UAL_Sprint_Loop',
+    '0': 'UAL_Death01',
+  };
+
+  if (UAL_TEST_MAP[e.key]) {
+    const clipName = UAL_TEST_MAP[e.key];
+    const clip = ualClips[clipName];
+    if (!clip) {
+      showNotif(`Animation "${clipName}" not found!`);
+      console.log('Available UAL:', Object.keys(ualClips));
+      return;
+    }
+    players.forEach(p => {
+      if (!p.mixer) return;
+      // Stop KayKit mixer animations
+      p.mixer.stopAllAction();
+      // Start manual UAL playback
+      p.ualPlayback = {
+        clip,
+        time: 0,
+        loop: clipName.includes('Loop'),
+      };
+      p.currentAnim = '_ual_test';
+    });
+    showNotif(`Playing: <strong>${clipName}</strong>`);
+    console.log(`🎬 UAL: ${clipName} (${clip.tracks.length} bone tracks, ${clip.duration.toFixed(1)}s)`);
   }
 });
 
