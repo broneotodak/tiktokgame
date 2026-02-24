@@ -184,6 +184,7 @@
   <!-- Top Bar -->
   <div id="topBar">
     <div class="top-pill" id="connStatus"><div class="live-dot"></div> Connecting</div>
+    <div class="top-pill" id="biomeIndicator">🌿 Grasslands</div>
     <div class="top-pill"><span class="label">Players</span> <span id="playerCount">0</span></div>
   </div>
 
@@ -256,8 +257,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.3;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x6CB4EE);
-scene.fog = new THREE.FogExp2(0x9DCEFF, 0.006);
+scene.background = new THREE.Color(0x87CEEB);   // Grasslands sky
+scene.fog = new THREE.FogExp2(0xCCE5FF, 0.003); // Grasslands fog
 
 const camera = new THREE.PerspectiveCamera(60, sz.width / sz.height, 0.5, 400);
 
@@ -303,6 +304,61 @@ function getHillSlope(x) {
   const dx = 0.3;
   return Math.atan2(getHillY(x + dx) - getHillY(x - dx), dx * 2);
 }
+
+// ===== MOUNTAIN FACTS (altitude → famous landmark) =====
+const MOUNTAIN_FACTS = [
+  { alt: 50, name: 'Bukit Nanas KL', fact: 'Oldest forest reserve in Malaysia', emoji: '🌴' },
+  { alt: 100, name: 'Statue of Liberty', fact: '93m tall including pedestal', emoji: '🗽' },
+  { alt: 200, name: 'Petronas Towers', fact: 'Tallest twin towers (452m)', emoji: '🏙️' },
+  { alt: 300, name: 'Eiffel Tower', fact: '330m — Paris, France', emoji: '🗼' },
+  { alt: 500, name: 'Burj Khalifa', fact: 'Tallest building (828m)', emoji: '🏗️' },
+  { alt: 700, name: 'Bukit Tabur', fact: 'Famous quartz ridge in KL', emoji: '⛰️' },
+  { alt: 1000, name: 'Gunung Datuk', fact: 'Popular sunrise hike, Negeri Sembilan', emoji: '🌄' },
+  { alt: 1200, name: 'Gunung Irau', fact: 'Mossy cloud forest, Cameron Highlands', emoji: '🌫️' },
+  { alt: 1500, name: 'Gunung Tahan', fact: 'Highest peak in Peninsular Malaysia (2,187m)', emoji: '🏔️' },
+  { alt: 2000, name: 'Gunung Kinabalu', fact: 'Tallest in Malaysia & Southeast Asia (4,095m)', emoji: '🗻' },
+  { alt: 2500, name: 'Mont Blanc', fact: 'Highest in the Alps (4,808m)', emoji: '🏔️' },
+  { alt: 3000, name: 'Mount Fuji', fact: 'Iconic volcano in Japan (3,776m)', emoji: '🗻' },
+  { alt: 3500, name: 'Mount Kilimanjaro', fact: 'Tallest freestanding mountain (5,895m)', emoji: '🌋' },
+  { alt: 4000, name: 'Everest Base Camp', fact: 'Where climbers prepare (5,364m)', emoji: '⛺' },
+  { alt: 5000, name: 'Mount Everest', fact: 'Highest point on Earth (8,849m)', emoji: '🏔️' },
+  { alt: 6000, name: 'Stratosphere', fact: 'Higher than weather! (10km+)', emoji: '✈️' },
+  { alt: 8000, name: 'Edge of Space', fact: 'Felix Baumgartner jumped from here', emoji: '🚀' },
+  { alt: 10000, name: 'Space!', fact: 'Karman line — you made it to space!', emoji: '🛸' },
+];
+
+function getMountainFact(alt) {
+  let best = MOUNTAIN_FACTS[0];
+  for (const m of MOUNTAIN_FACTS) {
+    if (alt >= m.alt) best = m;
+    else break;
+  }
+  return best;
+}
+
+// ===== BIOME SYSTEM (changes with altitude) =====
+const BIOMES = [
+  { minAlt: 0,    name: 'Grasslands',   grass: 0x4CAF50, dirt: 0x8B6914, sky: 0x87CEEB, fog: 0xCCE5FF, fogDensity: 0.003 },
+  { minAlt: 200,  name: 'Forest',       grass: 0x2E7D32, dirt: 0x6B4E0A, sky: 0x6BA3D6, fog: 0xB8D4E8, fogDensity: 0.004 },
+  { minAlt: 500,  name: 'Highland',     grass: 0x558B2F, dirt: 0x795548, sky: 0x5E92C0, fog: 0xA0C0D8, fogDensity: 0.005 },
+  { minAlt: 1000, name: 'Cloud Forest', grass: 0x33691E, dirt: 0x5D4037, sky: 0x90A4AE, fog: 0xB0BEC5, fogDensity: 0.008 },
+  { minAlt: 1500, name: 'Alpine',       grass: 0x8D6E63, dirt: 0x4E342E, sky: 0x78909C, fog: 0x90A4AE, fogDensity: 0.006 },
+  { minAlt: 2500, name: 'Rocky Peak',   grass: 0x757575, dirt: 0x424242, sky: 0x546E7A, fog: 0x78909C, fogDensity: 0.005 },
+  { minAlt: 3500, name: 'Snow Zone',    grass: 0xE0E0E0, dirt: 0xBDBDBD, sky: 0x37474F, fog: 0x607D8B, fogDensity: 0.007 },
+  { minAlt: 5000, name: 'Icy Summit',   grass: 0xF5F5F5, dirt: 0xE8EAF6, sky: 0x263238, fog: 0x455A64, fogDensity: 0.004 },
+];
+
+function getBiome(alt) {
+  let biome = BIOMES[0];
+  for (const b of BIOMES) {
+    if (alt >= b.minAlt) biome = b;
+    else break;
+  }
+  return biome;
+}
+
+let currentBiome = BIOMES[0];
+let lastBiomeCheck = 0;
 
 // ===== TERRAIN CHUNK SYSTEM =====
 const terrainChunks = new Map(); // chunkIdx → { meshes: [], decos: [] }
@@ -441,22 +497,38 @@ function buildChunk(chunkIdx) {
     scene.add(flower); objects.push(flower);
   }
 
-  // Altitude markers every chunk
+  // Altitude markers with mountain facts
   const alt = Math.round(getHillY(startX + CHUNK_LENGTH / 2));
   if (chunkIdx > 0 && chunkIdx % 2 === 0) {
+    const fact = getMountainFact(alt);
     const mc = document.createElement('canvas');
-    mc.width = 256; mc.height = 128;
+    mc.width = 512; mc.height = 180;
     const mctx = mc.getContext('2d');
-    mctx.font = 'bold 60px Segoe UI';
+    // Background pill
+    mctx.fillStyle = 'rgba(0,0,0,0.6)';
+    mctx.roundRect(10, 10, 492, 160, 20);
+    mctx.fill();
+    // Altitude
+    mctx.font = 'bold 48px Segoe UI';
     mctx.textAlign = 'center';
-    mctx.fillStyle = 'rgba(255,255,255,0.7)';
-    mctx.fillText(`${alt}m`, 128, 80);
+    mctx.fillStyle = '#ffffff';
+    mctx.fillText(`${fact.emoji} ${alt}m`, 256, 60);
+    // Mountain name
+    mctx.font = 'bold 30px Segoe UI';
+    mctx.fillStyle = '#ffd700';
+    mctx.fillText(fact.name, 256, 100);
+    // Fun fact
+    mctx.font = '22px Segoe UI';
+    mctx.fillStyle = '#cccccc';
+    const factText = fact.fact.length > 40 ? fact.fact.slice(0, 38) + '...' : fact.fact;
+    mctx.fillText(factText, 256, 135);
     const mSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: new THREE.CanvasTexture(mc), transparent: true
+      map: new THREE.CanvasTexture(mc), transparent: true, depthTest: false
     }));
     const mx = startX + CHUNK_LENGTH / 2;
-    mSprite.position.set(mx, getHillY(mx) + 4, 0);
-    mSprite.scale.set(3, 1.5, 1);
+    mSprite.position.set(mx, getHillY(mx) + 5, 0);
+    mSprite.scale.set(5, 1.8, 1);
+    mSprite.renderOrder = 998;
     scene.add(mSprite); objects.push(mSprite);
   }
 
@@ -1639,12 +1711,57 @@ function updateHazards(dt) {
   }
 }
 
+// ===== BIOME TRANSITION =====
+const targetBiomeColors = {
+  grass: new THREE.Color(BIOMES[0].grass),
+  dirt: new THREE.Color(BIOMES[0].dirt),
+  sky: new THREE.Color(BIOMES[0].sky),
+  fog: new THREE.Color(BIOMES[0].fog),
+};
+let targetFogDensity = BIOMES[0].fogDensity;
+
+const BIOME_EMOJIS = {
+  'Grasslands': '🌿', 'Forest': '🌲', 'Highland': '⛰️', 'Cloud Forest': '🌫️',
+  'Alpine': '🏔️', 'Rocky Peak': '🪨', 'Snow Zone': '❄️', 'Icy Summit': '🧊',
+};
+
+function updateBiome(dt) {
+  const leaderX = getLeaderProgress();
+  if (leaderX <= 0) return;
+
+  const alt = getHillY(leaderX);
+  const biome = getBiome(alt);
+
+  // Detect biome change — show notification
+  if (biome !== currentBiome) {
+    currentBiome = biome;
+    targetBiomeColors.grass.set(biome.grass);
+    targetBiomeColors.dirt.set(biome.dirt);
+    targetBiomeColors.sky.set(biome.sky);
+    targetBiomeColors.fog.set(biome.fog);
+    targetFogDensity = biome.fogDensity;
+    showNotif(`${BIOME_EMOJIS[biome.name] || '🌍'} Entering <strong>${biome.name}</strong>! (${Math.round(alt)}m)`);
+    // Update HUD biome indicator
+    const bi = document.getElementById('biomeIndicator');
+    if (bi) bi.textContent = `${BIOME_EMOJIS[biome.name] || '🌍'} ${biome.name}`;
+  }
+
+  // Smooth lerp every frame for gradual transition
+  const speed = dt * 0.8;
+  grassMat.color.lerp(targetBiomeColors.grass, speed);
+  dirtMat.color.lerp(targetBiomeColors.dirt, speed);
+  scene.background.lerp(targetBiomeColors.sky, speed);
+  scene.fog.color.lerp(targetBiomeColors.fog, speed);
+  scene.fog.density += (targetFogDensity - scene.fog.density) * speed;
+}
+
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
 
   updatePlayers(dt);
   updateHazards(dt);
+  updateBiome(dt);
   updateCamera(dt);
 
   lbTimer += dt;
