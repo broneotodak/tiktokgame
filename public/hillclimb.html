@@ -310,6 +310,15 @@ const grassMat = new THREE.MeshStandardMaterial({ color: 0x4CAF50, roughness: 0.
 const dirtMat = new THREE.MeshStandardMaterial({ color: 0x8B6914, roughness: 0.95 });
 // Nature 3D asset templates (loaded in loadAssets)
 const natureTemplates = { trees: [], pines: [], bushes: [], rocks: [] };
+// Animal templates for rolling hazards
+const animalTemplates = []; // { scene, name, emoji, scale }
+const ANIMAL_DEFS = [
+  { file: 'Cow', name: 'Cow', emoji: '🐄', scale: 0.8 },
+  { file: 'cat', name: 'Cat', emoji: '🐱', scale: 2.5 },
+  { file: 'dog', name: 'Dog', emoji: '🐕', scale: 2.0 },
+  { file: 'chichen', name: 'Chicken', emoji: '🐔', scale: 1.2 },
+  { file: 'girafe', name: 'Giraffe', emoji: '🦒', scale: 1.0 },
+];
 // Fallback primitives (used if nature assets fail to load)
 const rockGeo = new THREE.DodecahedronGeometry(0.4, 0);
 const rockMat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.9 });
@@ -600,6 +609,16 @@ async function loadAssets() {
     }
   }
   console.log('Nature:', Object.entries(natureTemplates).map(([k,v]) => `${k}:${v.length}`).join(', '));
+
+  // Load animal assets for rolling hazards
+  for (const def of ANIMAL_DEFS) {
+    try {
+      const gltf = await loader.loadAsync(`/animals/${def.file}.glb`);
+      gltf.scene.traverse(c => { if (c.isMesh) { c.castShadow = true; } });
+      animalTemplates.push({ scene: gltf.scene, name: def.name, emoji: def.emoji, scale: def.scale });
+    } catch (e) { console.warn(`Animal ${def.file}:`, e.message); }
+  }
+  console.log('Animals:', animalTemplates.length);
 
   assetsLoaded = true;
   console.log(`Ready: ${Object.keys(characterTemplates).length} chars, ${Object.keys(animationClips).length} anims`);
@@ -984,39 +1003,43 @@ function showPowerFlash(icon, name, byName) {
 // DROP NEARBY: knocks back players near the gifter
 function powerDropNearby(gifterUniqueId, radius) {
   const gifter = players.get(gifterUniqueId);
-  if (!gifter) return;
+  if (!gifter) return [];
+  const gifterName = gifter.nickname;
 
   const gx = gifter.progress;
   const dropped = [];
 
   players.forEach((p) => {
-    if (p.uniqueId === gifterUniqueId) return;  // Don't drop yourself
+    if (p.uniqueId === gifterUniqueId) return;
     const dist = Math.abs(p.progress - gx);
     if (dist < radius) {
-      // Knock them back — further back the closer they are
       const knockback = (radius - dist) * 1.5;
       p.targetProgress = Math.max(0, p.progress - knockback);
       p.score = Math.max(0, p.score - Math.round(knockback));
 
-      // Launch them in the air (hit feel)
       p.isJumping = true;
       p.isOnGround = false;
       p.velocityY = 6 + Math.random() * 4;
 
-      // Play UAL hit animation on the victim!
       const hitAnim = Math.random() > 0.5 ? 'UAL_Hit_Chest' : 'UAL_Hit_Head';
       playUAL(p, hitAnim);
-      // Return to normal after hit finishes
       const hitClip = ualClips[hitAnim];
       if (hitClip) {
-        setTimeout(() => {
-          if (p.ualPlayback) stopUAL(p);
-        }, hitClip.duration * 1000 + 200);
+        setTimeout(() => { if (p.ualPlayback) stopUAL(p); }, hitClip.duration * 1000 + 200);
       }
 
       dropped.push(p.nickname);
     }
   });
+
+  // Show individual hit notifications (max 3 to avoid spam)
+  const shown = dropped.slice(0, 3);
+  shown.forEach(name => {
+    showNotif(`👊 <strong>${name}</strong> got punched by ${gifterName}! -${Math.round(radius)} steps`);
+  });
+  if (dropped.length > 3) {
+    showNotif(`👊 ...and ${dropped.length - 3} more got hit!`);
+  }
 
   return dropped;
 }
@@ -1505,66 +1528,86 @@ socket.on('viewer-list', (list) => {
 // ===== MAIN LOOP =====
 let lbTimer = 0;
 
-// ===== RANDOM EVENTS — BOULDERS =====
-const boulders = [];
-let nextBoulderTime = Date.now() + 15000 + Math.random() * 15000; // First boulder in 15-30s
+// ===== RANDOM EVENTS — BOULDERS & ANIMALS =====
+const hazards = [];
+let nextHazardTime = Date.now() + 15000 + Math.random() * 15000;
 
-function spawnBoulder() {
+function spawnHazard() {
   if (players.size === 0) return;
 
-  // Find the leader to spawn boulder ahead
   const leaderX = getLeaderProgress();
-  const spawnX = leaderX + 15 + Math.random() * 10; // Spawn ahead of leader
+  const spawnX = leaderX + 15 + Math.random() * 10;
   const spawnY = getHillY(spawnX) + 1;
   const laneZ = (Math.random() - 0.5) * LANE_WIDTH * 0.6;
 
-  // Create boulder mesh (use nature rock if available, else primitive)
-  let boulderMesh;
-  if (natureTemplates.rocks.length > 0) {
-    const template = natureTemplates.rocks[Math.floor(Math.random() * natureTemplates.rocks.length)];
-    boulderMesh = template.clone();
-    boulderMesh.scale.setScalar(0.8 + Math.random() * 0.6);
-  } else {
-    boulderMesh = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(0.8, 1),
-      new THREE.MeshStandardMaterial({ color: 0x665544, roughness: 0.9 })
-    );
-  }
-  boulderMesh.position.set(spawnX, spawnY, laneZ);
-  boulderMesh.castShadow = true;
-  scene.add(boulderMesh);
+  // 50% boulder, 50% animal (if animals loaded)
+  const isAnimal = animalTemplates.length > 0 && Math.random() > 0.4;
+  let mesh, emoji, label;
 
-  boulders.push({
-    mesh: boulderMesh,
-    x: spawnX,
-    z: laneZ,
-    speed: 8 + Math.random() * 6, // Rolling speed downhill
-    life: 6, // Seconds before despawn
+  if (isAnimal) {
+    const animal = animalTemplates[Math.floor(Math.random() * animalTemplates.length)];
+    mesh = animal.scene.clone();
+    mesh.scale.setScalar(animal.scale);
+    emoji = animal.emoji;
+    label = animal.name;
+  } else {
+    if (natureTemplates.rocks.length > 0) {
+      const template = natureTemplates.rocks[Math.floor(Math.random() * natureTemplates.rocks.length)];
+      mesh = template.clone();
+      mesh.scale.setScalar(0.8 + Math.random() * 0.6);
+    } else {
+      mesh = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.8, 1),
+        new THREE.MeshStandardMaterial({ color: 0x665544, roughness: 0.9 })
+      );
+    }
+    emoji = '🪨';
+    label = 'Boulder';
+  }
+
+  mesh.position.set(spawnX, spawnY, laneZ);
+  mesh.castShadow = true;
+  scene.add(mesh);
+
+  hazards.push({
+    mesh, x: spawnX, z: laneZ,
+    speed: isAnimal ? (6 + Math.random() * 5) : (8 + Math.random() * 6),
+    life: 7,
+    emoji, label, isAnimal,
+    hitPlayers: new Set(), // Track who was already hit (prevent double-hit)
   });
 
-  showNotif('🪨 <strong>BOULDER!</strong> Watch out!', 'event');
-  showPowerFlash('🪨', 'BOULDER!', '');
+  showNotif(`${emoji} <strong>${label.toUpperCase()}!</strong> Watch out!`, 'event');
+  showPowerFlash(emoji, `${label.toUpperCase()}!`, '');
 }
 
-function updateBoulders(dt) {
-  for (let i = boulders.length - 1; i >= 0; i--) {
-    const b = boulders[i];
-    b.life -= dt;
-    // Roll downhill (decreasing X)
-    b.x -= b.speed * dt;
-    const y = getHillY(b.x);
-    b.mesh.position.set(b.x, y + 0.5, b.z);
-    // Spin the boulder
-    b.mesh.rotation.z -= dt * 5;
-    b.mesh.rotation.x += dt * 2;
+function updateHazards(dt) {
+  for (let i = hazards.length - 1; i >= 0; i--) {
+    const h = hazards[i];
+    h.life -= dt;
+    h.x -= h.speed * dt;
+    const y = getHillY(h.x);
+
+    if (h.isAnimal) {
+      // Animals tumble/roll down the hill
+      h.mesh.position.set(h.x, y + 0.3, h.z);
+      h.mesh.rotation.x += dt * 4;
+      h.mesh.rotation.z -= dt * 3;
+    } else {
+      // Boulder rolls
+      h.mesh.position.set(h.x, y + 0.5, h.z);
+      h.mesh.rotation.z -= dt * 5;
+      h.mesh.rotation.x += dt * 2;
+    }
 
     // Hit players in the path
     players.forEach((p) => {
-      const dx = Math.abs(p.progress - b.x);
-      const dz = Math.abs(p.laneZ - b.z);
+      if (h.hitPlayers.has(p.uniqueId)) return; // Already hit by this hazard
+      const dx = Math.abs(p.progress - h.x);
+      const dz = Math.abs(p.laneZ - h.z);
       if (dx < 1.5 && dz < 2 && !p.isJumping) {
-        // Knock player back
-        const knockback = 3 + Math.random() * 3;
+        h.hitPlayers.add(p.uniqueId);
+        const knockback = h.isAnimal ? (2 + Math.random() * 2) : (3 + Math.random() * 3);
         p.targetProgress = Math.max(0, p.progress - knockback);
         p.score = Math.max(0, p.score - Math.round(knockback));
         p.isJumping = true;
@@ -1577,20 +1620,22 @@ function updateBoulders(dt) {
         if (hitClip) {
           setTimeout(() => { if (p.ualPlayback) stopUAL(p); }, hitClip.duration * 1000 + 200);
         }
+        // Show hit notification
+        showNotif(`${h.emoji} <strong>${p.nickname}</strong> got hit by a ${h.label}! -${Math.round(knockback)} steps`);
       }
     });
 
-    // Remove expired boulders
-    if (b.life <= 0 || b.x < getLeaderProgress() - 30) {
-      scene.remove(b.mesh);
-      boulders.splice(i, 1);
+    // Remove expired hazards
+    if (h.life <= 0 || h.x < getLeaderProgress() - 30) {
+      scene.remove(h.mesh);
+      hazards.splice(i, 1);
     }
   }
 
-  // Spawn next boulder
-  if (Date.now() > nextBoulderTime && players.size > 0) {
-    spawnBoulder();
-    nextBoulderTime = Date.now() + 20000 + Math.random() * 25000; // Every 20-45s
+  // Spawn next hazard
+  if (Date.now() > nextHazardTime && players.size > 0) {
+    spawnHazard();
+    nextHazardTime = Date.now() + 18000 + Math.random() * 22000; // Every 18-40s
   }
 }
 
@@ -1599,7 +1644,7 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
 
   updatePlayers(dt);
-  updateBoulders(dt);
+  updateHazards(dt);
   updateCamera(dt);
 
   lbTimer += dt;
