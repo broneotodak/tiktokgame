@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fichy — TikTok Live Fishing</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0a;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: min(100vh, calc(100vw * 9 / 16));
+      background: #0a0a0a;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    /* ===== HUD ===== */
+    .hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+
+    /* Title */
+    .hud-title {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      font-size: clamp(18px, 3vw, 36px); font-weight: 800;
+      background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      text-shadow: none; letter-spacing: 3px;
+      opacity: 0.9;
+    }
+
+    /* Zone indicator */
+    .hud-zone {
+      position: absolute; top: 12px; left: 12px;
+      background: rgba(0,0,0,0.6); border-radius: 20px; padding: 6px 14px;
+      font-size: 13px; color: #fff; font-weight: 600;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .hud-zone .zone-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* Fish Dex counter */
+    .hud-dex {
+      position: absolute; top: 12px; right: 12px;
+      background: rgba(0,0,0,0.6); border-radius: 20px; padding: 6px 14px;
+      font-size: 13px; color: #fff; font-weight: 600;
+    }
+
+    /* Leaderboard */
+    .hud-leaderboard {
+      position: absolute; top: 50px; right: 12px;
+      background: rgba(0,0,0,0.6); border-radius: 12px; padding: 10px 14px;
+      font-size: 12px; color: #fff; min-width: 180px; max-width: 220px;
+    }
+    .hud-leaderboard h3 {
+      font-size: 11px; color: #0ea5e9; text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 6px;
+    }
+    .lb-row {
+      display: flex; justify-content: space-between; padding: 2px 0;
+      font-size: 11px;
+    }
+    .lb-row .lb-name { color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px; }
+    .lb-row .lb-score { color: #fbbf24; font-weight: 700; }
+
+    /* Player count */
+    .hud-players {
+      position: absolute; bottom: 12px; left: 12px;
+      background: rgba(0,0,0,0.6); border-radius: 20px; padding: 6px 14px;
+      font-size: 12px; color: #888;
+    }
+
+    /* Controls legend */
+    .hud-controls {
+      position: absolute; bottom: 12px; right: 12px;
+      background: rgba(0,0,0,0.6); border-radius: 12px; padding: 8px 12px;
+      font-size: 10px; color: #888; line-height: 1.6;
+    }
+    .hud-controls span { color: #0ea5e9; font-weight: 700; }
+
+    /* Notifications */
+    .notif-container {
+      position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column-reverse; align-items: center; gap: 4px;
+      max-height: 200px; overflow: hidden;
+    }
+    .notif {
+      background: rgba(0,0,0,0.7); border-radius: 20px; padding: 6px 16px;
+      font-size: 12px; color: #fff; white-space: nowrap;
+      animation: notifIn 0.3s ease-out, notifOut 0.5s ease-in 3.5s forwards;
+    }
+    @keyframes notifIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes notifOut { to { opacity: 0; transform: translateY(-10px); } }
+
+    .notif .rarity-common { color: #9ca3af; }
+    .notif .rarity-uncommon { color: #22c55e; }
+    .notif .rarity-rare { color: #3b82f6; }
+    .notif .rarity-epic { color: #a855f7; }
+    .notif .rarity-legendary { color: #f59e0b; }
+    .notif .rarity-mythical { color: #ef4444; }
+
+    /* Megalodon alert */
+    .mega-alert {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-size: clamp(24px, 4vw, 48px); font-weight: 800; color: #ef4444;
+      text-shadow: 0 0 30px rgba(239,68,68,0.8), 0 0 60px rgba(239,68,68,0.4);
+      animation: megaPulse 0.5s ease-in-out infinite alternate;
+      display: none; text-align: center; line-height: 1.3;
+    }
+    @keyframes megaPulse { from { transform: translate(-50%,-50%) scale(1); } to { transform: translate(-50%,-50%) scale(1.05); } }
+
+    /* Zone buttons (active during test) */
+    .hud-zone-buttons {
+      position: absolute; top: 50px; left: 12px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .zone-btn {
+      pointer-events: auto; cursor: pointer;
+      background: rgba(0,0,0,0.5); border: 1px solid #333;
+      border-radius: 8px; padding: 4px 10px;
+      font-size: 10px; color: #aaa; font-weight: 600;
+    }
+    .zone-btn:hover { border-color: #0ea5e9; color: #fff; }
+    .zone-btn.active { border-color: #0ea5e9; color: #0ea5e9; }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="canvas"></canvas>
+    <div class="hud">
+      <div class="hud-title">FICHY</div>
+      <div class="hud-zone" id="hudZone"><div class="zone-dot" style="background:#22c55e"></div><span>Beach</span></div>
+      <div class="hud-dex" id="hudDex">Dex: 0/30</div>
+      <div class="hud-leaderboard" id="hudLB">
+        <h3>Leaderboard</h3>
+        <div id="lbRows"></div>
+      </div>
+      <div class="hud-players" id="hudPlayers">0 anglers</div>
+      <div class="hud-controls">
+        <span>Like</span> = Cast | <span>Chat</span> = Zone<br>
+        <span>Gift</span> = Boost | <span>Follow</span> = Rod+
+      </div>
+      <div class="notif-container" id="notifContainer"></div>
+      <div class="mega-alert" id="megaAlert">MEGALODON<br>SPOTTED!</div>
+
+      <!-- Zone switch buttons (test + visual) -->
+      <div class="hud-zone-buttons" id="zoneButtons">
+        <button class="zone-btn active" data-zone="beach">Beach</button>
+        <button class="zone-btn" data-zone="lava">Lava</button>
+        <button class="zone-btn" data-zone="temple">Temple</button>
+        <button class="zone-btn" data-zone="lost_isle">Lost Isle</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js" } }
+  </script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ============================================================
+    //  FICHY — TikTok Live Fishing Game (Landscape 16:9)
+    //  Inspired by Fish It (Roblox)
+    // ============================================================
+
+    // ===== FISH DATA — 30 species across 4 zones =====
+    const RARITY = {
+      common:    { label: 'Common',    color: '#9ca3af', odds: 1/2,    gold: 5,    css: 'rarity-common' },
+      uncommon:  { label: 'Uncommon',  color: '#22c55e', odds: 1/5,    gold: 15,   css: 'rarity-uncommon' },
+      rare:      { label: 'Rare',      color: '#3b82f6', odds: 1/20,   gold: 50,   css: 'rarity-rare' },
+      epic:      { label: 'Epic',      color: '#a855f7', odds: 1/100,  gold: 200,  css: 'rarity-epic' },
+      legendary: { label: 'Legendary', color: '#f59e0b', odds: 1/500,  gold: 1000, css: 'rarity-legendary' },
+      mythical:  { label: 'Mythical',  color: '#ef4444', odds: 1/3000, gold: 5000, css: 'rarity-mythical' },
+    };
+
+    const FISH = [
+      // Beach (8)
+      { name: 'Sardine',       zone: 'beach', rarity: 'common',    emoji: '🐟' },
+      { name: 'Clownfish',     zone: 'beach', rarity: 'common',    emoji: '🐠' },
+      { name: 'Pufferfish',    zone: 'beach', rarity: 'uncommon',  emoji: '🐡' },
+      { name: 'Sea Bass',      zone: 'beach', rarity: 'uncommon',  emoji: '🐟' },
+      { name: 'Swordfish',     zone: 'beach', rarity: 'rare',      emoji: '🗡️' },
+      { name: 'Blue Marlin',   zone: 'beach', rarity: 'rare',      emoji: '🐟' },
+      { name: 'Golden Koi',    zone: 'beach', rarity: 'epic',      emoji: '✨' },
+      { name: 'Sea Dragon',    zone: 'beach', rarity: 'legendary', emoji: '🐉' },
+      // Lava (8)
+      { name: 'Magma Guppy',   zone: 'lava', rarity: 'common',    emoji: '🔥' },
+      { name: 'Ember Eel',     zone: 'lava', rarity: 'common',    emoji: '🐍' },
+      { name: 'Lava Catfish',  zone: 'lava', rarity: 'uncommon',  emoji: '🌋' },
+      { name: 'Flame Snapper', zone: 'lava', rarity: 'uncommon',  emoji: '🔥' },
+      { name: 'Obsidian Pike', zone: 'lava', rarity: 'rare',      emoji: '⬛' },
+      { name: 'Inferno Ray',   zone: 'lava', rarity: 'rare',      emoji: '☀️' },
+      { name: 'Phoenix Fish',  zone: 'lava', rarity: 'epic',      emoji: '🦅' },
+      { name: 'Volcanic Titan',zone: 'lava', rarity: 'legendary', emoji: '🌋' },
+      // Temple (7)
+      { name: 'Spirit Minnow', zone: 'temple', rarity: 'common',    emoji: '👻' },
+      { name: 'Temple Guardian',zone: 'temple', rarity: 'uncommon',  emoji: '🗿' },
+      { name: 'Jade Carp',     zone: 'temple', rarity: 'uncommon',  emoji: '💎' },
+      { name: 'Sacred Koi',    zone: 'temple', rarity: 'rare',      emoji: '🏮' },
+      { name: 'Ancient Serpent',zone: 'temple', rarity: 'epic',      emoji: '🐲' },
+      { name: 'Void Leviathan',zone: 'temple', rarity: 'legendary', emoji: '🕳️' },
+      { name: 'Transcended One',zone:'temple', rarity: 'mythical',  emoji: '👁️' },
+      // Lost Isle (7)
+      { name: 'Abyssal Minnow',zone: 'lost_isle', rarity: 'uncommon',  emoji: '🌊' },
+      { name: 'Crystal Jellyfish',zone:'lost_isle',rarity:'rare',      emoji: '🪼' },
+      { name: 'Deep Sea Angler',zone: 'lost_isle', rarity: 'rare',     emoji: '🐙' },
+      { name: 'Shadow Barracuda',zone:'lost_isle', rarity: 'epic',     emoji: '🦈' },
+      { name: 'Atlantean Whale',zone: 'lost_isle', rarity: 'legendary',emoji: '🐋' },
+      { name: 'Water Snake',   zone: 'lost_isle', rarity: 'legendary', emoji: '🐍' },
+      { name: 'Megalodon',     zone: 'lost_isle', rarity: 'mythical',  emoji: '🦈' },
+    ];
+
+    // Zone configs — colors, biome settings
+    const ZONES = {
+      beach:     { label: 'Beach',     dot: '#22c55e', water: 0x0077be, sky: 0x87ceeb, skyTop: 0x0077be, fog: 0x87ceeb, sunColor: 0xffdd44, ambient: 0xffffff },
+      lava:      { label: 'Lava',      dot: '#ef4444', water: 0xcc3300, sky: 0x331100, skyTop: 0x110000, fog: 0x331100, sunColor: 0xff4400, ambient: 0xff6633 },
+      temple:    { label: 'Temple',    dot: '#a855f7', water: 0x1a0033, sky: 0x1a0044, skyTop: 0x0d0022, fog: 0x1a0044, sunColor: 0xcc88ff, ambient: 0x9966cc },
+      lost_isle: { label: 'Lost Isle', dot: '#0ea5e9', water: 0x001133, sky: 0x001122, skyTop: 0x000011, fog: 0x001122, sunColor: 0x2288ff, ambient: 0x4488cc },
+    };
+
+    // Rod tiers
+    const RODS = [
+      { name: 'Starter Rod',  luck: 0,   color: 0x8b6914 },
+      { name: 'Grass Rod',    luck: 0.1, color: 0x22c55e },
+      { name: 'Lava Rod',     luck: 0.2, color: 0xef4444 },
+      { name: 'Chrome Rod',   luck: 0.35, color: 0xc0c0c0 },
+      { name: 'Grand Rod',    luck: 0.5, color: 0xfbbf24 },
+      { name: 'Mythic Rod',   luck: 0.75, color: 0xa855f7 },
+    ];
+
+    // ===== THREE.JS SCENE =====
+    const container = document.getElementById('game-container');
+    const canvas = document.getElementById('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x87ceeb);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x87ceeb, 0.006);
+
+    const camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 500);
+    camera.position.set(0, 12, 30);
+    camera.lookAt(0, 0, -5);
+
+    // Sky sphere
+    const skyGeo = new THREE.SphereGeometry(200, 32, 16);
+    const skyMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      uniforms: {
+        topColor: { value: new THREE.Color(0x0077be) },
+        bottomColor: { value: new THREE.Color(0x87ceeb) },
+      },
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPos.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 topColor;
+        uniform vec3 bottomColor;
+        varying vec3 vWorldPosition;
+        void main() {
+          float h = normalize(vWorldPosition).y;
+          gl_FragColor = vec4(mix(bottomColor, topColor, max(h, 0.0)), 1.0);
+        }
+      `,
+    });
+    const sky = new THREE.Mesh(skyGeo, skyMat);
+    scene.add(sky);
+
+    // Sun
+    const sunGeo = new THREE.SphereGeometry(4, 16, 16);
+    const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd44 });
+    const sun = new THREE.Mesh(sunGeo, sunMat);
+    sun.position.set(60, 40, -100);
+    scene.add(sun);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffeecc, 1.0);
+    dirLight.position.set(60, 40, -100);
+    scene.add(dirLight);
+
+    // Water
+    const waterGeo = new THREE.PlaneGeometry(400, 400, 80, 80);
+    const waterMat = new THREE.MeshPhongMaterial({
+      color: 0x0077be, transparent: true, opacity: 0.8,
+      shininess: 100, specular: 0x88ccff, flatShading: true,
+    });
+    const water = new THREE.Mesh(waterGeo, waterMat);
+    water.rotation.x = -Math.PI / 2;
+    scene.add(water);
+
+    // Dock / pier (simple boxes)
+    const dockMat = new THREE.MeshLambertMaterial({ color: 0x8b6914 });
+    const dockPlanks = new THREE.Mesh(new THREE.BoxGeometry(30, 0.3, 6), dockMat);
+    dockPlanks.position.set(0, 1.5, 18);
+    scene.add(dockPlanks);
+    // Dock legs
+    for (let x = -12; x <= 12; x += 6) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3, 0.5), dockMat);
+      leg.position.set(x, 0, 18);
+      scene.add(leg);
+    }
+
+    // Dock railing
+    const railMat = new THREE.MeshLambertMaterial({ color: 0x6b4f12 });
+    const railL = new THREE.Mesh(new THREE.BoxGeometry(30, 0.2, 0.2), railMat);
+    railL.position.set(0, 2.8, 20.8);
+    scene.add(railL);
+
+    // Water vertex base for waves
+    const posAttr = waterGeo.attributes.position;
+    const baseZ = new Float32Array(posAttr.count);
+    for (let i = 0; i < posAttr.count; i++) baseZ[i] = posAttr.getZ(i);
+
+    // ===== GAME STATE =====
+    const players = new Map(); // uniqueId -> player state
+    let currentZone = 'beach';
+    let globalDex = new Set();
+    let megalodonActive = false;
+    let megalodonTimer = null;
+
+    // ===== PLAYER MANAGEMENT =====
+    function getOrCreatePlayer(data) {
+      const id = data.uniqueId || data.userId || data.nickname;
+      if (players.has(id)) return players.get(id);
+
+      const player = {
+        id,
+        nickname: data.nickname || id,
+        gold: 0,
+        rodTier: 0,
+        luck: 0,     // bonus luck from gifts/enchants
+        catches: [],
+        dex: new Set(),
+        totalCatches: 0,
+        bestRarity: 0,
+        casting: false,
+        castTimer: null,
+        bobber: null,
+        line: null,
+        rodMesh: null,
+        label: null,
+        position: null,
+      };
+
+      // Create 3D objects for player
+      spawnPlayerVisual(player);
+      players.set(id, player);
+      updateHUD();
+      return player;
+    }
+
+    function spawnPlayerVisual(player) {
+      const idx = players.size;
+      const spread = 24;
+      const x = -spread/2 + (idx % 10) * (spread/9);
+      const z = 16 + Math.floor(idx / 10) * 2;
+
+      // Character body (simple capsule)
+      const bodyGeo = new THREE.CapsuleGeometry(0.3, 0.8, 4, 8);
+      const bodyMat = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(Math.random(), 0.7, 0.5) });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.set(x, 2.4, z);
+      scene.add(body);
+
+      // Rod (thin cylinder)
+      const rodColor = RODS[player.rodTier].color;
+      const rodGeo = new THREE.CylinderGeometry(0.03, 0.05, 3, 6);
+      const rodMat = new THREE.MeshLambertMaterial({ color: rodColor });
+      const rod = new THREE.Mesh(rodGeo, rodMat);
+      rod.rotation.x = -Math.PI / 4;
+      rod.position.set(x + 0.5, 3, z - 1);
+      scene.add(rod);
+      player.rodMesh = rod;
+
+      // Name label (sprite)
+      const labelCanvas = document.createElement('canvas');
+      labelCanvas.width = 256; labelCanvas.height = 64;
+      const ctx = labelCanvas.getContext('2d');
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.roundRect(0, 0, 256, 64, 12);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(player.nickname.slice(0, 12), 128, 42);
+      const tex = new THREE.CanvasTexture(labelCanvas);
+      const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.set(3, 0.75, 1);
+      sprite.position.set(x, 4, z);
+      scene.add(sprite);
+      player.label = sprite;
+
+      player.position = { x, z };
+      player._body = body;
+    }
+
+    function removePlayer(id) {
+      const p = players.get(id);
+      if (!p) return;
+      if (p._body) scene.remove(p._body);
+      if (p.rodMesh) scene.remove(p.rodMesh);
+      if (p.label) scene.remove(p.label);
+      if (p.bobber) scene.remove(p.bobber);
+      if (p.line) scene.remove(p.line);
+      if (p.castTimer) clearTimeout(p.castTimer);
+      players.delete(id);
+      updateHUD();
+    }
+
+    // ===== FISHING MECHANIC =====
+    function castLine(player) {
+      if (player.casting) return;
+      player.casting = true;
+
+      // Create bobber
+      const bobGeo = new THREE.SphereGeometry(0.15, 8, 8);
+      const bobMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+      const bobber = new THREE.Mesh(bobGeo, bobMat);
+      const targetX = player.position.x + (Math.random() - 0.5) * 6;
+      const targetZ = player.position.z - 6 - Math.random() * 10;
+      bobber.position.set(targetX, 0.3, targetZ);
+      scene.add(bobber);
+      player.bobber = bobber;
+
+      // Create line
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(player.position.x + 0.5, 3, player.position.z - 1),
+        bobber.position,
+      ]);
+      const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+      const line = new THREE.Line(lineGeo, lineMat);
+      scene.add(line);
+      player.line = line;
+
+      // Wait to catch (2-4 seconds)
+      const catchDelay = 2000 + Math.random() * 2000;
+      player.castTimer = setTimeout(() => catchFish(player), catchDelay);
+    }
+
+    function catchFish(player) {
+      // Pick fish from current zone
+      const zoneFish = FISH.filter(f => f.zone === currentZone);
+      const fish = rollFish(zoneFish, player);
+
+      if (fish) {
+        const rarity = RARITY[fish.rarity];
+        const weight = (0.5 + Math.random() * 10).toFixed(1);
+        const gold = rarity.gold + Math.floor(Math.random() * rarity.gold * 0.5);
+
+        player.gold += gold;
+        player.totalCatches++;
+        player.catches.push(fish.name);
+        player.dex.add(fish.name);
+        globalDex.add(fish.name);
+
+        // Track best rarity for leaderboard
+        const rarityOrder = ['common','uncommon','rare','epic','legendary','mythical'];
+        const rarityIdx = rarityOrder.indexOf(fish.rarity);
+        if (rarityIdx > player.bestRarity) player.bestRarity = rarityIdx;
+
+        // Auto-upgrade rod based on gold
+        upgradeRod(player);
+
+        // Notification
+        showNotif(`${fish.emoji} <b>${player.nickname}</b> caught <span class="${rarity.css}">${fish.name}</span> (${weight}kg) +${gold}g`);
+
+        // Splash effect at bobber
+        if (player.bobber) splashEffect(player.bobber.position.clone());
+
+        // Megalodon special
+        if (fish.name === 'Megalodon') {
+          showNotif(`🦈🦈🦈 <b>${player.nickname}</b> caught the <span class="rarity-mythical">MEGALODON</span>!! 🦈🦈🦈`);
+        }
+      }
+
+      // Clean up
+      if (player.bobber) { scene.remove(player.bobber); player.bobber = null; }
+      if (player.line) { scene.remove(player.line); player.line = null; }
+      player.casting = false;
+      updateHUD();
+    }
+
+    function rollFish(zoneFish, player) {
+      // Luck = base rod luck + gift luck bonus
+      const totalLuck = RODS[player.rodTier].luck + player.luck;
+
+      // Sort fish by rarity (rarest first) and try to hit
+      const rarityOrder = ['mythical','legendary','epic','rare','uncommon','common'];
+
+      for (const rarity of rarityOrder) {
+        const candidates = zoneFish.filter(f => f.rarity === rarity);
+        if (candidates.length === 0) continue;
+
+        const baseOdds = RARITY[rarity].odds;
+        const boostedOdds = Math.min(baseOdds * (1 + totalLuck), 0.95); // cap at 95%
+
+        if (Math.random() < boostedOdds) {
+          return candidates[Math.floor(Math.random() * candidates.length)];
+        }
+      }
+      // Fallback: always catch something common
+      const commons = zoneFish.filter(f => f.rarity === 'common');
+      if (commons.length > 0) return commons[Math.floor(Math.random() * commons.length)];
+      return zoneFish[0];
+    }
+
+    function upgradeRod(player) {
+      // Auto-upgrade based on gold milestones
+      const thresholds = [0, 50, 200, 800, 3000, 10000];
+      for (let i = thresholds.length - 1; i >= 0; i--) {
+        if (player.gold >= thresholds[i] && player.rodTier < i) {
+          player.rodTier = i;
+          if (player.rodMesh) player.rodMesh.material.color.setHex(RODS[i].color);
+          showNotif(`🎣 <b>${player.nickname}</b> upgraded to <span style="color:${RODS[i].color.toString(16).padStart(6,'0')}">${RODS[i].name}</span>!`);
+          break;
+        }
+      }
+    }
+
+    // ===== GIFT EFFECTS =====
+    function applyGift(player, diamondCount) {
+      if (diamondCount >= 500) {
+        // VIP: Legendary lure — guaranteed rare+ catch
+        player.luck += 5;
+        showNotif(`🌟 <b>${player.nickname}</b> activated <span class="rarity-legendary">LEGENDARY LURE</span>!`);
+        // Trigger Megalodon event for everyone
+        triggerMegalodon();
+        setTimeout(() => { player.luck -= 5; }, 30000);
+      } else if (diamondCount >= 100) {
+        // Big: Enchant stone — +50% luck for 60s
+        player.luck += 0.5;
+        showNotif(`💎 <b>${player.nickname}</b> used <span class="rarity-epic">Enchant Stone</span> (+50% luck)`);
+        setTimeout(() => { player.luck -= 0.5; }, 60000);
+      } else if (diamondCount >= 10) {
+        // Med: Golden hook — instant catch 3x
+        showNotif(`🪝 <b>${player.nickname}</b> got <span class="rarity-rare">Golden Hook</span> x3!`);
+        for (let i = 0; i < 3; i++) setTimeout(() => castLine(player), i * 500);
+      } else {
+        // Small: Bait boost — +luck for 30s
+        player.luck += 0.2;
+        showNotif(`🪱 <b>${player.nickname}</b> used <span class="rarity-uncommon">Lucky Bait</span> (+20% luck)`);
+        setTimeout(() => { player.luck -= 0.2; }, 30000);
+      }
+    }
+
+    // ===== MEGALODON EVENT =====
+    function triggerMegalodon() {
+      if (megalodonActive) return;
+      megalodonActive = true;
+      const el = document.getElementById('megaAlert');
+      el.style.display = 'block';
+
+      // Switch to Lost Isle temporarily
+      const prevZone = currentZone;
+      switchZone('lost_isle');
+
+      showNotif('🦈 <b>MEGALODON SPOTTED!</b> Everyone cast now! 30 seconds!');
+
+      // Auto-cast for everyone
+      players.forEach(p => { if (!p.casting) castLine(p); });
+
+      megalodonTimer = setTimeout(() => {
+        megalodonActive = false;
+        el.style.display = 'none';
+        switchZone(prevZone);
+        showNotif('🦈 The Megalodon retreated to the depths...');
+      }, 30000);
+    }
+
+    // ===== ZONE SWITCHING =====
+    function switchZone(zoneName) {
+      if (!ZONES[zoneName]) return;
+      currentZone = zoneName;
+      const z = ZONES[zoneName];
+
+      // Lerp water color
+      waterMat.color.setHex(z.water);
+      skyMat.uniforms.topColor.value.setHex(z.skyTop);
+      skyMat.uniforms.bottomColor.value.setHex(z.sky);
+      scene.fog.color.setHex(z.fog);
+      renderer.setClearColor(z.sky);
+      sunMat.color.setHex(z.sunColor);
+      ambientLight.color.setHex(z.ambient);
+
+      // Update HUD
+      const hudZone = document.getElementById('hudZone');
+      hudZone.innerHTML = `<div class="zone-dot" style="background:${z.dot}"></div><span>${z.label}</span>`;
+
+      // Update zone buttons
+      document.querySelectorAll('.zone-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.zone === zoneName);
+      });
+    }
+
+    // ===== SPLASH EFFECT =====
+    const splashParticles = [];
+    function splashEffect(pos) {
+      for (let i = 0; i < 8; i++) {
+        const geo = new THREE.SphereGeometry(0.08, 4, 4);
+        const mat = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.8 });
+        const p = new THREE.Mesh(geo, mat);
+        p.position.copy(pos);
+        const vel = new THREE.Vector3((Math.random()-0.5)*0.3, 0.2+Math.random()*0.3, (Math.random()-0.5)*0.3);
+        scene.add(p);
+        splashParticles.push({ mesh: p, vel, life: 1.0 });
+      }
+    }
+
+    // ===== HUD UPDATES =====
+    function updateHUD() {
+      // Dex
+      document.getElementById('hudDex').textContent = `Dex: ${globalDex.size}/30`;
+
+      // Player count
+      document.getElementById('hudPlayers').textContent = `${players.size} angler${players.size !== 1 ? 's' : ''}`;
+
+      // Leaderboard (top 8 by gold)
+      const sorted = Array.from(players.values()).sort((a, b) => b.gold - a.gold).slice(0, 8);
+      const lbEl = document.getElementById('lbRows');
+      lbEl.innerHTML = sorted.map((p, i) => {
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
+        return `<div class="lb-row"><span class="lb-name">${medal} ${p.nickname}</span><span class="lb-score">${p.gold}g</span></div>`;
+      }).join('');
+    }
+
+    function showNotif(html) {
+      const cont = document.getElementById('notifContainer');
+      const el = document.createElement('div');
+      el.className = 'notif';
+      el.innerHTML = html;
+      cont.appendChild(el);
+      setTimeout(() => el.remove(), 4000);
+      // Cap at 6 visible
+      while (cont.children.length > 6) cont.removeChild(cont.firstChild);
+    }
+
+    // ===== RESIZE =====
+    function onResize() {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', onResize);
+    onResize();
+
+    // ===== ANIMATION LOOP =====
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      const t = clock.getElapsedTime();
+
+      // Waves
+      for (let i = 0; i < posAttr.count; i++) {
+        const x = posAttr.getX(i);
+        const y = posAttr.getY(i);
+        const waveHeight = currentZone === 'lava' ? 0.3 : 0.5;
+        posAttr.setZ(i, baseZ[i] + Math.sin(x * 0.05 + t * 0.8) * waveHeight + Math.cos(y * 0.04 + t * 0.6) * waveHeight * 0.6);
+      }
+      posAttr.needsUpdate = true;
+      waterGeo.computeVertexNormals();
+
+      // Bobber bobbing
+      players.forEach(p => {
+        if (p.bobber) {
+          p.bobber.position.y = 0.3 + Math.sin(t * 3 + p.position.x) * 0.15;
+          // Update line endpoint
+          if (p.line) {
+            const pts = p.line.geometry.attributes.position;
+            pts.setXYZ(1, p.bobber.position.x, p.bobber.position.y, p.bobber.position.z);
+            pts.needsUpdate = true;
+          }
+        }
+      });
+
+      // Splash particles
+      for (let i = splashParticles.length - 1; i >= 0; i--) {
+        const sp = splashParticles[i];
+        sp.mesh.position.add(sp.vel.clone().multiplyScalar(dt * 4));
+        sp.vel.y -= dt * 2; // gravity
+        sp.life -= dt * 1.5;
+        sp.mesh.material.opacity = sp.life;
+        if (sp.life <= 0) {
+          scene.remove(sp.mesh);
+          splashParticles.splice(i, 1);
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // ===== SOCKET.IO + TIKTOK EVENTS =====
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get('room') || '';
+    const socket = io({ query: { room } });
+
+    socket.on('connect', () => console.log('Fichy connected to room:', room || 'default'));
+
+    // Like → Cast
+    socket.on('like', (data) => {
+      const player = getOrCreatePlayer(data);
+      if (!player.casting) castLine(player);
+    });
+
+    // Chat → Zone command or just acknowledge
+    socket.on('chat', (data) => {
+      const player = getOrCreatePlayer(data);
+      const msg = (data.comment || '').toLowerCase().trim();
+
+      // Zone commands
+      if (msg === 'beach' || msg === 'shore') switchZone('beach');
+      else if (msg === 'lava' || msg === 'fire' || msg === 'volcano') switchZone('lava');
+      else if (msg === 'temple' || msg === 'sacred') switchZone('temple');
+      else if (msg === 'lost isle' || msg === 'deep' || msg === 'abyss' || msg === 'atlantis') switchZone('lost_isle');
+    });
+
+    // Gift → Tiered boosts
+    socket.on('gift', (data) => {
+      const player = getOrCreatePlayer(data);
+      applyGift(player, data.diamondCount || 1);
+    });
+
+    // Follow → Rod upgrade + bonus casts
+    socket.on('follow', (data) => {
+      const player = getOrCreatePlayer(data);
+      if (player.rodTier < 1) {
+        player.rodTier = 1;
+        if (player.rodMesh) player.rodMesh.material.color.setHex(RODS[1].color);
+      }
+      showNotif(`⭐ <b>${player.nickname}</b> followed! Got <span style="color:#22c55e">Grass Rod</span> + 5 casts!`);
+      for (let i = 0; i < 5; i++) setTimeout(() => { if (!player.casting) castLine(player); }, i * 800);
+    });
+
+    // Share → Bonus casts
+    socket.on('share', (data) => {
+      const player = getOrCreatePlayer(data);
+      showNotif(`📢 <b>${player.nickname}</b> shared! +3 casts!`);
+      for (let i = 0; i < 3; i++) setTimeout(() => { if (!player.casting) castLine(player); }, i * 600);
+    });
+
+    // Join → Spawn
+    socket.on('viewer-join', (data) => {
+      getOrCreatePlayer(data);
+    });
+
+    // ===== ZONE BUTTONS (click) =====
+    document.querySelectorAll('.zone-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchZone(btn.dataset.zone));
+    });
+
+    // ===== TEST KEYS =====
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 't' || e.key === 'T') {
+        // Spawn test player
+        const id = 'test_' + Math.floor(Math.random() * 999);
+        const player = getOrCreatePlayer({ uniqueId: id, nickname: 'Tester' + id.slice(5) });
+        castLine(player);
+      }
+      if (e.key === 'l' || e.key === 'L') {
+        // Like for all
+        players.forEach(p => { if (!p.casting) castLine(p); });
+      }
+      if (e.key === 'b' || e.key === 'B') {
+        // Gift for first player
+        const first = players.values().next().value;
+        if (first) applyGift(first, 150);
+      }
+      if (e.key === 'm' || e.key === 'M') {
+        triggerMegalodon();
+      }
+      if (e.key === 'a' || e.key === 'A') {
+        // Auto mode — spawn 5 players, continuous fishing
+        for (let i = 0; i < 5; i++) {
+          const id = 'auto_' + i;
+          getOrCreatePlayer({ uniqueId: id, nickname: ['Aisyah','Haziq','MeiLing','Arjun','Nurul'][i] });
+        }
+        setInterval(() => {
+          players.forEach(p => { if (!p.casting) castLine(p); });
+        }, 3000);
+      }
+      // Zone shortcuts
+      if (e.key === '1') switchZone('beach');
+      if (e.key === '2') switchZone('lava');
+      if (e.key === '3') switchZone('temple');
+      if (e.key === '4') switchZone('lost_isle');
+    });
+
+  </script>
+</body>
+</html>

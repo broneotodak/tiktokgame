@@ -536,13 +536,13 @@
         <div class="game-card">
           <div class="game-card-icon">🐟</div>
           <div class="game-card-info">
-            <div class="game-card-name" style="color:#0ea5e9">Fisch <span class="game-badge soon">SOON</span></div>
-            <div class="game-card-desc">Fishing game — landscape 16:9</div>
+            <div class="game-card-name" style="color:#0ea5e9">Fichy <span class="game-badge new">NEW</span></div>
+            <div class="game-card-desc">Fish It — TikTok Live fishing — landscape 16:9</div>
           </div>
           <div class="game-card-actions">
-            <input type="hidden" id="fischUrl">
-            <button onclick="copyUrl('fischUrl')" style="background:#0ea5e9;color:#fff">Copy</button>
-            <button onclick="window.open(document.getElementById('fischUrl').value,'_blank')" style="background:#0ea5e9;color:#fff">Open</button>
+            <input type="hidden" id="fichyUrl">
+            <button onclick="copyUrl('fichyUrl')" style="background:#0ea5e9;color:#fff">Copy</button>
+            <button onclick="window.open(document.getElementById('fichyUrl').value,'_blank')" style="background:#0ea5e9;color:#fff">Open</button>
           </div>
         </div>
       </div>
@@ -684,7 +684,7 @@
       document.getElementById('hillclimbUrl').value = `${window.location.origin}/hillclimb${roomParam}`;
       document.getElementById('funclassUrl').value = `${window.location.origin}/funclass${roomParam}`;
       document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
-      document.getElementById('fischUrl').value = `${window.location.origin}/fisch${roomParam}`;
+      document.getElementById('fichyUrl').value = `${window.location.origin}/fichy${roomParam}`;
 
       // Load config
       fetch(`/api/config?room=${ROOM}`).then(r => r.json()).then(config => {
@@ -787,7 +787,7 @@
         document.getElementById('hillclimbUrl').value = `${window.location.origin}/hillclimb${roomParam}`;
         document.getElementById('funclassUrl').value = `${window.location.origin}/funclass${roomParam}`;
         document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
-        document.getElementById('fischUrl').value = `${window.location.origin}/fisch${roomParam}`;
+        document.getElementById('fichyUrl').value = `${window.location.origin}/fichy${roomParam}`;
         // Update room badge
         const badge = document.getElementById('roomBadge');
         badge.style.display = 'inline-block';
