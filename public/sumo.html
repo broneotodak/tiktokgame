@@ -1,0 +1,2148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sumo Smash - TikTok Live Arena Battle</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; width: 100vw; height: 100vh; }
+
+    /* Portrait game frame — 9:16 centered with black bars */
+    .game-frame {
+      position: relative;
+      width: min(100vw, calc(100vh * 9 / 16));
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+    }
+    #gameCanvas { display: block; width: 100%; height: 100%; }
+
+    /* Loading screen */
+    #loadingScreen {
+      position: absolute; inset: 0; z-index: 1000;
+      background: linear-gradient(135deg, #1a0a0a 0%, #2a1010 50%, #1a0000 100%);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #fff; transition: opacity 0.8s;
+    }
+    #loadingScreen.hidden { opacity: 0; pointer-events: none; }
+    #loadingScreen h1 { font-size: 2.8em; margin-bottom: 4px; text-shadow: 0 0 30px rgba(255,68,68,0.6); color: #ff4444; }
+    #loadingScreen .subtitle { font-size: 1.1em; color: #ff8800; margin-bottom: 25px; font-weight: 600; }
+    .progress-bar { width: 280px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #ff4444, #ff8800); width: 0%; transition: width 0.3s; border-radius: 3px; }
+    #loadingText { margin-top: 12px; font-size: 0.85em; color: #888; }
+
+    /* HUD - top bar */
+    #topBar {
+      position: absolute; top: 10px; left: 12px; right: 12px; z-index: 100;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none;
+    }
+    .top-pill {
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(10px);
+      border-radius: 16px; padding: 5px 14px; border: 1px solid rgba(255,255,255,0.1);
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: #fff; font-weight: 600;
+    }
+    .top-pill .label { color: #888; font-weight: 400; font-size: 10px; }
+    .top-pill.live { border-color: rgba(255,68,68,0.5); }
+    .live-dot { width: 7px; height: 7px; background: #ff4444; border-radius: 50%; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .top-center {
+      display: flex; gap: 10px; align-items: center;
+    }
+    .round-pill {
+      background: rgba(255,68,68,0.2); border: 1px solid rgba(255,68,68,0.4);
+      border-radius: 16px; padding: 5px 14px;
+      font-size: 13px; color: #ff8800; font-weight: 700;
+    }
+    .timer-pill {
+      background: rgba(0,0,0,0.7); border: 1px solid rgba(255,136,0,0.4);
+      border-radius: 16px; padding: 5px 14px;
+      font-size: 18px; color: #fff; font-weight: 900;
+      min-width: 50px; text-align: center;
+    }
+    .timer-pill.urgent { color: #ff4444; animation: timerPulse 0.5s infinite; }
+    @keyframes timerPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+
+    /* Leaderboard - top right under topBar */
+    #leaderboard {
+      position: absolute; top: 44px; right: 8px; z-index: 100;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
+      border-radius: 12px; padding: 6px 8px; border: 1px solid rgba(255,68,68,0.2);
+      width: 140px; max-height: 35%; overflow-y: auto; pointer-events: none;
+    }
+    #leaderboard::-webkit-scrollbar { width: 0; }
+    .lb-title {
+      font-size: 9px; color: #ff8800; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 4px; text-align: center;
+    }
+    .lb-row {
+      display: flex; align-items: center; gap: 4px; padding: 2px 0;
+      font-size: 11px; color: #fff;
+    }
+    .lb-rank { width: 18px; text-align: center; font-weight: 700; color: #ff8800; }
+    .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-score { color: #ff4444; font-weight: 700; }
+    .lb-kills { color: #ff8800; font-size: 10px; margin-left: 2px; }
+
+    /* Round banner — big centered text */
+    #roundBanner {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 200; pointer-events: none; text-align: center;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    #roundBanner.show { opacity: 1; }
+    #roundBanner h1 {
+      font-size: 2.8em; font-weight: 900; color: #fff;
+      text-shadow: 0 0 40px rgba(255,68,68,0.8), 0 4px 20px rgba(0,0,0,0.8);
+      animation: bannerPop 0.4s ease-out;
+    }
+    #roundBanner h2 {
+      font-size: 1.2em; color: #ff8800; font-weight: 700;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+    }
+    @keyframes bannerPop { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+    /* Notifications — left side */
+    #notifications {
+      position: absolute; bottom: 200px; left: 8px; z-index: 100;
+      display: flex; flex-direction: column; gap: 3px;
+      pointer-events: none; max-width: 65%;
+    }
+    .notif {
+      padding: 4px 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      border-radius: 10px; border: 1px solid rgba(255,68,68,0.3);
+      animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in 3.5s forwards;
+      font-size: 11px; color: #fff; line-height: 1.3;
+    }
+    .notif strong { color: #ff8800; }
+    .notif.kill { border-color: rgba(255,68,68,0.6); background: rgba(255,68,68,0.15); }
+    .notif.kill strong { color: #ff4444; }
+    .notif.gift { border-color: rgba(255,136,0,0.5); background: rgba(255,136,0,0.1); }
+    .notif.power { border-color: rgba(255,200,0,0.5); background: rgba(255,200,0,0.1); }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
+
+    /* Guide panel — top left under fighter counter */
+    #guidePanel {
+      position: absolute; left: 8px; top: 44px;
+      z-index: 100; pointer-events: none;
+      display: flex; flex-direction: column; gap: 3px; width: 110px;
+    }
+    .guide-item {
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(8px);
+      border-radius: 8px; padding: 4px 6px;
+      border: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .guide-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
+    .guide-label { font-size: 9px; color: #ff8800; font-weight: 700; line-height: 1; }
+    .guide-desc { font-size: 8px; color: #999; line-height: 1.1; }
+    .guide-divider { height: 1px; background: rgba(255,136,0,0.15); margin: 1px 0; }
+    .guide-gift {
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(8px);
+      border-radius: 8px; padding: 3px 6px;
+      border: 1px solid rgba(255,136,0,0.12);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .guide-gift .g-tier { font-size: 8px; color: #ff8800; font-weight: 700; white-space: nowrap; }
+    .guide-gift .g-name { font-size: 8px; color: #ccc; }
+    @keyframes tipIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Power flash overlay */
+    #powerFlash {
+      position: absolute; inset: 0; z-index: 150; pointer-events: none;
+      background: radial-gradient(circle, rgba(255,68,68,0.3), transparent 70%);
+      opacity: 0; transition: opacity 0.15s;
+    }
+    #powerFlash.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="game-frame">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen">
+      <h1>SUMO SMASH</h1>
+      <div class="subtitle">Push them off the arena!</div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div id="loadingText">Loading assets...</div>
+    </div>
+
+    <!-- HUD -->
+    <div id="topBar">
+      <div class="top-pill live">
+        <div class="live-dot"></div>
+        <span id="playerCount">0</span>
+        <span class="label">fighters</span>
+      </div>
+      <div class="top-center">
+        <div class="round-pill" id="roundInfo">WAITING</div>
+        <div class="timer-pill" id="roundTimer">--</div>
+      </div>
+      <div class="top-pill">
+        <span class="label">alive</span>
+        <span id="aliveCount">0</span>
+      </div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div id="leaderboard">
+      <div class="lb-title">Wins / Kills</div>
+      <div id="lbRows"></div>
+    </div>
+
+    <!-- Round Banner -->
+    <div id="roundBanner">
+      <h1 id="bannerTitle"></h1>
+      <h2 id="bannerSub"></h2>
+    </div>
+
+    <!-- Notifications -->
+    <div id="notifications"></div>
+
+    <!-- Guide Panel — top left under fighter counter -->
+    <div id="guidePanel">
+      <div class="guide-item" style="border-color: rgba(255,68,68,0.4); background: rgba(255,68,68,0.15);">
+        <div class="guide-icon">💬</div>
+        <div><div class="guide-label" style="color:#ff4444;">TYPE "JOIN"</div><div class="guide-desc">Enter arena!</div></div>
+      </div>
+      <div class="guide-item">
+        <div class="guide-icon">❤️</div>
+        <div><div class="guide-label">LIKE</div><div class="guide-desc">Punch!</div></div>
+      </div>
+      <div class="guide-item">
+        <div class="guide-icon">💬</div>
+        <div><div class="guide-label">CHAT</div><div class="guide-desc">Dodge!</div></div>
+      </div>
+      <div class="guide-item">
+        <div class="guide-icon">➕</div>
+        <div><div class="guide-label">FOLLOW</div><div class="guide-desc">+Power</div></div>
+      </div>
+      <div class="guide-item">
+        <div class="guide-icon">🔄</div>
+        <div><div class="guide-label">SHARE</div><div class="guide-desc">Shield</div></div>
+      </div>
+      <div class="guide-divider"></div>
+      <div class="guide-gift">
+        <div class="g-tier">🎁 1-10</div>
+        <div class="g-name">Power Up</div>
+      </div>
+      <div class="guide-gift">
+        <div class="g-tier">🎁 11-99</div>
+        <div class="g-name">Slam</div>
+      </div>
+      <div class="guide-gift">
+        <div class="g-tier">🎁 100+</div>
+        <div class="g-name">Shockwave</div>
+      </div>
+      <div class="guide-gift">
+        <div class="g-tier">🎁 500+</div>
+        <div class="g-name">Meteor!</div>
+      </div>
+    </div>
+
+    <!-- Power Flash -->
+    <div id="powerFlash"></div>
+  </div>
+
+  <!-- Debug Panel — outside game frame, hidden on TikTok stream -->
+  <div id="debugPanel">
+    <div class="debug-title">SPAWN</div>
+    <div id="spawnButtons"></div>
+    <div class="debug-title" style="margin-top:8px;">FOCUS</div>
+    <div id="focusButtons"></div>
+    <div id="animSection" style="display:none;">
+      <div class="debug-title" style="margin-top:6px;">ANIMATIONS</div>
+      <div id="animButtons"></div>
+    </div>
+    <div class="debug-title" style="margin-top:8px;">ACTIONS</div>
+    <button class="dbtn" onclick="window._debugAction('like')">Like (L)</button>
+    <button class="dbtn" onclick="window._debugAction('gift')">Gift (B)</button>
+    <button class="dbtn" onclick="window._debugAction('kill')">Kill (K)</button>
+    <button class="dbtn" onclick="window._debugAction('round')">Start (R)</button>
+    <button class="dbtn" onclick="window._debugAction('auto')">Auto (A)</button>
+    <button class="dbtn" onclick="window._debugAction('shrink')">Shrink (S)</button>
+  </div>
+  <style>
+    #debugPanel {
+      position: fixed; right: 10px; top: 50%; transform: translateY(-50%);
+      z-index: 9999; display: flex; flex-direction: column; gap: 4px;
+      background: rgba(20,20,20,0.95); border: 1px solid #333; border-radius: 10px;
+      padding: 10px; min-width: 100px; max-height: 80vh; overflow-y: auto;
+    }
+    .debug-title { font-size: 10px; color: #ff8800; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; text-align: center; margin-bottom: 2px; }
+    .dbtn {
+      background: #222; color: #ccc; border: 1px solid #444; border-radius: 6px;
+      padding: 6px 8px; font-size: 11px; cursor: pointer; text-align: left;
+      transition: background 0.15s;
+    }
+    .dbtn:hover { background: #333; color: #fff; border-color: #ff8800; }
+    .dbtn.spawn { border-left: 3px solid #ff4444; }
+    /* Hide debug panel on narrow screens (when game fills screen = TikTok) */
+    @media (max-aspect-ratio: 10/16) { #debugPanel { display: none; } }
+  </style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+// ===== CONFIG =====
+const MAX_PLAYERS = 20;
+const ARENA_START_RADIUS = 15;
+const ARENA_END_RADIUS = 0.5;    // circle shrinks all the way down
+const ROUND_DURATION = 90;       // total round time in seconds
+const ROUND_COUNTDOWN = 5;
+const MIN_PLAYERS_TO_START = 3;
+const INTERMISSION_TIME = 8;
+const GRAVITY = 20;
+const BASE_PUSH = 2.5;
+const FRICTION = 0.92;
+const CHAR_SCALE = 1.0;
+
+// Meshy AI characters — per-character animation mapping (Meshy shuffles clip names!)
+// To add a new character: 1) add entry here 2) press T to spawn 3) use debug keys 1-G to identify anims 4) fill the animMap
+const MESHY_CHARACTERS = [
+  {
+    id: 'DJT',
+    path: '/sumo-assets/characters/DJT/DJT_Merged_Animations.glb',
+    animMap: {
+      // clipName → game action. Verified by visual testing.
+      'Face_Punch_Reaction': 'idle',
+      'Walking': 'walk',
+      'Running': 'run',
+      'Hip_Hop_Dance': 'punch',
+      'Charged_Ground_Slam': 'hit',
+      'Jump_and_Slam_Back_Down': 'death',
+      'Dead': 'dance',
+      'Flying_Fist_Kick': 'slam',
+      'Roll_Dodge': 'dodge',
+      'Block1': 'block',
+      '360_Power_Spin_Jump': 'spin',
+      'Angry_To_Tantrum_Sit': 'tantrum',
+      'Punch_Combo_1': 'kick',
+      'Idle_03': 'groundslam',
+    }
+  },
+  {
+    id: 'NEO',
+    path: '/sumo-assets/characters/NEO/NEO_Merged_Animations.glb',
+    animMap: {
+      // clipName → game action. Verified by Neo's visual testing.
+      'Idle_10': 'idle',             // 1=idle ✅
+      'Running': 'walk',             // 3=walk
+      'Dodge_and_Counter': 'run',    // 9=run
+      'Jump_with_Arms_and_Legs_Open': 'punch', // Q=punch
+      'Block6': 'hit',              // 0=being hit
+      'Upside_Down_Rope_Hang': 'death', // E=die
+      'FunnyDancing_01': 'dance',    // 7=dance ✅
+      'Dive_Down_and_Land_2': 'slam', // 8=slam ✅
+      'Double_kick_forward': 'dodge', // F=dodge
+      'dying_backwards': 'block',    // 6=block
+      'Punch_Combo_5': 'spin',      // 4=VIP gift (spin)
+      'Walking': 'tantrum',          // 2=tantrum
+      'Face_Punch_Reaction_2': 'kick', // 5=kick
+      'Angry_Ground_Stomp': 'groundslam', // G=groundslam ✅
+    }
+  },
+  // Future: { id: 'PUTIN', path: '/sumo-assets/characters/PUTIN/PUTIN_Merged.glb', animMap: { ... } },
+];
+// Loaded Meshy data: { path, preloaded, animMap } keyed by id
+const meshyTemplates = {};
+
+const CHAR_COLORS = [
+  0xff4444, 0xff8800, 0xffcc00, 0x44cc44, 0x4488ff, 0xaa44ff,
+  0xff44aa, 0x44ffcc, 0xff6600, 0x88ff44
+];
+
+// Guide panel is static HTML — no rotation needed
+
+// ===== THREE.JS SETUP =====
+const canvas = document.getElementById('gameCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x1a0a1e, 0.012);
+
+const aspect = 9 / 16;
+const camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 200);
+camera.position.set(0, 28, 14);
+camera.lookAt(0, 0, 0);
+
+function resize() {
+  const w = canvas.parentElement.clientWidth;
+  const h = canvas.parentElement.clientHeight;
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Lighting
+const sun = new THREE.DirectionalLight(0xffeedd, 1.8);
+sun.position.set(10, 25, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -25; sun.shadow.camera.right = 25;
+sun.shadow.camera.top = 25; sun.shadow.camera.bottom = -25;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 60;
+scene.add(sun);
+
+scene.add(new THREE.AmbientLight(0x443344, 0.5));
+scene.add(new THREE.HemisphereLight(0x8888cc, 0x443322, 0.6));
+
+// Sky gradient
+const skyGeo = new THREE.SphereGeometry(80, 16, 12);
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  uniforms: {},
+  vertexShader: `varying vec3 vPos; void main(){ vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `varying vec3 vPos;
+    void main(){
+      float h = normalize(vPos).y;
+      vec3 top = vec3(0.15, 0.1, 0.35);
+      vec3 mid = vec3(0.6, 0.2, 0.1);
+      vec3 bot = vec3(0.1, 0.05, 0.15);
+      vec3 col = h > 0.0 ? mix(mid, top, h) : mix(mid, bot, -h);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+});
+scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+// ===== ARENA =====
+let arenaRadius = ARENA_START_RADIUS;
+const arenaMat = new THREE.MeshStandardMaterial({ color: 0xc4956a, roughness: 0.8, metalness: 0.1 });
+const arenaGeo = new THREE.CylinderGeometry(ARENA_START_RADIUS, ARENA_START_RADIUS, 0.5, 64);
+const arenaMesh = new THREE.Mesh(arenaGeo, arenaMat);
+arenaMesh.receiveShadow = true;
+arenaMesh.position.y = -0.25;
+scene.add(arenaMesh);
+
+// Edge glow ring
+const edgeRingGeo = new THREE.TorusGeometry(ARENA_START_RADIUS, 0.15, 8, 64);
+const edgeRingMat = new THREE.MeshStandardMaterial({ color: 0xff4444, emissive: 0xff2200, emissiveIntensity: 1.5, transparent: true, opacity: 0.8 });
+const edgeRing = new THREE.Mesh(edgeRingGeo, edgeRingMat);
+edgeRing.rotation.x = -Math.PI / 2;
+edgeRing.position.y = 0.02;
+scene.add(edgeRing);
+
+// No outer ring — just the arena platform + edge glow. Clean and clear.
+
+// Water/lava below
+const waterGeo = new THREE.PlaneGeometry(100, 100);
+const waterMat = new THREE.MeshStandardMaterial({ color: 0x1144aa, emissive: 0x0033aa, emissiveIntensity: 0.3, transparent: true, opacity: 0.7 });
+const water = new THREE.Mesh(waterGeo, waterMat);
+water.rotation.x = -Math.PI / 2;
+water.position.y = -5;
+scene.add(water);
+
+// (Pillars removed — cleaner scene, lighter load)
+
+function updateArenaVisuals() {
+  // Scale arena platform + edge ring together
+  const s = arenaRadius / ARENA_START_RADIUS;
+  arenaMesh.scale.set(s, 1, s);
+  edgeRing.scale.set(s, s, 1);
+  // Edge ring pulse speed increases as arena shrinks
+  const intensity = 1.0 + (1 - s) * 3;
+  edgeRingMat.emissiveIntensity = intensity + Math.sin(Date.now() * 0.005 * intensity) * 0.5;
+}
+
+// ===== ASSET LOADING =====
+const loader = new GLTFLoader();
+const characterTemplates = {};
+const animationClips = {};
+const ualClips = {};
+
+const UAL_BONE_MAP = {
+  'spine_01': 'spine', 'spine_02': 'spine', 'spine_03': 'chest',
+  'Head': 'head', 'neck_01': 'chest',
+  'upperarm_l': 'upperarm.l', 'upperarm_r': 'upperarm.r',
+  'lowerarm_l': 'lowerarm.l', 'lowerarm_r': 'lowerarm.r',
+  'hand_l': 'hand.l', 'hand_r': 'hand.r',
+  'thigh_l': 'upperleg.l', 'thigh_r': 'upperleg.r',
+  'calf_l': 'lowerleg.l', 'calf_r': 'lowerleg.r',
+  'foot_l': 'foot.l', 'foot_r': 'foot.r',
+  'ball_l': 'toes.l', 'ball_r': 'toes.r',
+};
+
+let assetsLoaded = false;
+
+function parseUALClip(clip) {
+  const tracks = [];
+  for (const track of clip.tracks) {
+    const dotIdx = track.name.indexOf('.');
+    const ualBone = track.name.substring(0, dotIdx);
+    const property = track.name.substring(dotIdx + 1);
+    const kaykitBone = UAL_BONE_MAP[ualBone];
+    if (property === 'quaternion') {
+      tracks.push({ ualBone, kaykitBone, interpolant: track.createInterpolant(), type: 'quaternion' });
+    } else if (property === 'position' && ualBone === 'pelvis') {
+      const interp = track.createInterpolant();
+      const rest = interp.evaluate(0);
+      tracks.push({ ualBone, kaykitBone, interpolant: interp, type: 'position', restPos: [rest[0], rest[1], rest[2]] });
+    }
+  }
+  return { name: clip.name, duration: clip.duration, tracks };
+}
+
+async function loadAssets() {
+  const totalAssets = MESHY_CHARACTERS.length;
+  let loaded = 0;
+  function updateProgress(text) {
+    loaded++;
+    document.getElementById('progressFill').style.width = Math.round((loaded / totalAssets) * 100) + '%';
+    document.getElementById('loadingText').textContent = text;
+  }
+
+  // Pre-load Meshy characters (verify they exist + warm browser cache)
+  for (const mc of MESHY_CHARACTERS) {
+    try {
+      const gltf = await loader.loadAsync(mc.path);
+      meshyTemplates[mc.id] = { path: mc.path, preloaded: true, animMap: mc.animMap };
+      updateProgress(`${mc.id} (${gltf.animations.length} anims: ${gltf.animations.map(a => a.name).join(', ')})`);
+      console.log(`Meshy ${mc.id} preloaded OK — ${gltf.animations.length} animations`);
+    } catch (e) { console.warn(`Meshy ${mc.id} failed:`, e.message); loaded++; }
+  }
+
+  assetsLoaded = true;
+  console.log(`Sumo ready: ${Object.keys(meshyTemplates).length} Meshy characters`);
+  setTimeout(() => document.getElementById('loadingScreen').classList.add('hidden'), 400);
+}
+
+// ===== ROUND STATE MACHINE =====
+// WAITING → COUNTDOWN → ACTIVE → ENDED → INTERMISSION → WAITING
+let roundState = 'WAITING';
+let roundTimer = 0;
+let roundNumber = 0;
+// shrinkElapsed removed — using roundTimer for linear shrink
+let countdownValue = 0;
+
+function setRoundState(state) {
+  roundState = state;
+  const info = document.getElementById('roundInfo');
+  const timer = document.getElementById('roundTimer');
+
+  switch (state) {
+    case 'WAITING':
+      info.textContent = 'WAITING';
+      timer.textContent = '--';
+      timer.classList.remove('urgent');
+      showBanner('WAITING', `Need ${MIN_PLAYERS_TO_START} fighters...`);
+      arenaRadius = ARENA_START_RADIUS;
+      updateArenaVisuals();
+      break;
+
+    case 'COUNTDOWN':
+      roundNumber++;
+      countdownValue = ROUND_COUNTDOWN;
+      info.textContent = `ROUND ${roundNumber}`;
+      showBanner(String(ROUND_COUNTDOWN), 'Get ready!');
+      // Reset all players for new round
+      players.forEach(p => {
+        p.alive = true;
+        p.roundKills = 0;
+        p.vx = 0; p.vz = 0; p.vy = 0;
+        p.y = 0.25; p.onGround = true;
+        p.pushPower = p.basePushPower;
+        p.speedBoost = 0;
+        p.shieldHits = 0;
+        // Respawn at random position
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * arenaRadius * 0.5;
+        p.x = Math.cos(angle) * dist;
+        p.z = Math.sin(angle) * dist;
+        p.model.position.set(p.x, p.y, p.z);
+        p.model.visible = true;
+        p.animPriority = 0;
+        setPlayerAnim(p, 'idle', 0);
+      });
+      arenaRadius = ARENA_START_RADIUS;
+      updateArenaVisuals();
+      break;
+
+    case 'ACTIVE':
+      info.textContent = `ROUND ${roundNumber}`;
+      roundTimer = ROUND_DURATION;
+      hideBanner();
+      showBanner('FIGHT!', '');
+      setTimeout(hideBanner, 1500);
+      break;
+
+    // SUDDEN_DEATH removed — arena shrinks continuously during ACTIVE
+
+    case 'ENDED': {
+      roundTimer = 6;
+      const winner = getWinner();
+      if (winner) {
+        winner.wins++;
+        winner.score += 100;
+        showBanner(`${winner.nickname} WINS!`, `${winner.wins} win${winner.wins > 1 ? 's' : ''} — ${winner.roundKills} kills`);
+        // Teleport winner to arena center for victory dance
+        winner.x = 0; winner.z = 0; winner.y = 0.25;
+        winner.vx = 0; winner.vz = 0; winner.vy = 0;
+        winner.onGround = true;
+        winner.model.position.set(0, 0.25, 0);
+        setPlayerAnim(winner, 'dance', 6);
+        winner.punchTimer = 6; // hold dance for full ENDED duration
+        spawnConfetti(0, 3, 0);
+        shakeCamera(0.5);
+        // All losers play death animation and stay visible (dead on ground)
+        players.forEach(p => {
+          if (p.uniqueId === winner.uniqueId) return;
+          p.alive = false;
+          p.model.visible = true;
+          setPlayerAnim(p, 'death', 6);
+          p.punchTimer = 0; p.hitTimer = 0; // clear any timers
+        });
+      } else {
+        showBanner('DRAW!', 'No one survived...');
+        players.forEach(p => {
+          p.alive = false;
+          p.model.visible = true;
+          setPlayerAnim(p, 'death', 6);
+          p.punchTimer = 0; p.hitTimer = 0;
+        });
+      }
+      break;
+    }
+
+    case 'INTERMISSION':
+      roundTimer = INTERMISSION_TIME;
+      info.textContent = 'NEXT ROUND';
+      hideBanner();
+      break;
+  }
+}
+
+function updateRoundState(dt) {
+  switch (roundState) {
+    case 'WAITING': {
+      const alive = countAlivePlayers();
+      document.getElementById('roundTimer').textContent = `${alive}/${MIN_PLAYERS_TO_START}`;
+      if (alive >= MIN_PLAYERS_TO_START) {
+        setRoundState('COUNTDOWN');
+      }
+      break;
+    }
+
+    case 'COUNTDOWN':
+      countdownValue -= dt;
+      if (countdownValue <= 0) {
+        setRoundState('ACTIVE');
+      } else {
+        const v = Math.ceil(countdownValue);
+        document.getElementById('roundTimer').textContent = v;
+        showBanner(String(v), v === 1 ? 'FIGHT!' : 'Get ready!');
+      }
+      break;
+
+    case 'ACTIVE': {
+      // Smooth linear shrink tied to countdown timer
+      roundTimer -= dt;
+      const timeLeft = Math.max(0, roundTimer);
+      const shrinkProgress = 1 - (timeLeft / ROUND_DURATION); // 0 at start, 1 at end
+      arenaRadius = ARENA_START_RADIUS - (ARENA_START_RADIUS - ARENA_END_RADIUS) * shrinkProgress;
+      updateArenaVisuals();
+
+      // Countdown timer display
+      const display = Math.ceil(timeLeft);
+      const timerEl = document.getElementById('roundTimer');
+      timerEl.textContent = display;
+      timerEl.classList.toggle('urgent', display <= 15);
+
+      // Check win condition
+      const alive = countAlivePlayers();
+      document.getElementById('aliveCount').textContent = alive;
+      if (alive <= 1) {
+        // Last player standing — end immediately!
+        setRoundState('ENDED');
+      } else if (timeLeft <= 0) {
+        // Timer ran out with multiple alive — pick winner by kills/score
+        setRoundState('ENDED');
+      }
+      break;
+    }
+
+    case 'ENDED':
+      roundTimer -= dt;
+      if (roundTimer <= 0) setRoundState('INTERMISSION');
+      break;
+
+    case 'INTERMISSION':
+      roundTimer -= dt;
+      document.getElementById('roundTimer').textContent = Math.ceil(Math.max(0, roundTimer));
+      if (roundTimer <= 0) {
+        if (countAlivePlayers() >= MIN_PLAYERS_TO_START || players.size >= MIN_PLAYERS_TO_START) {
+          setRoundState('COUNTDOWN');
+        } else {
+          setRoundState('WAITING');
+        }
+      }
+      break;
+  }
+}
+
+function countAlivePlayers() {
+  let count = 0;
+  players.forEach(p => { if (p.alive) count++; });
+  return count;
+}
+
+function getWinner() {
+  // First: find alive players
+  const aliveList = [];
+  players.forEach(p => { if (p.alive) aliveList.push(p); });
+
+  // If exactly 1 alive — they win
+  if (aliveList.length === 1) return aliveList[0];
+
+  // If multiple alive (sudden death ended with radius 0.5) — pick by kills then score
+  if (aliveList.length > 1) {
+    aliveList.sort((a, b) => b.roundKills - a.roundKills || b.score - a.score);
+    return aliveList[0];
+  }
+
+  // If nobody alive (all fell off simultaneously) — pick by kills then score from all
+  const allPlayers = Array.from(players.values());
+  if (allPlayers.length === 0) return null;
+  allPlayers.sort((a, b) => b.roundKills - a.roundKills || b.score - a.score);
+  return allPlayers[0];
+}
+
+// ===== BANNER =====
+function showBanner(title, sub) {
+  const el = document.getElementById('roundBanner');
+  document.getElementById('bannerTitle').textContent = title;
+  document.getElementById('bannerSub').textContent = sub;
+  el.classList.add('show');
+}
+function hideBanner() {
+  document.getElementById('roundBanner').classList.remove('show');
+}
+
+// ===== PLAYER MANAGEMENT =====
+const players = new Map();
+
+function hashCode(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  return Math.abs(hash);
+}
+
+// Track pending async loads to prevent duplicates
+const pendingPlayers = new Set();
+
+async function createPlayer(viewer) {
+  if (players.has(viewer.uniqueId)) {
+    const existing = players.get(viewer.uniqueId);
+    existing.lastActive = Date.now();
+    return existing;
+  }
+  if (pendingPlayers.has(viewer.uniqueId)) return null;
+
+  if (players.size >= MAX_PLAYERS) {
+    let worst = null;
+    players.forEach(p => {
+      if (!worst || (!p.alive && worst.alive) || (p.alive === worst.alive && p.score < worst.score)) {
+        worst = p;
+      }
+    });
+    if (worst) removePlayer(worst.uniqueId);
+  }
+
+  const hash = hashCode(viewer.uniqueId);
+  const color = CHAR_COLORS[hash % CHAR_COLORS.length];
+  const meshyIds = Object.keys(meshyTemplates);
+
+  let model, mixer = null;
+  const animations = {};
+  let boneMap = {};
+  let hipsBone = null;
+  let _hipsRestPos = { x: 0, y: 0.85, z: 0 };
+  let isMannequin = false;
+  let isMeshy = false;
+
+  const meshyId = meshyIds.length > 0 ? meshyIds[hash % meshyIds.length] : null;
+
+  if (meshyId && meshyTemplates[meshyId]) {
+    // Load fresh GLB per player — browser caches the file, each gets own skeleton + bindings
+    pendingPlayers.add(viewer.uniqueId);
+    try {
+      const gltf = await loader.loadAsync(meshyTemplates[meshyId].path);
+      model = gltf.scene;
+      model.scale.setScalar(CHAR_SCALE);
+      isMeshy = true;
+
+      model.traverse(child => {
+        if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
+        if (child.isBone) {
+          boneMap[child.name] = child;
+          if (child.name === 'Hips') hipsBone = child;
+        }
+      });
+      if (hipsBone) _hipsRestPos = { x: hipsBone.position.x, y: hipsBone.position.y, z: hipsBone.position.z };
+
+      // Mixer on the fresh scene — animations bind directly to their own bones
+      mixer = new THREE.AnimationMixer(model);
+      // Per-character animation mapping (from config)
+      const nameMap = meshyTemplates[meshyId].animMap || {};
+      for (const clip of gltf.animations) {
+        const key = nameMap[clip.name];
+        if (!key) continue;
+        const action = mixer.clipAction(clip);
+        const looping = ['idle', 'run', 'walk', 'dance', 'block'].includes(key);
+        action.setLoop(looping ? THREE.LoopRepeat : THREE.LoopOnce);
+        if (!looping) action.clampWhenFinished = true;
+        action.stop();
+        animations[key] = action;
+      }
+
+      // One-shot finished → return to idle (respects priority system)
+      const _uid = viewer.uniqueId;
+      mixer.addEventListener('finished', () => {
+        const p = players.get(_uid);
+        if (!p || !p.alive) return; // Stay dead — don't reset to idle
+        // Respect priority — don't cut high-priority animations (gifts, etc.)
+        if (p.animPriority >= 2 && (p.punchTimer > 0 || p.hitTimer > 0)) return;
+        setPlayerAnim(p, 'idle', 0);
+      });
+
+      console.log(`Player ${viewer.uniqueId}: ${meshyId}, anims=[${Object.keys(animations)}]`);
+    } catch (e) {
+      console.warn('Meshy load fail:', e.message);
+      pendingPlayers.delete(viewer.uniqueId);
+      return null;
+    }
+    pendingPlayers.delete(viewer.uniqueId);
+  } else {
+    // Fallback box character
+    model = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.6, 4, 8), new THREE.MeshStandardMaterial({ color }));
+    body.position.y = 0.7; body.castShadow = true; model.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshStandardMaterial({ color }));
+    head.position.y = 1.3; head.castShadow = true; model.add(head);
+  }
+
+  // Name label
+  const nc = document.createElement('canvas');
+  nc.width = 512; nc.height = 128;
+  const ctx = nc.getContext('2d');
+  const displayName = (viewer.nickname || viewer.uniqueId).slice(0, 14);
+  ctx.font = 'bold 42px Segoe UI, sans-serif';
+  const textW = Math.min(ctx.measureText(displayName).width + 40, 500);
+  const pillX = (512 - textW) / 2;
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.roundRect(pillX, 20, textW, 80, 40);
+  ctx.fill();
+  ctx.strokeStyle = '#' + color.toString(16).padStart(6, '0');
+  ctx.lineWidth = 3;
+  ctx.roundRect(pillX, 20, textW, 80, 40);
+  ctx.stroke();
+  ctx.font = 'bold 42px Segoe UI, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(displayName, 256, 72);
+  const nameSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(nc), transparent: true, depthTest: false
+  }));
+  nameSprite.scale.set(2.2, 0.55, 1);
+  nameSprite.position.y = 2.3;
+  nameSprite.renderOrder = 999;
+  model.add(nameSprite);
+
+  // Aim arrow indicator
+  const arrowGeo = new THREE.ConeGeometry(0.12, 0.4, 4);
+  arrowGeo.rotateX(Math.PI / 2);
+  const arrowMat = new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0xff4400, emissiveIntensity: 1 });
+  const aimArrow = new THREE.Mesh(arrowGeo, arrowMat);
+  aimArrow.position.set(0, 1.8, 0.6);
+  model.add(aimArrow);
+
+  // Spawn position
+  const angle = Math.random() * Math.PI * 2;
+  const dist = Math.random() * arenaRadius * 0.5;
+  const x = Math.cos(angle) * dist;
+  const z = Math.sin(angle) * dist;
+
+  model.position.set(x, 0.25, z);
+  scene.add(model);
+
+  const player = {
+    uniqueId: viewer.uniqueId,
+    nickname: viewer.nickname || viewer.uniqueId,
+    model, mixer, animations, boneMap, hipsBone, isMannequin, isMeshy,
+    _hipsRestPos, aimArrow, nameSprite,
+    // Physics
+    x, z, y: 0.25, vx: 0, vz: 0, vy: 0, onGround: true,
+    // Combat
+    aimAngle: Math.random() * Math.PI * 2,
+    pushPower: 1.0, basePushPower: 1.0, speedBoost: 0,
+    kills: 0, roundKills: 0, wins: 0, alive: true, animPriority: 0,
+    shieldHits: 0, lastPushedBy: null,
+    // Animation
+    ualPlayback: null, currentAnim: 'idle',
+    punchTimer: 0, hitTimer: 0,
+    // Meta
+    color, score: 0, lastActive: Date.now(),
+  };
+
+  // Start idle (fallback to first available anim)
+  setPlayerAnim(player, 'idle', 0);
+
+  players.set(viewer.uniqueId, player);
+  updatePlayerCount();
+  addNotification(`<strong>${player.nickname}</strong> entered the arena!`);
+  setupFocusButtons(); // Refresh focus panel
+  return player;
+}
+
+function removePlayer(uniqueId) {
+  const p = players.get(uniqueId);
+  if (!p) return;
+  scene.remove(p.model);
+  players.delete(uniqueId);
+  updatePlayerCount();
+}
+
+function updatePlayerCount() {
+  document.getElementById('playerCount').textContent = players.size;
+  document.getElementById('aliveCount').textContent = countAlivePlayers();
+}
+
+// ===== ANIMATION =====
+// Priority levels: 0=idle/walk/run, 1=punch/hit, 2=small gift, 3=medium gift, 4=big gift, 5=VIP gift, 6=death/win
+function setPlayerAnim(player, animName, priority = 0) {
+  // Block if current animation has higher priority and timer hasn't expired
+  if (priority < player.animPriority && (player.punchTimer > 0 || player.hitTimer > 0)) {
+    if (priority >= 2) console.log(`[ANIM BLOCKED] ${animName}(p${priority}) blocked by ${player.currentAnim}(p${player.animPriority}) timers: punch=${player.punchTimer.toFixed(1)} hit=${player.hitTimer.toFixed(1)}`);
+    return;
+  }
+  player.animPriority = priority;
+  player.currentAnim = animName;
+
+  if (player.isMeshy) {
+    const meshyName = animName === 'jab' ? 'punch' : animName;
+    player.ualPlayback = null;
+    if (player.mixer) {
+      const target = player.animations[meshyName]
+        || player.animations.idle
+        || Object.values(player.animations)[0];
+      if (target) {
+        player.mixer.stopAllAction();
+        target.reset();
+        target.enabled = true;
+        target.setEffectiveTimeScale(1);
+        target.setEffectiveWeight(1);
+        // Death/hit animations: play once and hold final pose
+        const oneShot = (meshyName === 'death' || meshyName === 'hit' || meshyName === 'slam'
+          || meshyName === 'groundslam' || meshyName === 'dodge' || meshyName === 'spin'
+          || meshyName === 'tantrum' || meshyName === 'kick' || meshyName === 'punch');
+        if (oneShot) {
+          target.setLoop(THREE.LoopOnce);
+          target.clampWhenFinished = true;
+        } else {
+          target.setLoop(THREE.LoopRepeat);
+          target.clampWhenFinished = false;
+        }
+        target.play();
+      } else {
+        console.warn(`Meshy anim not found: ${meshyName}, available:`, Object.keys(player.animations));
+      }
+    }
+    return;
+  }
+
+  // KayKit/Mannequin: Try UAL clip first
+  const ualMap = {
+    'idle': 'UAL_Idle_Loop',
+    'run': 'UAL_Running_A',
+    'walk': 'UAL_Walking_A',
+    'punch': 'UAL_Punch_Cross',
+    'jab': 'UAL_Punch_Jab',
+    'hit': 'UAL_Hit_Chest',
+    'dance': 'UAL_Dance_Loop',
+    'death': 'UAL_Death01',
+  };
+  const ualKey = ualMap[animName];
+  if (ualKey && ualClips[ualKey]) {
+    player.ualPlayback = { clip: ualClips[ualKey], time: 0, loop: ['idle', 'run', 'walk', 'dance'].includes(animName) };
+  } else {
+    player.ualPlayback = null;
+    // Fallback to KayKit mixer
+    if (player.mixer) {
+      player.mixer.stopAllAction();
+      if (player.animations[animName]) {
+        player.animations[animName].reset().play();
+      } else if (player.animations.idle) {
+        player.animations.idle.reset().play();
+      }
+    }
+  }
+}
+
+const _tempQ = new THREE.Quaternion();
+
+function applyUALFrame(player, time) {
+  if (!player.ualPlayback) return;
+  for (const t of player.ualPlayback.clip.tracks) {
+    const boneName = player.isMannequin ? t.ualBone : t.kaykitBone;
+    if (!boneName) continue;
+    const bone = player.boneMap[boneName];
+    if (!bone) continue;
+    const result = t.interpolant.evaluate(time);
+    if (t.type === 'quaternion') {
+      bone.quaternion.set(result[0], result[1], result[2], result[3]);
+    } else if (t.type === 'position') {
+      if (player.isMannequin) {
+        bone.position.set(result[0], result[1], result[2]);
+      }
+    }
+  }
+}
+
+function updateAnimations(dt) {
+  players.forEach(p => {
+    if (p.mixer) p.mixer.update(dt);
+
+    if (p.isMeshy) {
+      // Meshy: mixer handles everything natively
+      // Just handle one-shot → idle transition via finished event
+      // (punch/hit timer below handles return to idle)
+    } else if (p.ualPlayback) {
+      // KayKit/Mannequin: manual UAL bone playback
+      p.ualPlayback.time += dt;
+      if (p.ualPlayback.loop) {
+        p.ualPlayback.time %= p.ualPlayback.clip.duration;
+      } else if (p.ualPlayback.time >= p.ualPlayback.clip.duration) {
+        if (p.currentAnim === 'death') return; // stay dead
+        setPlayerAnim(p, p.alive ? 'idle' : 'death', 0);
+        return;
+      }
+      applyUALFrame(p, p.ualPlayback.time);
+    }
+
+    // Punch/hit cooldown animations — reset priority when expired
+    if (p.punchTimer > 0) {
+      p.punchTimer -= dt;
+      if (p.punchTimer <= 0 && p.alive) { p.animPriority = 0; setPlayerAnim(p, 'idle', 0); }
+    }
+    if (p.hitTimer > 0) {
+      p.hitTimer -= dt;
+      if (p.hitTimer <= 0 && p.alive) { p.animPriority = 0; setPlayerAnim(p, 'idle', 0); }
+    }
+  });
+}
+
+// ===== PHYSICS =====
+const WALK_SPEED = 1.8;       // Auto-walk speed toward opponents
+const ENGAGE_DIST = 1.8;      // Distance to stop and face opponent
+const PUNCH_RANGE = 2.2;      // Max range for like-to-punch
+const DODGE_FORCE = 4.0;      // Dodge sidestep force
+
+function findNearestAlive(player) {
+  let nearest = null, minDist = Infinity;
+  players.forEach(other => {
+    if (other.uniqueId === player.uniqueId || !other.alive) return;
+    const dx = other.x - player.x, dz = other.z - player.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < minDist) { minDist = dist; nearest = other; }
+  });
+  return { target: nearest, dist: minDist };
+}
+
+function updatePhysics(dt) {
+  if (roundState !== 'ACTIVE' && roundState !== 'COUNTDOWN') return;
+
+  players.forEach(p => {
+    if (!p.alive) return;
+
+    // Friction
+    p.vx *= FRICTION;
+    p.vz *= FRICTION;
+
+    // Speed boost countdown
+    if (p.speedBoost > 0) p.speedBoost -= dt;
+
+    // ===== AUTO-WALK AI WITH SURVIVAL INSTINCT =====
+    if (roundState === 'ACTIVE' && p.onGround && p.punchTimer <= 0 && p.hitTimer <= 0) {
+      const distFromCenter = Math.sqrt(p.x * p.x + p.z * p.z);
+      const edgeRatio = distFromCenter / Math.max(arenaRadius, 1); // 0=center, 1=edge
+
+      // Survival instinct: pull toward center when near the edge
+      // Kicks in strongly past 70% of arena radius
+      const survivalUrgency = Math.max(0, (edgeRatio - 0.5) / 0.5); // 0 at 50%, 1 at 100%
+      const survivalForce = survivalUrgency * survivalUrgency * 3.0; // quadratic ramp
+
+      // Direction toward center
+      let moveX = 0, moveZ = 0;
+      if (distFromCenter > 0.5 && survivalForce > 0.1) {
+        moveX += (-p.x / distFromCenter) * survivalForce;
+        moveZ += (-p.z / distFromCenter) * survivalForce;
+      }
+
+      // Chase opponent: strongest when safely inside, weakens near edge
+      const { target, dist } = findNearestAlive(p);
+      if (target && dist > ENGAGE_DIST) {
+        const dx = target.x - p.x, dz = target.z - p.z;
+        const chaseFactor = Math.max(0.1, 1.0 - survivalUrgency * 0.8); // weaken chase near edge
+        moveX += (dx / dist) * chaseFactor;
+        moveZ += (dz / dist) * chaseFactor;
+      }
+
+      // Aim toward movement direction (or toward opponent if close)
+      if (target) {
+        const dx = target.x - p.x, dz = target.z - p.z;
+        p.aimAngle = Math.atan2(dx, dz);
+      }
+
+      // Apply movement
+      const moveMag = Math.sqrt(moveX * moveX + moveZ * moveZ);
+      if (moveMag > 0.01) {
+        const speed = WALK_SPEED * (p.speedBoost > 0 ? 1.5 : 1);
+        p.vx += (moveX / moveMag) * speed * dt * 3;
+        p.vz += (moveZ / moveMag) * speed * dt * 3;
+        // Cap walk speed
+        const curSpeed = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
+        if (curSpeed > speed) {
+          p.vx = (p.vx / curSpeed) * speed;
+          p.vz = (p.vz / curSpeed) * speed;
+        }
+      }
+    }
+
+    // Gravity
+    if (!p.onGround) {
+      p.vy -= GRAVITY * dt;
+    }
+
+    // Apply velocity
+    p.x += p.vx * dt;
+    p.z += p.vz * dt;
+    p.y += p.vy * dt;
+
+    // Ground check — on arena surface (y=0.25)
+    const distFromCenter = Math.sqrt(p.x * p.x + p.z * p.z);
+
+    if (roundState === 'ACTIVE') {
+      if (distFromCenter <= arenaRadius + 0.3) {
+        // On arena (with tiny grace buffer at edge)
+        if (p.y <= 0.25) { p.y = 0.25; p.vy = 0; p.onGround = true; }
+        // Nudge inward if in grace buffer
+        if (distFromCenter > arenaRadius && distFromCenter > 0.1) {
+          const nx = -p.x / distFromCenter;
+          const nz = -p.z / distFromCenter;
+          p.vx += nx * 4.0 * dt;
+          p.vz += nz * 4.0 * dt;
+        }
+      } else {
+        // Past arena edge — fall into the abyss!
+        p.onGround = false;
+        if (p.vy >= 0) p.vy = -1.0; // kick downward immediately
+      }
+
+      // Elimination check
+      if (p.y < -3) {
+        eliminatePlayer(p);
+      }
+    } else {
+      // During countdown, keep on platform
+      if (p.y <= 0.25) { p.y = 0.25; p.vy = 0; p.onGround = true; }
+    }
+
+    // Update model position
+    p.model.position.set(p.x, p.y, p.z);
+
+    // Face aim direction (toward nearest opponent)
+    p.model.rotation.y = p.aimAngle;
+
+    // Update aim arrow
+    if (p.aimArrow) {
+      p.aimArrow.position.set(
+        Math.sin(p.aimAngle) * 0.6,
+        1.8,
+        Math.cos(p.aimAngle) * 0.6
+      );
+    }
+
+    // Determine walk/run/idle anim based on velocity
+    if (p.alive && p.punchTimer <= 0 && p.hitTimer <= 0) {
+      const speed = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
+      if (speed > 1.5 && p.currentAnim !== 'run') setPlayerAnim(p, 'run', 0);
+      else if (speed > 0.3 && speed <= 1.5 && p.currentAnim !== 'walk') setPlayerAnim(p, 'walk', 0);
+      else if (speed <= 0.3 && p.currentAnim !== 'idle' && p.currentAnim !== 'dance') setPlayerAnim(p, 'idle', 0);
+    }
+  });
+
+  // Player-player collisions
+  if (roundState === 'ACTIVE') {
+    const arr = Array.from(players.values()).filter(p => p.alive);
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const a = arr[i], b = arr[j];
+        const dx = b.x - a.x, dz = b.z - a.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < 1.2 && dist > 0.01) {
+          const nx = dx / dist, nz = dz / dist;
+          const overlap = (1.2 - dist) * 0.5;
+          // Push apart
+          a.x -= nx * overlap; a.z -= nz * overlap;
+          b.x += nx * overlap; b.z += nz * overlap;
+          // Momentum transfer
+          const aSpeed = Math.sqrt(a.vx * a.vx + a.vz * a.vz);
+          const bSpeed = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
+          if (aSpeed > bSpeed + 0.5) {
+            // A is pushing B
+            const force = (aSpeed - bSpeed) * 0.5 * a.pushPower;
+            b.vx += nx * force; b.vz += nz * force;
+            b.lastPushedBy = a.uniqueId;
+            if (b.shieldHits > 0) { b.shieldHits--; b.vx *= 0.3; b.vz *= 0.3; }
+          } else if (bSpeed > aSpeed + 0.5) {
+            const force = (bSpeed - aSpeed) * 0.5 * b.pushPower;
+            a.vx -= nx * force; a.vz -= nz * force;
+            a.lastPushedBy = b.uniqueId;
+            if (a.shieldHits > 0) { a.shieldHits--; a.vx *= 0.3; a.vz *= 0.3; }
+          }
+        }
+      }
+    }
+  }
+}
+
+function eliminatePlayer(player) {
+  if (!player.alive) return;
+  player.alive = false;
+
+  // Play death animation (keep model visible during it) — highest priority
+  setPlayerAnim(player, 'death', 6);
+  player.punchTimer = 0;
+  player.hitTimer = 0;
+
+  // Credit kill
+  if (player.lastPushedBy) {
+    const killer = players.get(player.lastPushedBy);
+    if (killer && killer.alive) {
+      killer.kills++;
+      killer.roundKills++;
+      killer.score += 25;
+      addNotification(`<strong>${killer.nickname}</strong> knocked off <strong>${player.nickname}</strong>!`, 'kill');
+    } else {
+      addNotification(`<strong>${player.nickname}</strong> fell off the arena!`, 'kill');
+    }
+  } else {
+    addNotification(`<strong>${player.nickname}</strong> fell off the arena!`, 'kill');
+  }
+
+  // Splash particles
+  spawnSplash(player.x, -2, player.z, player.color);
+  updatePlayerCount();
+
+  // Hide model after death animation plays (2 seconds)
+  setTimeout(() => {
+    if (player.model) player.model.visible = false;
+  }, 2000);
+
+  // Check if round should end
+  if (roundState === 'ACTIVE' && countAlivePlayers() <= 1) {
+    setRoundState('ENDED');
+  }
+}
+
+// ===== TIKTOK EVENT HANDLERS =====
+async function handleLike(data) {
+  const count = Math.min(data.likeCount || 1, 3);
+  let p = players.get(data.uniqueId);
+  if (!p) return; // Must type "join" first
+  if (!p.alive || roundState !== 'ACTIVE') return;
+
+  p.lastActive = Date.now();
+  p.score += count;
+
+  // Find nearest opponent and PUNCH them
+  const { target, dist } = findNearestAlive(p);
+  if (target && dist < PUNCH_RANGE) {
+    // In range — punch the opponent!
+    const dx = target.x - p.x, dz = target.z - p.z;
+    const nx = dx / dist, nz = dz / dist;
+    const force = BASE_PUSH * p.pushPower * (p.speedBoost > 0 ? 1.5 : 1) * count;
+
+    // Knockback on target
+    target.vx += nx * force;
+    target.vz += nz * force;
+    target.lastPushedBy = p.uniqueId;
+
+    // Hit animation on target + small stagger bounce
+    if (target.hitTimer <= 0) {
+      setPlayerAnim(target, 'hit', 1);
+      target.hitTimer = 2.9; // hit clip = 2.83s
+      // Stagger bounce — makes hit visually clear
+      target.vy = 1.5;
+      target.onGround = false;
+    }
+    if (target.shieldHits > 0) { target.shieldHits--; target.vx *= 0.3; target.vz *= 0.3; }
+
+    // Face the opponent
+    p.aimAngle = Math.atan2(dx, dz);
+
+    spawnPushParticles(target.x, 1, target.z);
+    addNotification(`<strong>${p.nickname}</strong> punched <strong>${target.nickname}</strong>!`);
+  } else {
+    // No one in range — lunge forward
+    const force = BASE_PUSH * 0.5 * count;
+    p.vx += Math.sin(p.aimAngle) * force;
+    p.vz += Math.cos(p.aimAngle) * force;
+    spawnPushParticles(p.x + Math.sin(p.aimAngle) * 0.8, 1, p.z + Math.cos(p.aimAngle) * 0.8);
+  }
+
+  // Punch animation on attacker
+  if (p.punchTimer <= 0) {
+    setPlayerAnim(p, 'punch', 1);
+    p.punchTimer = 2.3; // punch clip = 2.23s
+  }
+}
+
+async function handleChat(data) {
+  const msg = (data.comment || '').toLowerCase().trim();
+
+  // JOIN command — type "join" to enter the arena
+  let p = players.get(data.uniqueId);
+  if (!p) {
+    if (msg === 'join' || msg === 'masuk' || msg === 'nak main') {
+      p = await createPlayer(data);
+      if (p) addNotification(`<strong>${p.nickname}</strong> joined the arena! 👊`, 'power');
+    }
+    return; // Not in game yet
+  }
+
+  p.lastActive = Date.now();
+  p.score += 1;
+
+  if (!p.alive || roundState !== 'ACTIVE') return;
+
+  // DODGE — sidestep perpendicular to aim direction
+  let dodgeAngle;
+  if (msg.includes('left') || msg.includes('kiri')) {
+    dodgeAngle = p.aimAngle - Math.PI / 2; // dodge left
+  } else if (msg.includes('right') || msg.includes('kanan')) {
+    dodgeAngle = p.aimAngle + Math.PI / 2; // dodge right
+  } else if (msg.includes('back') || msg.includes('belakang') || msg.includes('lari')) {
+    dodgeAngle = p.aimAngle + Math.PI; // dodge backward (retreat)
+  } else {
+    // Random sidestep left or right
+    dodgeAngle = p.aimAngle + (Math.random() < 0.5 ? -Math.PI / 2 : Math.PI / 2);
+  }
+
+  p.vx += Math.sin(dodgeAngle) * DODGE_FORCE;
+  p.vz += Math.cos(dodgeAngle) * DODGE_FORCE;
+
+  // Dodge animation (priority 1 — can be overridden by gifts)
+  if (p.punchTimer <= 0 && p.hitTimer <= 0) {
+    setPlayerAnim(p, 'dodge', 1);
+    p.punchTimer = 1.9; // dodge clip = 1.83s
+  }
+  addNotification(`<strong>${p.nickname}</strong> dodged!`);
+}
+
+async function handleGift(data) {
+  let p = players.get(data.uniqueId);
+  if (!p) return; // Must type "join" first
+  p.lastActive = Date.now();
+
+  const diamonds = data.diamondCount || 1;
+
+  if (diamonds >= 500) {
+    // VIP: METEOR SPIN — 360 spin + nuke ALL other players!
+    p.score += 200;
+    players.forEach(other => {
+      if (other.uniqueId === p.uniqueId || !other.alive) return;
+      const dx = other.x - p.x, dz = other.z - p.z;
+      const dist = Math.sqrt(dx * dx + dz * dz) || 1;
+      const force = 14;
+      other.vx += (dx / dist) * force;
+      other.vz += (dz / dist) * force;
+      other.vy = 8;
+      other.onGround = false;
+      other.lastPushedBy = p.uniqueId;
+      setPlayerAnim(other, 'death', 5);
+      other.hitTimer = 4.0; other.punchTimer = 0;
+      spawnExplosion(other.x, 1, other.z);
+    });
+    addNotification(`<strong>${p.nickname}</strong> used METEOR SPIN — EVERYONE FLIES!`, 'gift');
+    // Spin animation on gifter + bright purple aura
+    if (p.alive) { setPlayerAnim(p, 'spin', 5); p.punchTimer = 3.2; } // spin clip = 3.07s
+    highlightGifter(p, 0xff00ff, 4.0);
+    showPowerFlash();
+    showGiftBanner(p.nickname, 'VIP METEOR SPIN', '#ff00ff', diamonds);
+    shakeCamera(1.5);
+
+  } else if (diamonds >= 100) {
+    // BIG: SHOCKWAVE SLAM — jump + slam, AoE knockback everyone
+    p.score += 50;
+    players.forEach(other => {
+      if (other.uniqueId === p.uniqueId || !other.alive) return;
+      const dx = other.x - p.x, dz = other.z - p.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < 8 && dist > 0.1) {
+        const force = 8 * (1 - dist / 8);
+        other.vx += (dx / dist) * force;
+        other.vz += (dz / dist) * force;
+        other.vy = 5;
+        other.onGround = false;
+        other.lastPushedBy = p.uniqueId;
+        if (dist < 3) {
+          setPlayerAnim(other, 'death', 4); other.hitTimer = 4.0;
+        } else {
+          setPlayerAnim(other, 'hit', 4); other.hitTimer = 2.9; // hit clip = 2.83s
+        }
+        other.punchTimer = 0;
+      }
+    });
+    // Slam animation on gifter
+    if (p.alive) { setPlayerAnim(p, 'slam', 4); p.punchTimer = 2.9; } // slam clip = 2.77s
+    highlightGifter(p, 0xff4400, 3.0);
+    spawnExplosion(p.x, 0.5, p.z);
+    addNotification(`<strong>${p.nickname}</strong> used SHOCKWAVE SLAM!`, 'gift');
+    showPowerFlash();
+    showGiftBanner(p.nickname, 'SHOCKWAVE SLAM', '#ff4400', diamonds);
+    shakeCamera(1.0);
+
+  } else if (diamonds >= 11) {
+    // MEDIUM: GROUND SLAM — charge + slam one area
+    p.score += 20;
+    const { target: nearest, dist: nearDist } = findNearestAlive(p);
+    if (nearest && nearDist < 6) {
+      // Rush toward nearest + big knockback
+      const dx = nearest.x - p.x, dz = nearest.z - p.z;
+      const nx = dx / nearDist, nz = dz / nearDist;
+      nearest.vx += nx * 6; nearest.vz += nz * 6;
+      nearest.vy = 3; nearest.onGround = false;
+      nearest.lastPushedBy = p.uniqueId;
+      setPlayerAnim(nearest, 'hit', 3); nearest.hitTimer = 2.9; nearest.punchTimer = 0; // hit clip = 2.83s
+      // Also push nearby players (smaller AoE) + hit animation
+      players.forEach(other => {
+        if (other.uniqueId === p.uniqueId || other.uniqueId === nearest.uniqueId || !other.alive) return;
+        const odx = other.x - p.x, odz = other.z - p.z;
+        const odist = Math.sqrt(odx * odx + odz * odz);
+        if (odist < 4 && odist > 0.1) {
+          const force = 3 * (1 - odist / 4);
+          other.vx += (odx / odist) * force; other.vz += (odz / odist) * force;
+          other.vy = 1.5; other.onGround = false;
+          other.lastPushedBy = p.uniqueId;
+          setPlayerAnim(other, 'hit', 3); other.hitTimer = 2.9; other.punchTimer = 0; // hit clip = 2.83s
+        }
+      });
+      addNotification(`<strong>${p.nickname}</strong> used GROUND SLAM on <strong>${nearest.nickname}</strong>!`, 'gift');
+    } else {
+      addNotification(`<strong>${p.nickname}</strong> used GROUND SLAM!`, 'gift');
+    }
+    // Ground slam animation on gifter
+    if (p.alive) { setPlayerAnim(p, 'groundslam', 3); p.punchTimer = 3.1; } // groundslam clip = 3.00s
+    highlightGifter(p, 0xffaa00, 2.5);
+    spawnShockwave(p.x, 0.3, p.z);
+    showGiftBanner(p.nickname, 'GROUND SLAM', '#ffaa00', diamonds);
+
+  } else {
+    // SMALL (1-10): POWER TANTRUM — 2x knockback for 5s + flying kick
+    p.score += 5;
+    p.pushPower = p.basePushPower * 2;
+    setTimeout(() => { if (p) p.pushPower = p.basePushPower; }, 5000);
+    // Tantrum animation
+    if (p.alive) { setPlayerAnim(p, 'tantrum', 2); p.punchTimer = 3.5; } // tantrum clip = 8.50s (capped for gameplay)
+    highlightGifter(p, 0x44ff44, 2.0);
+    addNotification(`<strong>${p.nickname}</strong> is POWERED UP! 2x punch for 5s!`, 'power');
+  }
+}
+
+async function handleFollow(data) {
+  let p = players.get(data.uniqueId);
+  if (!p) { // Auto-join on follow as a reward
+    p = await createPlayer(data);
+    if (p) addNotification(`<strong>${p.nickname}</strong> followed & joined! 👊`, 'power');
+    if (!p) return;
+  }
+  p.score += 10;
+  p.basePushPower = Math.min(p.basePushPower * 1.3, 3.0);
+  p.pushPower = p.basePushPower;
+  // Tantrum flex animation
+  if (p.alive && p.punchTimer <= 0) { setPlayerAnim(p, 'tantrum', 2); p.punchTimer = 3.0; } // tantrum clip = 8.50s (capped)
+  addNotification(`<strong>${p.nickname}</strong> followed! +30% POWER!`, 'power');
+}
+
+async function handleShare(data) {
+  let p = players.get(data.uniqueId);
+  if (!p) return; // Must type "join" first
+  p.score += 5;
+  p.speedBoost = 3;
+  p.shieldHits = Math.max(p.shieldHits, 1);
+  // Block/shield animation
+  if (p.alive && p.punchTimer <= 0) { setPlayerAnim(p, 'block', 2); p.punchTimer = 3.5; } // block clip = 3.47s
+  addNotification(`<strong>${p.nickname}</strong> shared! Speed + Shield!`, 'power');
+}
+
+function getLeader() {
+  let leader = null;
+  players.forEach(p => {
+    if (p.alive && (!leader || p.score > leader.score)) leader = p;
+  });
+  return leader;
+}
+
+// ===== NOTIFICATIONS =====
+function addNotification(html, type = '') {
+  const container = document.getElementById('notifications');
+  const el = document.createElement('div');
+  el.className = `notif ${type}`;
+  el.innerHTML = html;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+  while (container.children.length > 6) container.removeChild(container.firstChild);
+}
+
+// ===== POWER FLASH =====
+function showPowerFlash() {
+  const el = document.getElementById('powerFlash');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 200);
+}
+
+// Big gift announcement — fullscreen overlay for VIP/Big gifts
+function showGiftBanner(nickname, tierName, tierColor, diamonds) {
+  let banner = document.getElementById('giftBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'giftBanner';
+    banner.style.cssText = `
+      position:absolute; top:0; left:0; width:100%; height:100%;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      pointer-events:none; z-index:200; opacity:0; transition:opacity 0.3s;
+    `;
+    banner.innerHTML = `
+      <div id="giftTier" style="font-size:14px;font-weight:900;letter-spacing:4px;text-transform:uppercase;margin-bottom:4px;"></div>
+      <div id="giftUser" style="font-size:24px;font-weight:900;text-shadow:0 0 20px rgba(0,0,0,0.8);"></div>
+      <div id="giftDiamonds" style="font-size:12px;margin-top:4px;opacity:0.8;"></div>
+    `;
+    document.querySelector('.game-frame').appendChild(banner);
+  }
+  document.getElementById('giftTier').textContent = tierName;
+  document.getElementById('giftTier').style.color = tierColor;
+  document.getElementById('giftUser').textContent = nickname;
+  document.getElementById('giftUser').style.color = '#fff';
+  document.getElementById('giftDiamonds').textContent = `${diamonds} diamonds`;
+  document.getElementById('giftDiamonds').style.color = tierColor;
+  banner.style.opacity = '1';
+  banner.style.background = `radial-gradient(ellipse at center, ${tierColor}44 0%, transparent 70%)`;
+  clearTimeout(banner._timer);
+  banner._timer = setTimeout(() => { banner.style.opacity = '0'; }, 2500);
+}
+
+// ===== GIFTER HIGHLIGHT — glowing aura so you can see who did it =====
+function highlightGifter(player, color, duration) {
+  if (!player || !player.model) return;
+  // Add a glowing sphere around the gifter
+  const auraGeo = new THREE.SphereGeometry(1.2, 16, 12);
+  const auraMat = new THREE.MeshBasicMaterial({
+    color: color, transparent: true, opacity: 0.4, side: THREE.BackSide
+  });
+  const aura = new THREE.Mesh(auraGeo, auraMat);
+  aura.position.y = 0.8;
+  player.model.add(aura);
+
+  // Pulse the aura
+  const startTime = Date.now();
+  const pulseInterval = setInterval(() => {
+    const elapsed = (Date.now() - startTime) / 1000;
+    if (elapsed > duration) {
+      player.model.remove(aura);
+      auraGeo.dispose(); auraMat.dispose();
+      clearInterval(pulseInterval);
+      return;
+    }
+    auraMat.opacity = 0.2 + Math.sin(elapsed * 8) * 0.2;
+    aura.scale.setScalar(1.0 + Math.sin(elapsed * 6) * 0.15);
+  }, 50);
+}
+
+// ===== PARTICLES =====
+const particles = [];
+
+function spawnPushParticles(x, y, z) {
+  for (let i = 0; i < 6; i++) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 4, 3),
+      new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0xff4400, emissiveIntensity: 1 })
+    );
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+    particles.push({
+      mesh,
+      vx: (Math.random() - 0.5) * 3,
+      vy: Math.random() * 2 + 1,
+      vz: (Math.random() - 0.5) * 3,
+      life: 0.6 + Math.random() * 0.3,
+    });
+  }
+}
+
+function spawnSplash(x, y, z, color) {
+  for (let i = 0; i < 15; i++) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.08, 4, 3),
+      new THREE.MeshStandardMaterial({ color: color || 0xff4444, emissive: color || 0xff2200, emissiveIntensity: 1.5 })
+    );
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+    particles.push({
+      mesh,
+      vx: (Math.random() - 0.5) * 6,
+      vy: Math.random() * 5 + 2,
+      vz: (Math.random() - 0.5) * 6,
+      life: 1.0 + Math.random() * 0.5,
+    });
+  }
+}
+
+function spawnExplosion(x, y, z) {
+  for (let i = 0; i < 25; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 3 + Math.random() * 5;
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 4, 3),
+      new THREE.MeshStandardMaterial({ color: 0xff4400, emissive: 0xff2200, emissiveIntensity: 2 })
+    );
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+    particles.push({
+      mesh,
+      vx: Math.cos(angle) * speed,
+      vy: Math.random() * 4 + 1,
+      vz: Math.sin(angle) * speed,
+      life: 0.8 + Math.random() * 0.4,
+    });
+  }
+}
+
+function spawnShockwave(x, y, z) {
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.5, 0.1, 8, 32),
+    new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0xff6600, emissiveIntensity: 2, transparent: true, opacity: 1 })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, y, z);
+  scene.add(ring);
+  particles.push({ mesh: ring, vx: 0, vy: 0, vz: 0, life: 0.8, isRing: true, ringScale: 0.5 });
+}
+
+function spawnConfetti(x, y, z) {
+  const colors = [0xff4444, 0xff8800, 0xffcc00, 0x44cc44, 0x4488ff, 0xaa44ff];
+  for (let i = 0; i < 40; i++) {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.08, 0.02),
+      new THREE.MeshStandardMaterial({ color: colors[i % colors.length] })
+    );
+    mesh.position.set(x + (Math.random() - 0.5) * 2, y + Math.random() * 2, z + (Math.random() - 0.5) * 2);
+    mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    scene.add(mesh);
+    particles.push({
+      mesh,
+      vx: (Math.random() - 0.5) * 4,
+      vy: Math.random() * 3 + 2,
+      vz: (Math.random() - 0.5) * 4,
+      life: 2.5 + Math.random(),
+      spin: true,
+    });
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life -= dt;
+    if (p.life <= 0) {
+      scene.remove(p.mesh);
+      particles.splice(i, 1);
+      continue;
+    }
+    if (p.isRing) {
+      p.ringScale += dt * 12;
+      p.mesh.scale.set(p.ringScale, p.ringScale, 1);
+      p.mesh.material.opacity = Math.max(0, p.life / 0.8);
+    } else {
+      p.vy -= 8 * dt;
+      p.mesh.position.x += p.vx * dt;
+      p.mesh.position.y += p.vy * dt;
+      p.mesh.position.z += p.vz * dt;
+      if (p.spin) {
+        p.mesh.rotation.x += dt * 5;
+        p.mesh.rotation.y += dt * 3;
+      }
+      p.mesh.material.opacity = Math.min(1, p.life * 2);
+    }
+  }
+}
+
+// ===== LEADERBOARD =====
+function updateLeaderboard() {
+  const sorted = Array.from(players.values())
+    .sort((a, b) => b.wins - a.wins || b.kills - a.kills || b.score - a.score)
+    .slice(0, 8);
+
+  const container = document.getElementById('lbRows');
+  container.innerHTML = sorted.map((p, i) => {
+    const rank = i === 0 && p.wins > 0 ? '👑' : i + 1;
+    const status = p.alive ? '' : ' style="opacity:0.4"';
+    return `<div class="lb-row"${status}>
+      <span class="lb-rank">${rank}</span>
+      <span class="lb-name">${p.nickname}</span>
+      <span class="lb-score">${p.wins}W</span>
+      <span class="lb-kills">${p.kills}K</span>
+    </div>`;
+  }).join('');
+}
+
+// ===== CAMERA =====
+let cameraOrbitAngle = 0;
+let cameraShakeTimer = 0;
+
+function updateCamera(dt) {
+  cameraOrbitAngle += dt * 0.04; // Slow, cinematic orbit
+
+  const orbitRadius = 14;
+  const height = 28;
+
+  let targetX = Math.sin(cameraOrbitAngle) * orbitRadius * 0.2;
+  let targetZ = Math.cos(cameraOrbitAngle) * orbitRadius;
+  let targetY = height;
+  let lookY = 0.5;
+
+  if (roundState === 'COUNTDOWN') {
+    const progress = 1 - countdownValue / ROUND_COUNTDOWN;
+    targetY = height - progress * 3;
+    targetZ *= (1 - progress * 0.1);
+  }
+
+  let lookTarget = new THREE.Vector3(0, lookY, 0);
+
+  if (roundState === 'ENDED') {
+    const winner = getWinner();
+    if (winner) {
+      // Close-up orbit around winner
+      const orbitDist = 2.5;
+      targetX = winner.x + Math.sin(cameraOrbitAngle * 2) * orbitDist;
+      targetZ = winner.z + Math.cos(cameraOrbitAngle * 2) * orbitDist;
+      targetY = 1.8;
+      lookTarget.set(winner.x, 1.0, winner.z);
+    }
+  }
+
+  // Camera shake
+  if (cameraShakeTimer > 0) {
+    cameraShakeTimer -= dt;
+    targetX += (Math.random() - 0.5) * 0.3;
+    targetY += (Math.random() - 0.5) * 0.2;
+    targetZ += (Math.random() - 0.5) * 0.3;
+  }
+
+  // Focus mode — orbit close around selected player
+  if (focusCamEnabled && focusPlayer && focusPlayer.model) {
+    const fp = focusPlayer;
+    const orbitDist = 3.0;
+    targetX = fp.x + Math.sin(cameraOrbitAngle * 1.5) * orbitDist;
+    targetZ = fp.z + Math.cos(cameraOrbitAngle * 1.5) * orbitDist;
+    targetY = 2.5;
+    lookTarget.set(fp.x, 1.0, fp.z);
+  }
+
+  // Smooth follow — faster during winner close-up or focus mode
+  const lerpSpeed = (roundState === 'ENDED' || focusCamEnabled) ? dt * 4 : dt * 2;
+  camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), lerpSpeed);
+  camera.lookAt(lookTarget);
+}
+
+function shakeCamera(duration = 0.3) {
+  cameraShakeTimer = duration;
+}
+
+// ===== AUTO-PLAY / BOT SYSTEM =====
+let autoPlay = false;
+let autoTimer = 0;
+
+function updateAutoPlay(dt) {
+  if (!autoPlay || roundState !== 'ACTIVE') return;
+  autoTimer -= dt;
+  if (autoTimer <= 0) {
+    autoTimer = 0.3 + Math.random() * 0.5;
+    // Random action on random alive player
+    const alive = Array.from(players.values()).filter(p => p.alive);
+    if (alive.length === 0) return;
+    const target = alive[Math.floor(Math.random() * alive.length)];
+    const action = Math.random();
+    if (action < 0.6) {
+      // Push
+      handleLike({ uniqueId: target.uniqueId, nickname: target.nickname, likeCount: 1 });
+    } else if (action < 0.85) {
+      // Rotate aim
+      handleChat({ uniqueId: target.uniqueId, nickname: target.nickname, comment: '' });
+    } else {
+      // Small gift
+      handleGift({ uniqueId: target.uniqueId, nickname: target.nickname, diamondCount: Math.random() < 0.3 ? 10 : 1, giftName: 'Rose', repeatCount: 1 });
+    }
+  }
+}
+
+// ===== DEBUG KEYS =====
+document.addEventListener('keydown', (e) => {
+  const key = e.key.toUpperCase();
+  switch (key) {
+    case 'T': {
+      const id = 'test_' + Math.floor(Math.random() * 10000);
+      (async () => { await createPlayer({ uniqueId: id, nickname: 'Tester_' + id.slice(-4) }); })();
+      break;
+    }
+    case 'D':
+      (async () => {
+        for (let i = 0; i < 10; i++) {
+          const id = 'bot_' + Math.floor(Math.random() * 10000);
+          await createPlayer({ uniqueId: id, nickname: 'Bot_' + id.slice(-4) });
+        }
+      })();
+      break;
+    case 'L': {
+      const alive = Array.from(players.values()).filter(p => p.alive);
+      if (alive.length > 0) {
+        const t = alive[Math.floor(Math.random() * alive.length)];
+        handleLike({ uniqueId: t.uniqueId, nickname: t.nickname, likeCount: 3 });
+      }
+      break;
+    }
+    case 'B': {
+      // Cycle through gift tiers: 5 → 50 → 200 → 500
+      if (!window._giftTier) window._giftTier = 0;
+      const tiers = [
+        { diamonds: 5, name: 'Rose (Small)' },
+        { diamonds: 50, name: 'Lion (Medium)' },
+        { diamonds: 200, name: 'Universe (Big)' },
+        { diamonds: 500, name: 'TikTok (VIP)' },
+      ];
+      const tier = tiers[window._giftTier % tiers.length];
+      window._giftTier++;
+      const alive = Array.from(players.values()).filter(p => p.alive);
+      if (alive.length > 0) {
+        const t = alive[Math.floor(Math.random() * alive.length)];
+        handleGift({ uniqueId: t.uniqueId, nickname: t.nickname, diamondCount: tier.diamonds, giftName: tier.name, repeatCount: 1 });
+        addNotification(`[DEBUG] Gift ${tier.diamonds} diamonds (${tier.name}) on ${t.nickname}`, 'gift');
+      }
+      break;
+    }
+    case 'K': {
+      const alive = Array.from(players.values()).filter(p => p.alive);
+      if (alive.length > 0) {
+        const t = alive[Math.floor(Math.random() * alive.length)];
+        t.vy = -5; t.onGround = false;
+      }
+      break;
+    }
+    case 'R':
+      if (roundState === 'WAITING' || roundState === 'INTERMISSION') {
+        if (players.size >= MIN_PLAYERS_TO_START) {
+          setRoundState('COUNTDOWN');
+        } else {
+          addNotification(`Need at least ${MIN_PLAYERS_TO_START} players! (${players.size}/${MIN_PLAYERS_TO_START})`);
+        }
+      }
+      break;
+    case 'A':
+      autoPlay = !autoPlay;
+      addNotification(autoPlay ? 'Auto-play ON' : 'Auto-play OFF');
+      break;
+    case 'C': {
+      // Simulate a chat "join" from a new viewer
+      const id = 'chat_' + Math.floor(Math.random() * 10000);
+      handleChat({ uniqueId: id, nickname: 'Chatter_' + id.slice(-4), comment: 'join' });
+      break;
+    }
+    case 'S':
+      arenaRadius = Math.max(ARENA_END_RADIUS, arenaRadius - 2);
+      updateArenaVisuals();
+      addNotification(`Arena shrunk to ${arenaRadius.toFixed(1)}`);
+      break;
+    // === ANIM CYCLE DEBUG: keys 1-9, 0, Q, E, F, G ===
+    case '1': case '2': case '3': case '4': case '5': case '6': case '7':
+    case '8': case '9': case '0': case 'Q': case 'E': case 'F': case 'G': {
+      const allAnims = [
+        'idle', 'walk', 'run', 'punch', 'hit', 'death', 'dance',
+        'slam', 'dodge', 'block', 'spin', 'tantrum', 'kick', 'groundslam'
+      ];
+      const keyMap = { '1':0, '2':1, '3':2, '4':3, '5':4, '6':5, '7':6, '8':7, '9':8, '0':9, 'Q':10, 'E':11, 'F':12, 'G':13 };
+      const idx = keyMap[key];
+      const animName = allAnims[idx];
+      const first = players.values().next().value;
+      if (first) {
+        setPlayerAnim(first, animName, 6); // debug override — max priority
+        first.punchTimer = 3; first.hitTimer = 0;
+        addNotification(`[${key}] ${animName}`);
+      }
+      break;
+    }
+  }
+});
+
+// ===== SOCKET.IO =====
+const params = new URLSearchParams(window.location.search);
+const ROOM = params.get('room') || '';
+
+let socket = null;
+function connectSocket() {
+  const ioScript = document.createElement('script');
+  ioScript.src = '/socket.io/socket.io.js';
+  ioScript.onload = () => {
+    socket = io({ query: { room: ROOM } });
+
+    socket.on('like', (data) => {
+      handleLike(data);
+    });
+
+    socket.on('chat', (data) => {
+      handleChat(data);
+    });
+
+    socket.on('gift', (data) => {
+      handleGift(data);
+    });
+
+    socket.on('follow', (data) => {
+      handleFollow(data);
+    });
+
+    socket.on('share', (data) => {
+      handleShare(data);
+    });
+
+    socket.on('viewer-join', async (data) => {
+      await createPlayer(data);
+    });
+
+    socket.on('room-stats', (data) => {
+      // Could display viewer count
+    });
+
+    console.log('Socket connected, room:', ROOM || '(default)');
+  };
+  document.head.appendChild(ioScript);
+}
+
+// ===== MAIN LOOP =====
+const clock = new THREE.Clock();
+let leaderboardTimer = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  updateRoundState(dt);
+  updatePhysics(dt);
+  updateAnimations(dt);
+  updateParticles(dt);
+  updateCamera(dt);
+  updateAutoPlay(dt);
+
+  // Water animation
+  water.material.emissiveIntensity = 0.3 + Math.sin(Date.now() * 0.002) * 0.1;
+
+  // Leaderboard refresh
+  leaderboardTimer -= dt;
+  if (leaderboardTimer <= 0) {
+    updateLeaderboard();
+    leaderboardTimer = 1;
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ===== DEBUG PANEL SETUP =====
+function setupDebugPanel() {
+  const container = document.getElementById('spawnButtons');
+  if (!container) return;
+
+  // Spawn specific character buttons
+  for (const mc of MESHY_CHARACTERS) {
+    const btn = document.createElement('button');
+    btn.className = 'dbtn spawn';
+    btn.textContent = mc.id;
+    btn.onclick = async () => {
+      const id = mc.id.toLowerCase() + '_' + Math.floor(Math.random() * 10000);
+      // Force this specific character by temporarily limiting meshyTemplates
+      const backup = { ...meshyTemplates };
+      const keep = meshyTemplates[mc.id];
+      for (const k of Object.keys(meshyTemplates)) delete meshyTemplates[k];
+      meshyTemplates[mc.id] = keep;
+      await createPlayer({ uniqueId: id, nickname: mc.id + '_' + id.slice(-4) });
+      // Restore all
+      for (const k of Object.keys(backup)) meshyTemplates[k] = backup[k];
+    };
+    container.appendChild(btn);
+  }
+
+  // Spawn all button
+  const allBtn = document.createElement('button');
+  allBtn.className = 'dbtn spawn';
+  allBtn.textContent = 'ALL (1 each)';
+  allBtn.onclick = async () => {
+    for (const mc of MESHY_CHARACTERS) {
+      const id = mc.id.toLowerCase() + '_' + Math.floor(Math.random() * 10000);
+      const backup = { ...meshyTemplates };
+      const keep = meshyTemplates[mc.id];
+      for (const k of Object.keys(meshyTemplates)) delete meshyTemplates[k];
+      meshyTemplates[mc.id] = keep;
+      await createPlayer({ uniqueId: id, nickname: mc.id + '_' + id.slice(-4) });
+      for (const k of Object.keys(backup)) meshyTemplates[k] = backup[k];
+    }
+  };
+  container.appendChild(allBtn);
+}
+
+// ===== FOCUS MODE =====
+let focusPlayer = null;
+let focusCamEnabled = false;
+
+function setupFocusButtons() {
+  const container = document.getElementById('focusButtons');
+  if (!container) return;
+  container.innerHTML = '';
+
+  // Button per spawned player
+  players.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'dbtn';
+    btn.textContent = p.nickname;
+    if (focusPlayer && focusPlayer.uniqueId === p.uniqueId) {
+      btn.style.borderColor = '#ff4444';
+      btn.style.color = '#ff4444';
+    }
+    btn.onclick = () => {
+      focusPlayer = p;
+      focusCamEnabled = true;
+      setupFocusButtons(); // refresh highlight
+      showAnimButtons(p);
+      addNotification(`Focused on ${p.nickname}`);
+    };
+    container.appendChild(btn);
+  });
+
+  // Unfocus button
+  if (focusPlayer) {
+    const ufBtn = document.createElement('button');
+    ufBtn.className = 'dbtn';
+    ufBtn.textContent = 'Unfocus';
+    ufBtn.style.color = '#ff8800';
+    ufBtn.onclick = () => {
+      focusPlayer = null;
+      focusCamEnabled = false;
+      document.getElementById('animSection').style.display = 'none';
+      setupFocusButtons();
+      addNotification('Camera unfocused');
+    };
+    container.appendChild(ufBtn);
+  }
+}
+
+function showAnimButtons(p) {
+  const section = document.getElementById('animSection');
+  const container = document.getElementById('animButtons');
+  section.style.display = 'block';
+  container.innerHTML = '';
+
+  const allAnims = [
+    'idle', 'walk', 'run', 'punch', 'hit', 'death', 'dance',
+    'slam', 'dodge', 'block', 'spin', 'tantrum', 'kick', 'groundslam'
+  ];
+  const keyLabels = ['1','2','3','4','5','6','7','8','9','0','Q','E','F','G'];
+
+  allAnims.forEach((anim, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'dbtn';
+    btn.textContent = `[${keyLabels[i]}] ${anim}`;
+    btn.style.fontSize = '10px';
+    btn.style.padding = '4px 6px';
+    btn.onclick = () => {
+      setPlayerAnim(p, anim, 6);
+      p.punchTimer = 5; p.hitTimer = 0;
+      addNotification(`[${keyLabels[i]}] ${anim}`);
+    };
+    container.appendChild(btn);
+  });
+}
+
+// Wire up action buttons
+window._debugAction = function(action) {
+  const alive = Array.from(players.values()).filter(p => p.alive);
+  const t = alive.length > 0 ? alive[Math.floor(Math.random() * alive.length)] : null;
+  switch (action) {
+    case 'like':
+      if (t) handleLike({ uniqueId: t.uniqueId, nickname: t.nickname, likeCount: 3 });
+      break;
+    case 'gift':
+      if (!window._giftTier) window._giftTier = 0;
+      const tiers = [
+        { diamonds: 5, name: 'Rose (Small)' },
+        { diamonds: 50, name: 'Lion (Medium)' },
+        { diamonds: 200, name: 'Universe (Big)' },
+        { diamonds: 500, name: 'TikTok (VIP)' },
+      ];
+      const tier = tiers[window._giftTier % tiers.length];
+      window._giftTier++;
+      if (t) {
+        handleGift({ uniqueId: t.uniqueId, nickname: t.nickname, diamondCount: tier.diamonds, giftName: tier.name, repeatCount: 1 });
+        addNotification(`[DEBUG] Gift ${tier.diamonds} (${tier.name}) → ${t.nickname}`, 'gift');
+      }
+      break;
+    case 'kill':
+      if (t) { t.vy = -5; t.onGround = false; }
+      break;
+    case 'round':
+      if ((roundState === 'WAITING' || roundState === 'INTERMISSION') && players.size >= MIN_PLAYERS_TO_START) {
+        setRoundState('COUNTDOWN');
+      } else {
+        addNotification(`Need ${MIN_PLAYERS_TO_START}+ players (${players.size} now)`);
+      }
+      break;
+    case 'auto':
+      autoPlay = !autoPlay;
+      addNotification(autoPlay ? 'Auto-play ON' : 'Auto-play OFF');
+      break;
+    case 'shrink':
+      arenaRadius = Math.max(ARENA_END_RADIUS, arenaRadius - 2);
+      updateArenaVisuals();
+      addNotification(`Arena shrunk to ${arenaRadius.toFixed(1)}`);
+      break;
+  }
+};
+
+// ===== INIT =====
+async function init() {
+  await loadAssets();
+  setupDebugPanel();
+  connectSocket();
+  setRoundState('WAITING');
+  animate();
+}
+
+init();
+</script>
+</body>
+</html>

@@ -545,6 +545,18 @@
             <button style="background:#333;color:#666;cursor:not-allowed" disabled>Dev Only</button>
           </div>
         </div>
+        <div class="game-card">
+          <div class="game-card-icon">👊</div>
+          <div class="game-card-info">
+            <div class="game-card-name" style="color:#ff4444">Sumo Smash <span class="game-badge soon">DEV</span></div>
+            <div class="game-card-desc">Arena battle — push opponents off — landscape 16:9</div>
+          </div>
+          <div class="game-card-actions">
+            <input type="hidden" id="sumoUrl">
+            <button onclick="copyUrl('sumoUrl')" style="background:#333;color:#666;cursor:not-allowed" disabled>Copy</button>
+            <button style="background:#333;color:#666;cursor:not-allowed" disabled>Dev Only</button>
+          </div>
+        </div>
       </div>
 
       <!-- Tools -->
@@ -685,6 +697,7 @@
       document.getElementById('funclassUrl').value = `${window.location.origin}/funclass${roomParam}`;
       document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
       document.getElementById('fichyUrl').value = `${window.location.origin}/fichy${roomParam}`;
+      document.getElementById('sumoUrl').value = `${window.location.origin}/sumo${roomParam}`;
 
       // Load config
       fetch(`/api/config?room=${ROOM}`).then(r => r.json()).then(config => {
@@ -788,6 +801,7 @@
         document.getElementById('funclassUrl').value = `${window.location.origin}/funclass${roomParam}`;
         document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
         document.getElementById('fichyUrl').value = `${window.location.origin}/fichy${roomParam}`;
+        document.getElementById('sumoUrl').value = `${window.location.origin}/sumo${roomParam}`;
         // Update room badge
         const badge = document.getElementById('roomBadge');
         badge.style.display = 'inline-block';

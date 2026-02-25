@@ -186,6 +186,7 @@ app.get('/voice', (req, res) => res.sendFile(join(__dirname, 'public', 'voice.ht
 app.get('/hillclimb', (req, res) => res.sendFile(join(__dirname, 'public', 'hillclimb.html')));
 app.get('/funclass', (req, res) => res.sendFile(join(__dirname, 'public', 'funclass.html')));
 app.get('/fichy', (req, res) => res.sendFile(join(__dirname, 'public', 'fichy.html')));
+app.get('/sumo', (req, res) => res.sendFile(join(__dirname, 'public', 'sumo.html')));
 
 // API endpoint to get current config
 app.get('/api/config', (req, res) => {
