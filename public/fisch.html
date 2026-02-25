@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fisch — Coming Soon</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0a;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: min(100vh, calc(100vw * 9 / 16));
+      background: #0a0a0a;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .overlay h1 {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: clamp(32px, 6vw, 72px);
+      font-weight: 800;
+      color: #fff;
+      text-shadow: 0 4px 20px rgba(14, 165, 233, 0.5);
+      letter-spacing: 6px;
+    }
+    .overlay h1 span {
+      background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .overlay p {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: clamp(14px, 2vw, 24px);
+      color: rgba(255,255,255,0.5);
+      margin-top: 12px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+    }
+    .fish-icon {
+      font-size: clamp(48px, 8vw, 96px);
+      margin-bottom: 16px;
+      animation: bob 3s ease-in-out infinite;
+    }
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-12px); }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="canvas"></canvas>
+    <div class="overlay">
+      <div class="fish-icon">🐟</div>
+      <h1><span>FISCH</span></h1>
+      <p>Coming Soon</p>
+    </div>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js" } }
+  </script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module">
+    import * as THREE from 'three';
+
+    // === Scene Setup ===
+    const container = document.getElementById('game-container');
+    const canvas = document.getElementById('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x87ceeb);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x87ceeb, 0.008);
+
+    const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 500);
+    camera.position.set(0, 8, 20);
+    camera.lookAt(0, 0, 0);
+
+    // === Sky gradient ===
+    const skyGeo = new THREE.SphereGeometry(200, 32, 16);
+    const skyMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      uniforms: {
+        topColor: { value: new THREE.Color(0x0077be) },
+        bottomColor: { value: new THREE.Color(0x87ceeb) },
+      },
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPos.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 topColor;
+        uniform vec3 bottomColor;
+        varying vec3 vWorldPosition;
+        void main() {
+          float h = normalize(vWorldPosition).y;
+          gl_FragColor = vec4(mix(bottomColor, topColor, max(h, 0.0)), 1.0);
+        }
+      `,
+    });
+    scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+    // === Sun ===
+    const sunGeo = new THREE.SphereGeometry(5, 16, 16);
+    const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd44 });
+    const sun = new THREE.Mesh(sunGeo, sunMat);
+    sun.position.set(60, 50, -80);
+    scene.add(sun);
+
+    // === Lighting ===
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
+    const directional = new THREE.DirectionalLight(0xffeecc, 1.0);
+    directional.position.set(60, 50, -80);
+    scene.add(directional);
+
+    // === Water plane ===
+    const waterGeo = new THREE.PlaneGeometry(400, 400, 64, 64);
+    const waterMat = new THREE.MeshPhongMaterial({
+      color: 0x0077be,
+      transparent: true,
+      opacity: 0.8,
+      shininess: 100,
+      specular: 0x88ccff,
+      flatShading: true,
+    });
+    const water = new THREE.Mesh(waterGeo, waterMat);
+    water.rotation.x = -Math.PI / 2;
+    water.position.y = 0;
+    scene.add(water);
+
+    // === Resize ===
+    function onResize() {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', onResize);
+    onResize();
+
+    // === Animate water ===
+    const clock = new THREE.Clock();
+    const posAttr = waterGeo.attributes.position;
+    const baseY = new Float32Array(posAttr.count);
+    for (let i = 0; i < posAttr.count; i++) baseY[i] = posAttr.getZ(i);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+
+      // Gentle wave effect
+      for (let i = 0; i < posAttr.count; i++) {
+        const x = posAttr.getX(i);
+        const y = posAttr.getY(i);
+        posAttr.setZ(i, baseY[i] + Math.sin(x * 0.05 + t * 0.8) * 0.5 + Math.cos(y * 0.04 + t * 0.6) * 0.3);
+      }
+      posAttr.needsUpdate = true;
+      waterGeo.computeVertexNormals();
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // === Socket.IO (ready for game events) ===
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get('room') || '';
+    const socket = io({ query: { room } });
+
+    socket.on('connect', () => {
+      console.log('Fisch connected to room:', room || 'default');
+    });
+  </script>
+</body>
+</html>

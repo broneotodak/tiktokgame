@@ -332,6 +332,84 @@
       white-space: nowrap;
     }
 
+    /* Game Tabs */
+    .game-tabs {
+      display: flex;
+      border-bottom: 1px solid #222;
+      background: #0d0d0d;
+    }
+    .game-tab {
+      flex: 1;
+      padding: 10px 8px;
+      background: none;
+      border: none;
+      color: #666;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+      text-align: center;
+    }
+    .game-tab:hover { color: #aaa; }
+    .game-tab.active { color: #fff; border-bottom-color: #25f4ee; }
+    .game-tab-content { display: none; padding: 8px 10px; }
+    .game-tab-content.active { display: block; }
+    .game-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      margin-bottom: 4px;
+      transition: background 0.2s;
+    }
+    .game-card:hover { background: #1a1a1a; }
+    .game-card-icon {
+      font-size: 20px;
+      width: 32px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .game-card-info { flex: 1; min-width: 0; }
+    .game-card-name {
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .game-card-desc {
+      font-size: 11px;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .game-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .game-card-actions button {
+      padding: 5px 10px;
+      border: none;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .game-card-actions button:hover { opacity: 0.85; }
+    .game-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 8px;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .game-badge.soon { background: #0ea5e9; color: #fff; }
+    .game-badge.new { background: #22c55e; color: #fff; }
+    .game-badge.live { background: #fe2c55; color: #fff; }
+
     /* Cost bar */
     .cost-bar {
       padding: 6px 15px;
@@ -406,42 +484,106 @@
     <div class="feed-panel">
       <h2>Live Feed</h2>
       <div class="feed-list" id="feedList"></div>
-      <div class="overlay-link" style="flex-direction:column;gap:8px;">
-        <div style="display:flex;gap:8px;align-items:center;width:100%">
-          <span style="color:#888;font-size:12px;width:55px">Overlay:</span>
-          <input type="text" id="overlayUrl" readonly style="flex:1">
-          <button onclick="copyUrl('overlayUrl')">Copy</button>
-          <button onclick="window.open(document.getElementById('overlayUrl').value,'_blank')">Open</button>
+      <!-- Game Tabs -->
+      <div class="game-tabs">
+        <button class="game-tab active" data-tab="portrait" onclick="switchTab('portrait')">Portrait 9:16</button>
+        <button class="game-tab" data-tab="landscape" onclick="switchTab('landscape')">Landscape 16:9</button>
+        <button class="game-tab" data-tab="tools" onclick="switchTab('tools')">Tools</button>
+      </div>
+
+      <!-- Portrait Games -->
+      <div class="game-tab-content active" id="tab-portrait">
+        <div class="game-card">
+          <div class="game-card-icon">🏃</div>
+          <div class="game-card-info">
+            <div class="game-card-name" style="color:#a855f7">Marathon 3D</div>
+            <div class="game-card-desc">Endless marathon race — portrait 9:16</div>
+          </div>
+          <div class="game-card-actions">
+            <input type="hidden" id="marathonUrl">
+            <button onclick="copyUrl('marathonUrl')" style="background:#a855f7;color:#fff">Copy</button>
+            <button onclick="window.open(document.getElementById('marathonUrl').value,'_blank')" style="background:#a855f7;color:#fff">Open</button>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;width:100%">
-          <span style="color:#fe2c55;font-size:11px;width:55px;font-weight:700">Game:</span>
-          <input type="text" id="gameUrl" readonly style="flex:1;border-color:#fe2c55;color:#fe2c55">
-          <button onclick="copyUrl('gameUrl')" style="background:#fe2c55">Copy</button>
-          <button onclick="window.open(document.getElementById('gameUrl').value,'_blank')" style="background:#fe2c55">Open</button>
+        <div class="game-card">
+          <div class="game-card-icon">🏔️</div>
+          <div class="game-card-info">
+            <div class="game-card-name" style="color:#22c55e">Hill Climb 3D</div>
+            <div class="game-card-desc">Endless hill climb race — portrait 9:16</div>
+          </div>
+          <div class="game-card-actions">
+            <input type="hidden" id="hillclimbUrl">
+            <button onclick="copyUrl('hillclimbUrl')" style="background:#22c55e;color:#fff">Copy</button>
+            <button onclick="window.open(document.getElementById('hillclimbUrl').value,'_blank')" style="background:#22c55e;color:#fff">Open</button>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;width:100%">
-          <span style="color:#a855f7;font-size:11px;width:55px;font-weight:700">3D:</span>
-          <input type="text" id="marathonUrl" readonly style="flex:1;border-color:#a855f7;color:#a855f7">
-          <button onclick="copyUrl('marathonUrl')" style="background:#a855f7">Copy</button>
-          <button onclick="window.open(document.getElementById('marathonUrl').value,'_blank')" style="background:#a855f7">Open</button>
+        <div class="game-card">
+          <div class="game-card-icon">📚</div>
+          <div class="game-card-info">
+            <div class="game-card-name" style="color:#f59e0b">FunClass</div>
+            <div class="game-card-desc">3D classroom — earn points studying — portrait 9:16</div>
+          </div>
+          <div class="game-card-actions">
+            <input type="hidden" id="funclassUrl">
+            <button onclick="copyUrl('funclassUrl')" style="background:#f59e0b;color:#fff">Copy</button>
+            <button onclick="window.open(document.getElementById('funclassUrl').value,'_blank')" style="background:#f59e0b;color:#fff">Open</button>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;width:100%">
-          <span style="color:#22c55e;font-size:11px;width:55px;font-weight:700">Climb:</span>
-          <input type="text" id="hillclimbUrl" readonly style="flex:1;border-color:#22c55e;color:#22c55e">
-          <button onclick="copyUrl('hillclimbUrl')" style="background:#22c55e">Copy</button>
-          <button onclick="window.open(document.getElementById('hillclimbUrl').value,'_blank')" style="background:#22c55e">Open</button>
+      </div>
+
+      <!-- Landscape Games -->
+      <div class="game-tab-content" id="tab-landscape">
+        <div class="game-card">
+          <div class="game-card-icon">🐟</div>
+          <div class="game-card-info">
+            <div class="game-card-name" style="color:#0ea5e9">Fisch <span class="game-badge soon">SOON</span></div>
+            <div class="game-card-desc">Fishing game — landscape 16:9</div>
+          </div>
+          <div class="game-card-actions">
+            <input type="hidden" id="fischUrl">
+            <button onclick="copyUrl('fischUrl')" style="background:#0ea5e9;color:#fff">Copy</button>
+            <button onclick="window.open(document.getElementById('fischUrl').value,'_blank')" style="background:#0ea5e9;color:#fff">Open</button>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;width:100%">
-          <span style="color:#f59e0b;font-size:11px;width:55px;font-weight:700">Class:</span>
-          <input type="text" id="funclassUrl" readonly style="flex:1;border-color:#f59e0b;color:#f59e0b">
-          <button onclick="copyUrl('funclassUrl')" style="background:#f59e0b">Copy</button>
-          <button onclick="window.open(document.getElementById('funclassUrl').value,'_blank')" style="background:#f59e0b">Open</button>
+      </div>
+
+      <!-- Tools -->
+      <div class="game-tab-content" id="tab-tools">
+        <div class="game-card">
+          <div class="game-card-icon">🖼️</div>
+          <div class="game-card-info">
+            <div class="game-card-name" style="color:#888">Overlay</div>
+            <div class="game-card-desc">Stream overlay — chat + gifts</div>
+          </div>
+          <div class="game-card-actions">
+            <input type="hidden" id="overlayUrl">
+            <button onclick="copyUrl('overlayUrl')" style="background:#888;color:#fff">Copy</button>
+            <button onclick="window.open(document.getElementById('overlayUrl').value,'_blank')" style="background:#888;color:#fff">Open</button>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;width:100%">
-          <span style="color:#ec4899;font-size:11px;width:55px;font-weight:700">Voice:</span>
-          <input type="text" id="voiceUrl" readonly style="flex:1;border-color:#ec4899;color:#ec4899">
-          <button onclick="copyUrl('voiceUrl')" style="background:#ec4899">Copy</button>
-          <button onclick="window.open(document.getElementById('voiceUrl').value,'_blank')" style="background:#ec4899">Open</button>
+        <div class="game-card">
+          <div class="game-card-icon">🎙️</div>
+          <div class="game-card-info">
+            <div class="game-card-name" style="color:#ec4899">Voice AI</div>
+            <div class="game-card-desc">AI voice avatar — Digital Twin</div>
+          </div>
+          <div class="game-card-actions">
+            <input type="hidden" id="voiceUrl">
+            <button onclick="copyUrl('voiceUrl')" style="background:#ec4899;color:#fff">Copy</button>
+            <button onclick="window.open(document.getElementById('voiceUrl').value,'_blank')" style="background:#ec4899;color:#fff">Open</button>
+          </div>
+        </div>
+        <div class="game-card">
+          <div class="game-card-icon">🎮</div>
+          <div class="game-card-info">
+            <div class="game-card-name" style="color:#fe2c55">2D Game</div>
+            <div class="game-card-desc">Classic 2D TikTok game</div>
+          </div>
+          <div class="game-card-actions">
+            <input type="hidden" id="gameUrl">
+            <button onclick="copyUrl('gameUrl')" style="background:#fe2c55;color:#fff">Copy</button>
+            <button onclick="window.open(document.getElementById('gameUrl').value,'_blank')" style="background:#fe2c55;color:#fff">Open</button>
+          </div>
         </div>
       </div>
       <div class="cost-bar" id="costBar" style="display:none">
@@ -542,6 +684,7 @@
       document.getElementById('hillclimbUrl').value = `${window.location.origin}/hillclimb${roomParam}`;
       document.getElementById('funclassUrl').value = `${window.location.origin}/funclass${roomParam}`;
       document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
+      document.getElementById('fischUrl').value = `${window.location.origin}/fisch${roomParam}`;
 
       // Load config
       fetch(`/api/config?room=${ROOM}`).then(r => r.json()).then(config => {
@@ -644,6 +787,7 @@
         document.getElementById('hillclimbUrl').value = `${window.location.origin}/hillclimb${roomParam}`;
         document.getElementById('funclassUrl').value = `${window.location.origin}/funclass${roomParam}`;
         document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
+        document.getElementById('fischUrl').value = `${window.location.origin}/fisch${roomParam}`;
         // Update room badge
         const badge = document.getElementById('roomBadge');
         badge.style.display = 'inline-block';
@@ -700,6 +844,13 @@
       document.getElementById('chatCount').textContent = stats.chats;
       document.getElementById('giftCount').textContent = stats.gifts;
       document.getElementById('likeCount').textContent = stats.likes;
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.game-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.game-tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+      document.getElementById(`tab-${tabName}`).classList.add('active');
     }
 
     function copyUrl(id) {
