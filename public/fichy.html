@@ -357,7 +357,9 @@
     const loader = new GLTFLoader();
     let mannequinTemplate = null;
     const ualClips = {};
+    const fishModels = {};  // name -> THREE.Object3D template
     let assetsLoaded = false;
+    const fishJumpers = []; // active jumping fish animations
 
     // UAL bone names work directly on Mannequin (same skeleton)
     function parseUALClip(clip) {
@@ -376,8 +378,15 @@
       return { name: clip.name, duration: clip.duration, tracks };
     }
 
+    // Fish model file map — add more entries as Meshy models are generated
+    const FISH_MODEL_MAP = {
+      'Sardine': '/fichy-assets/fish/sardines.glb',
+      // Future: 'Clownfish': '/fichy-assets/fish/clownfish.glb', etc.
+    };
+
     async function loadAssets() {
-      const totalAssets = 4; // Mannequin + UAL1 + UAL2 + Rigs
+      const fishToLoad = Object.keys(FISH_MODEL_MAP);
+      const totalAssets = 4 + fishToLoad.length; // Mannequin + UAL1 + UAL2 + Rigs + fish models
       let loaded = 0;
       function progress(text) {
         loaded++;
@@ -421,8 +430,24 @@
         progress('Rigs loaded');
       } catch (e) { progress('Rigs skipped'); }
 
+      // 5. Fish 3D models (Meshy-generated)
+      for (const [fishName, path] of Object.entries(FISH_MODEL_MAP)) {
+        try {
+          const gltf = await loader.loadAsync(path);
+          gltf.scene.traverse(c => { if (c.isMesh) { c.castShadow = true; if (c.material) c.material.transparent = true; } });
+          // Auto-scale: normalize to ~1 unit tall
+          const box = new THREE.Box3().setFromObject(gltf.scene);
+          const size = box.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+          if (maxDim > 0) gltf.scene.scale.multiplyScalar(1.0 / maxDim);
+          fishModels[fishName] = gltf.scene;
+          progress(`Fish: ${fishName}`);
+          console.log(`🐟 Loaded ${fishName} (${(size.x).toFixed(1)}x${(size.y).toFixed(1)}x${(size.z).toFixed(1)})`);
+        } catch (e) { console.warn(`Fish ${fishName} failed:`, e.message); progress(`Fish: ${fishName} (failed)`); }
+      }
+
       assetsLoaded = true;
-      console.log(`Fichy ready: mannequin=${!!mannequinTemplate}, UAL clips=${Object.keys(ualClips).length}`);
+      console.log(`Fichy ready: mannequin=${!!mannequinTemplate}, UAL clips=${Object.keys(ualClips).length}, fish models=${Object.keys(fishModels).length}`);
       console.log('Available UAL:', Object.keys(ualClips).slice(0, 20));
 
       document.getElementById('loadingScreen').classList.add('hidden');
@@ -620,7 +645,11 @@
 
         upgradeRod(player);
         showNotif(`${fish.emoji} <b>${player.nickname}</b> caught <span class="${rarity.css}">${fish.name}</span> (${weight}kg) +${gold}g`);
-        if (player.bobber) splashEffect(player.bobber.position.clone());
+        if (player.bobber) {
+          const catchPos = player.bobber.position.clone();
+          splashEffect(catchPos);
+          spawnFishJumper(catchPos, fish.name, fish.rarity);
+        }
 
         // Celebrate rare catches
         if (['epic', 'legendary', 'mythical'].includes(fish.rarity)) {
@@ -736,6 +765,55 @@
       }
     }
 
+    // ===== FISH JUMPER — 3D fish pops out of water on catch =====
+    function spawnFishJumper(pos, fishName, rarityKey) {
+      const template = fishModels[fishName];
+      const rarity = RARITY[rarityKey];
+
+      // Clone 3D model or fallback to colored sphere
+      let mesh;
+      if (template) {
+        mesh = template.clone();
+        // Clone materials so fade doesn't affect template
+        mesh.traverse(c => { if (c.isMesh && c.material) c.material = c.material.clone(); });
+        // Scale based on rarity (rarer = bigger)
+        const rarityScale = { common: 0.8, uncommon: 1.0, rare: 1.3, epic: 1.6, legendary: 2.0, mythical: 2.5 };
+        mesh.scale.multiplyScalar(rarityScale[rarityKey] || 1.0);
+      } else {
+        // Fallback: colored ellipsoid
+        const geo = new THREE.SphereGeometry(0.3, 8, 6);
+        geo.scale(1.5, 0.8, 0.8);
+        const mat = new THREE.MeshLambertMaterial({ color: rarity.color });
+        mesh = new THREE.Mesh(geo, mat);
+        const rarityScale = { common: 0.8, uncommon: 1.0, rare: 1.3, epic: 1.6, legendary: 2.0, mythical: 2.5 };
+        mesh.scale.multiplyScalar(rarityScale[rarityKey] || 1.0);
+      }
+
+      mesh.position.copy(pos);
+      mesh.position.y = 0.2;
+      scene.add(mesh);
+
+      // Rarity glow ring (epic+)
+      let glow = null;
+      if (['epic', 'legendary', 'mythical'].includes(rarityKey)) {
+        const glowGeo = new THREE.RingGeometry(0.5, 0.7, 16);
+        const glowMat = new THREE.MeshBasicMaterial({ color: rarity.color, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+        glow = new THREE.Mesh(glowGeo, glowMat);
+        glow.rotation.x = -Math.PI / 2;
+        glow.position.copy(mesh.position);
+        scene.add(glow);
+      }
+
+      fishJumpers.push({
+        mesh, glow,
+        startPos: pos.clone(),
+        time: 0,
+        duration: 1.8,  // seconds for full arc
+        peakHeight: 3 + (rarityKey === 'mythical' ? 4 : rarityKey === 'legendary' ? 3 : rarityKey === 'epic' ? 2 : 1),
+        spinSpeed: 4 + Math.random() * 3,
+      });
+    }
+
     // ===== HUD =====
     function updateHUD() {
       document.getElementById('hudDex').textContent = `Dex: ${globalDex.size}/30`;
@@ -815,6 +893,40 @@
         sp.life -= dt * 1.5;
         sp.mesh.material.opacity = Math.max(0, sp.life);
         if (sp.life <= 0) { scene.remove(sp.mesh); splashParticles.splice(i, 1); }
+      }
+
+      // Fish jumpers (arc + spin out of water)
+      for (let i = fishJumpers.length - 1; i >= 0; i--) {
+        const fj = fishJumpers[i];
+        fj.time += dt;
+        const progress = fj.time / fj.duration;
+
+        if (progress >= 1) {
+          scene.remove(fj.mesh);
+          if (fj.glow) scene.remove(fj.glow);
+          fishJumpers.splice(i, 1);
+          continue;
+        }
+
+        // Parabolic arc: y = peak * 4 * p * (1-p)
+        const arcY = fj.peakHeight * 4 * progress * (1 - progress);
+        fj.mesh.position.y = 0.2 + arcY;
+        // Drift slightly forward
+        fj.mesh.position.z = fj.startPos.z - progress * 2;
+        // Spin
+        fj.mesh.rotation.y += dt * fj.spinSpeed;
+        // Fade out in last 30%
+        if (progress > 0.7) {
+          const fade = 1 - (progress - 0.7) / 0.3;
+          fj.mesh.traverse(c => { if (c.isMesh && c.material) c.material.opacity = fade; });
+        }
+        // Glow ring follows
+        if (fj.glow) {
+          fj.glow.position.y = fj.mesh.position.y - 0.3;
+          fj.glow.position.z = fj.mesh.position.z;
+          fj.glow.rotation.z += dt * 2;
+          if (progress > 0.7) fj.glow.material.opacity = 0.6 * (1 - (progress - 0.7) / 0.3);
+        }
       }
 
       renderer.render(scene, camera);
