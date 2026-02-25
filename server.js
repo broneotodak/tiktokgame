@@ -184,6 +184,7 @@ app.get('/game', (req, res) => res.sendFile(join(__dirname, 'public', 'game.html
 app.get('/marathon', (req, res) => res.sendFile(join(__dirname, 'public', 'marathon3d.html')));
 app.get('/voice', (req, res) => res.sendFile(join(__dirname, 'public', 'voice.html')));
 app.get('/hillclimb', (req, res) => res.sendFile(join(__dirname, 'public', 'hillclimb.html')));
+app.get('/funclass', (req, res) => res.sendFile(join(__dirname, 'public', 'funclass.html')));
 
 // API endpoint to get current config
 app.get('/api/config', (req, res) => {

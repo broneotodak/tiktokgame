@@ -432,6 +432,12 @@
           <button onclick="window.open(document.getElementById('hillclimbUrl').value,'_blank')" style="background:#22c55e">Open</button>
         </div>
         <div style="display:flex;gap:8px;align-items:center;width:100%">
+          <span style="color:#f59e0b;font-size:11px;width:55px;font-weight:700">Class:</span>
+          <input type="text" id="funclassUrl" readonly style="flex:1;border-color:#f59e0b;color:#f59e0b">
+          <button onclick="copyUrl('funclassUrl')" style="background:#f59e0b">Copy</button>
+          <button onclick="window.open(document.getElementById('funclassUrl').value,'_blank')" style="background:#f59e0b">Open</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;width:100%">
           <span style="color:#ec4899;font-size:11px;width:55px;font-weight:700">Voice:</span>
           <input type="text" id="voiceUrl" readonly style="flex:1;border-color:#ec4899;color:#ec4899">
           <button onclick="copyUrl('voiceUrl')" style="background:#ec4899">Copy</button>
@@ -534,6 +540,7 @@
       document.getElementById('gameUrl').value = `${window.location.origin}/game${roomParam}`;
       document.getElementById('marathonUrl').value = `${window.location.origin}/marathon${roomParam}`;
       document.getElementById('hillclimbUrl').value = `${window.location.origin}/hillclimb${roomParam}`;
+      document.getElementById('funclassUrl').value = `${window.location.origin}/funclass${roomParam}`;
       document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
 
       // Load config
@@ -635,6 +642,7 @@
         document.getElementById('gameUrl').value = `${window.location.origin}/game${roomParam}`;
         document.getElementById('marathonUrl').value = `${window.location.origin}/marathon${roomParam}`;
         document.getElementById('hillclimbUrl').value = `${window.location.origin}/hillclimb${roomParam}`;
+        document.getElementById('funclassUrl').value = `${window.location.origin}/funclass${roomParam}`;
         document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
         // Update room badge
         const badge = document.getElementById('roomBadge');

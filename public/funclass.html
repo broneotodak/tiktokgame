@@ -1,0 +1,1992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FunClass - TikTok Live Quiz Battle</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; width: 100vw; height: 100vh; }
+
+    /* Portrait game frame — 9:16 centered with black bars */
+    .game-frame {
+      position: relative;
+      width: min(100vw, calc(100vh * 9 / 16));
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+    }
+    #gameCanvas { display: block; width: 100%; height: 100%; }
+
+    /* Loading screen */
+    #loadingScreen {
+      position: absolute; inset: 0; z-index: 1000;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #fff; transition: opacity 0.8s;
+    }
+    #loadingScreen.hidden { opacity: 0; pointer-events: none; }
+    #loadingScreen h1 { font-size: 2.2em; margin-bottom: 8px; text-shadow: 0 0 20px rgba(255,200,50,0.5); }
+    #loadingScreen .subtitle { font-size: 1em; color: #aaa; margin-bottom: 25px; }
+    .progress-bar { width: 220px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #ffc832, #ff6b35); width: 0%; transition: width 0.3s; border-radius: 3px; }
+    #loadingText { margin-top: 12px; font-size: 0.85em; color: #888; }
+
+    /* HUD - top bar */
+    #topBar {
+      position: absolute; top: 8px; left: 8px; right: 8px; z-index: 100;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none;
+    }
+    .top-pill {
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+      border-radius: 16px; padding: 5px 12px; border: 1px solid rgba(255,255,255,0.1);
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: #fff; font-weight: 600;
+      pointer-events: auto;
+    }
+    .top-pill .label { color: #888; font-weight: 400; font-size: 10px; }
+    .top-pill.live { border-color: rgba(254,44,85,0.4); }
+    .live-dot { width: 6px; height: 6px; background: #fe2c55; border-radius: 50%; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* Quiz HUD — full width top bar */
+    #quizHUD {
+      position: absolute; top: 42px; left: 8px; right: 8px; z-index: 100;
+      background: rgba(10,10,40,0.85); backdrop-filter: blur(12px);
+      border-radius: 14px; padding: 10px 14px; border: 1px solid rgba(100,150,255,0.3);
+      pointer-events: none;
+    }
+    .quiz-timer {
+      font-size: 28px; font-weight: 900; color: #ffc832; text-align: center;
+      text-shadow: 0 0 12px rgba(255,200,50,0.5);
+      transition: color 0.3s;
+    }
+    .quiz-timer.urgent { color: #ff4444; animation: timerPulse 0.5s infinite; }
+    @keyframes timerPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+    .quiz-question {
+      font-size: 17px; color: #fff; font-weight: 700; margin: 6px 0;
+      line-height: 1.3; text-align: center;
+    }
+    .quiz-hint {
+      font-size: 10px; color: #88aaff; text-align: center; font-style: italic;
+    }
+    .quiz-answer {
+      font-size: 14px; color: #66ff66; font-weight: 700; text-align: center;
+      margin-top: 4px; min-height: 18px;
+    }
+    .quiz-stats {
+      font-size: 10px; color: #aaa; text-align: center; margin-top: 2px;
+    }
+
+    /* Leaderboard - right side, scrollable */
+    #leaderboard {
+      position: absolute; top: 42px; right: 8px; z-index: 101;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
+      border-radius: 12px; padding: 6px 8px; border: 1px solid rgba(255,200,50,0.2);
+      width: 130px; max-height: 45%; overflow-y: auto; pointer-events: none;
+    }
+    #leaderboard::-webkit-scrollbar { width: 0; }
+    #leaderboard .lb-title {
+      font-size: 9px; color: #ffc832; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 4px; text-align: center;
+    }
+    .lb-row {
+      display: flex; align-items: center; gap: 4px; padding: 1.5px 0;
+      font-size: 10px; color: #fff;
+    }
+    .lb-rank { width: 16px; text-align: center; font-weight: 700; }
+    .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-score { color: #ffc832; font-weight: 700; font-size: 10px; }
+
+    /* Notifications */
+    #notifications {
+      position: absolute; left: 8px; top: 56%; z-index: 100;
+      display: flex; flex-direction: column; gap: 4px;
+      pointer-events: none; width: 55%;
+    }
+    .notif {
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+      border-radius: 10px; padding: 5px 10px;
+      font-size: 11px; color: #fff; border: 1px solid rgba(255,255,255,0.1);
+      animation: slideIn 0.3s ease-out, fadeOut 0.5s 4s forwards;
+    }
+    .notif.gift { border-color: rgba(255,200,50,0.4); background: rgba(60,40,0,0.7); }
+    .notif.fight { border-color: rgba(255,60,60,0.5); background: rgba(80,10,10,0.7); }
+    .notif.correct { border-color: rgba(50,255,50,0.4); background: rgba(10,60,10,0.7); }
+    .notif strong { color: #25f4ee; }
+    @keyframes slideIn { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOut { to { opacity: 0; } }
+
+    /* Power flash */
+    .power-flash {
+      position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 200; text-align: center; pointer-events: none;
+      animation: powerIn 0.3s ease-out, powerOut 0.5s 1.5s forwards;
+    }
+    .pf-icon { font-size: 3em; display: block; }
+    .pf-name { font-size: 1.2em; color: #fff; font-weight: 700; text-shadow: 0 2px 8px rgba(0,0,0,0.8); margin-top: 4px; }
+    .pf-by { font-size: 0.8em; color: #aaa; }
+    @keyframes powerIn { from { transform: translate(-50%, -50%) scale(0.3); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+    @keyframes powerOut { to { transform: translate(-50%, -50%) scale(1.3); opacity: 0; } }
+
+    /* Debug shortcut panel */
+    #debugPanel {
+      position: absolute; left: 8px; bottom: 8px; right: 8px; z-index: 100;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(10px);
+      border-radius: 10px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.15);
+      pointer-events: none; font-size: 10px; color: #aaa;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px;
+    }
+    #debugPanel .dk { color: #ffc832; font-weight: 700; display: inline-block; min-width: 28px; }
+    #debugPanel .dd { color: #ccc; }
+    #debugPanel .section-title { grid-column: 1 / -1; color: #888; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 3px; }
+    #debugValues {
+      position: absolute; left: 8px; bottom: auto; top: auto; z-index: 100;
+      background: rgba(0,0,0,0.7); border-radius: 8px; padding: 4px 8px;
+      font-size: 10px; color: #0f0; font-family: monospace; pointer-events: none;
+      white-space: pre;
+    }
+  </style>
+</head>
+<body>
+<div class="game-frame" id="gameFrame">
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Loading screen -->
+  <div id="loadingScreen">
+    <h1>FunClass</h1>
+    <div class="subtitle">TikTok Live Quiz Battle</div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div id="loadingText">Loading assets...</div>
+  </div>
+
+  <!-- Top bar -->
+  <div id="topBar">
+    <div class="top-pill live" id="connStatus">Connecting...</div>
+    <div class="top-pill" id="playerCount">0 students</div>
+  </div>
+
+  <!-- Quiz HUD -->
+  <div id="quizHUD">
+    <div class="quiz-timer" id="quizTimer">15</div>
+    <div class="quiz-question" id="quizQuestion">Get ready...</div>
+    <div class="quiz-hint" id="quizHint">Type your answer in chat!</div>
+    <div class="quiz-answer" id="quizAnswer"></div>
+    <div class="quiz-stats" id="quizStats"></div>
+  </div>
+
+  <!-- Leaderboard -->
+  <div id="leaderboard">
+    <div class="lb-title">Top Students</div>
+    <div id="lbRows"></div>
+  </div>
+
+  <!-- Notifications -->
+  <div id="notifications"></div>
+
+  <!-- Debug shortcut panel -->
+  <div id="debugPanel">
+    <div><span class="dk">T</span> <span class="dd">Spawn 1</span></div>
+    <div><span class="dk">D</span> <span class="dd">Fill all seats</span></div>
+    <div><span class="dk">R</span> <span class="dd">Clear all</span></div>
+    <div><span class="dk">A</span> <span class="dd">Auto mode</span></div>
+    <div><span class="dk">L</span> <span class="dd">Like (write)</span></div>
+    <div><span class="dk">C</span> <span class="dd">Chat (answer)</span></div>
+    <div><span class="dk">B/⇧B</span> <span class="dd">Gift / Boss</span></div>
+    <div><span class="dk">Q</span> <span class="dd">Skip question</span></div>
+    <div class="section-title">Camera</div>
+    <div><span class="dk">Drag</span> <span class="dd">Rotate</span></div>
+    <div><span class="dk">Arrows</span> <span class="dd">Strafe</span></div>
+    <div><span class="dk">+/-</span> <span class="dd">Up/Down</span></div>
+    <div><span class="dk">G</span> <span class="dd">Toggle this panel</span></div>
+    <div><span class="dk">P</span> <span class="dd">Print debug (F12)</span></div>
+  </div>
+  <div id="debugValues"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script src="/socket.io/socket.io.js"></script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+// ===== CONFIG =====
+const params = new URLSearchParams(window.location.search);
+const MAX_SEATS = 36;         // 12 desks x 3 seats each
+const SEATS_PER_DESK = 3;
+const CHAR_SCALE = 0.55;
+const CHAR_CLASSES = ['Barbarian', 'Knight', 'Mage', 'Ranger', 'Rogue', 'Rogue_Hooded'];
+const CHAR_COLORS = [0xff6b6b, 0x4ecdc4, 0xffe66d, 0xa8e6cf, 0xdda0dd, 0x87ceeb, 0xffa07a, 0x98d8c8];
+
+// Desk grid: 2 columns x 6 rows
+const DESK_COLS = 2;
+const DESK_ROWS = 6;
+const DESK_SPACING_X = 2.2;
+const DESK_SPACING_Z = 1.7;
+const DESK_OFFSET_X = 0;
+const DESK_OFFSET_Z = -1.5;
+
+// Boss Fight stage positions (in front of first desk row, visible to camera)
+const STAGE_LEFT  = { x: -0.35, z: DESK_OFFSET_Z - 1.5 };
+const STAGE_RIGHT = { x:  0.35, z: DESK_OFFSET_Z - 1.5 };
+let bossFightActive = false;
+
+// ===== THREE.JS SETUP =====
+const canvas = document.getElementById('gameCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
+scene.fog = new THREE.FogExp2(0xb8d8b8, 0.015);
+
+const camera = new THREE.PerspectiveCamera(50, 9 / 16, 0.1, 100);
+camera.position.set(1.7, 3.6, -9.3);
+camera.lookAt(1.0, 1.5, -4.1);
+
+const orbitControls = new OrbitControls(camera, canvas);
+orbitControls.target.set(1.0, 1.5, -4.1);
+orbitControls.enableDamping = true;
+orbitControls.dampingFactor = 0.12;
+orbitControls.minDistance = 1;
+orbitControls.maxDistance = 25;
+orbitControls.maxPolarAngle = Math.PI * 0.85;
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+
+const sunLight = new THREE.DirectionalLight(0xfff5e6, 1.4);
+sunLight.position.set(5, 12, 8);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 0.5;
+sunLight.shadow.camera.far = 40;
+sunLight.shadow.camera.left = -15;
+sunLight.shadow.camera.right = 15;
+sunLight.shadow.camera.top = 15;
+sunLight.shadow.camera.bottom = -15;
+scene.add(sunLight);
+
+const fillLight = new THREE.DirectionalLight(0x88bbff, 0.3);
+fillLight.position.set(-5, 8, -5);
+scene.add(fillLight);
+
+function onResize() {
+  const frame = document.getElementById('gameFrame');
+  const w = frame.clientWidth;
+  const h = frame.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', onResize);
+onResize();
+
+// ===== ASSET LOADING =====
+const loader = new GLTFLoader();
+const characterTemplates = {};
+const animationClips = {};
+const ualClips = {};
+
+// UAL Mannequin → KayKit bone mapping
+const UAL_BONE_MAP = {
+  'pelvis': 'hips',
+  'spine_01': 'spine',
+  'spine_02': 'spine',
+  'spine_03': 'chest',
+  'Head': 'head',
+  'upperarm_l': 'upperarml', 'upperarm_r': 'upperarmr',
+  'lowerarm_l': 'lowerarml', 'lowerarm_r': 'lowerarmr',
+  'hand_l': 'wristl', 'hand_r': 'wristr',
+  'thigh_l': 'upperlegl', 'thigh_r': 'upperlegr',
+  'calf_l': 'lowerlegl', 'calf_r': 'lowerlegr',
+  'foot_l': 'footl', 'foot_r': 'footr',
+  'ball_l': 'toesl', 'ball_r': 'toesr',
+};
+
+const MANNEQUIN_BONE_MAP = null;
+
+const _hipsAutoQ = new THREE.Quaternion();
+let hipsManualAngle = 0;
+let hipsManualAxis = 1;
+const _hipsManualQ = new THREE.Quaternion();
+const _hipsFinalQ = new THREE.Quaternion();
+const _tempQ = new THREE.Quaternion();
+const _tempV = new THREE.Vector3();
+const AXIS_VECTORS = [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)];
+
+let hipsDropY = 0.0;
+let hipsPositionScale = 1.0;
+let ualPelvisStandPos = null;
+
+function updateHipsCorrection() {
+  _hipsManualQ.setFromAxisAngle(AXIS_VECTORS[hipsManualAxis], hipsManualAngle);
+  _hipsFinalQ.copy(_hipsAutoQ).multiply(_hipsManualQ);
+}
+
+// Classroom model templates
+let chairtableModel = null;
+let bookModel = null;
+let pencilModel = null;
+
+// Nature environment templates
+const natureTemplates = {};
+
+// Desk positions (filled after classroom build)
+const deskPositions = [];
+
+// Seat offset tuning
+const seatOffset = { x: 0.70, y: -0.10, z: -0.30 };
+
+function repositionSeatedPlayers() {
+  seatedPlayers.forEach(p => {
+    if (p.seat) {
+      p.model.position.set(p.seat.x + seatOffset.x, seatOffset.y, p.seat.z + seatOffset.z);
+    }
+  });
+}
+
+let assetsLoaded = false;
+
+async function loadAssets() {
+  const totalAssets = CHAR_CLASSES.length + 3 + 3 + 1; // chars + anims(KK+UAL1+UAL2) + classroom + nature
+  let loaded = 0;
+  function updateProgress(text) {
+    loaded++;
+    document.getElementById('progressFill').style.width = Math.round((loaded / totalAssets) * 100) + '%';
+    document.getElementById('loadingText').textContent = text;
+  }
+
+  // KayKit animation rigs
+  try {
+    const g = await loader.loadAsync('/characters/Rig_Medium_General.glb');
+    g.animations.forEach(clip => { animationClips[clip.name] = clip; });
+    updateProgress(`General anims (${g.animations.length})`);
+  } catch (e) { loaded++; }
+
+  try {
+    const m = await loader.loadAsync('/characters/Rig_Medium_MovementBasic.glb');
+    m.animations.forEach(clip => { animationClips[clip.name] = clip; });
+    updateProgress(`Movement anims (${m.animations.length})`);
+  } catch (e) { loaded++; }
+
+  // UAL animations
+  function parseUALClip(clip) {
+    const tracks = [];
+    for (const track of clip.tracks) {
+      const dotIdx = track.name.indexOf('.');
+      const ualBone = track.name.substring(0, dotIdx);
+      const property = track.name.substring(dotIdx + 1);
+      const kaykitBone = UAL_BONE_MAP[ualBone];
+
+      if (property === 'quaternion') {
+        tracks.push({ ualBone, kaykitBone, interpolant: track.createInterpolant(), type: 'quaternion' });
+      } else if (property === 'position' && ualBone === 'pelvis') {
+        const interp = track.createInterpolant();
+        const rest = interp.evaluate(0);
+        tracks.push({
+          ualBone, kaykitBone, interpolant: interp, type: 'position',
+          restPos: [rest[0], rest[1], rest[2]]
+        });
+      }
+    }
+    return { name: clip.name, duration: clip.duration, tracks };
+  }
+
+  try {
+    const ual = await loader.loadAsync('/characters/UAL1_Standard.glb');
+    ual.animations.forEach(clip => {
+      const parsed = parseUALClip(clip);
+      if (parsed.tracks.length > 0) ualClips['UAL_' + clip.name] = parsed;
+    });
+    updateProgress(`UAL anims (${Object.keys(ualClips).length} parsed)`);
+    const idleClip = ualClips['UAL_Idle_Loop'];
+    if (idleClip) {
+      for (const t of idleClip.tracks) {
+        if (t.type === 'quaternion' && t.kaykitBone === 'hips') {
+          const rest = t.interpolant.evaluate(0);
+          _hipsAutoQ.set(rest[0], rest[1], rest[2], rest[3]);
+          _hipsAutoQ.invert();
+        }
+        if (t.type === 'position' && t.kaykitBone === 'hips') {
+          ualPelvisStandPos = t.restPos;
+        }
+      }
+    }
+    updateHipsCorrection();
+  } catch (e) { console.warn('UAL1 load failed:', e); loaded++; }
+
+  // UAL2 — punch/hit/dance animations
+  try {
+    const ual2 = await loader.loadAsync('/characters/UAL2_Standard.glb');
+    let ual2Count = 0;
+    ual2.animations.forEach(clip => {
+      const parsed = parseUALClip(clip);
+      if (parsed.tracks.length > 0) {
+        ualClips['UAL_' + clip.name] = parsed;
+        ual2Count++;
+      }
+    });
+    updateProgress(`UAL2 anims (${ual2Count} parsed)`);
+  } catch (e) { console.warn('UAL2 load failed:', e); loaded++; }
+
+  // Character templates
+  for (const cls of CHAR_CLASSES) {
+    try {
+      const gltf = await loader.loadAsync(`/characters/${cls}.glb`);
+      gltf.scene.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+      characterTemplates[cls] = gltf.scene;
+      updateProgress(`Loaded ${cls}`);
+    } catch (e) { console.warn(`Failed to load ${cls}:`, e.message); loaded++; }
+  }
+
+  // Mannequin (optional reference)
+  try {
+    const gltf = await loader.loadAsync('/characters/Mannequin_F.glb');
+    gltf.scene.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+    characterTemplates['Mannequin'] = gltf.scene;
+  } catch (e) { /* optional */ }
+
+  // Classroom models (no blackboard)
+  try {
+    const g = await loader.loadAsync('/classroom/chairtable.glb');
+    g.scene.traverse(c => { if (c.isMesh) { c.receiveShadow = true; c.castShadow = true; } });
+    chairtableModel = g.scene;
+    updateProgress('Chair & Table');
+  } catch (e) { console.warn('chairtable:', e.message); loaded++; }
+
+  try {
+    const g = await loader.loadAsync('/classroom/book.glb');
+    g.scene.traverse(c => { if (c.isMesh) { c.receiveShadow = true; } });
+    bookModel = g.scene;
+    updateProgress('Book');
+  } catch (e) { console.warn('book:', e.message); loaded++; }
+
+  try {
+    const g = await loader.loadAsync('/classroom/pencil.glb');
+    g.scene.traverse(c => { if (c.isMesh) { c.receiveShadow = true; } });
+    pencilModel = g.scene;
+    updateProgress('Pencil');
+  } catch (e) { console.warn('pencil:', e.message); loaded++; }
+
+  // Nature environment assets (trees, rocks, bushes, flowers, grass)
+  const natureAssets = [
+    'CommonTree_1', 'CommonTree_2', 'CommonTree_3',
+    'Pine_1', 'Pine_2',
+    'Bush_Common', 'Rock_Medium_1', 'Rock_Medium_2',
+    'Grass_Common_Short', 'Flower_3_Group', 'Mushroom_Common'
+  ];
+  let natureLoaded = 0;
+  for (const name of natureAssets) {
+    try {
+      const g = await loader.loadAsync(`/nature/${name}.gltf`);
+      g.scene.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+      natureTemplates[name] = g.scene;
+      natureLoaded++;
+    } catch (e) { /* optional, silently skip */ }
+  }
+  updateProgress(`Nature (${natureLoaded} models)`);
+
+  buildClassroom();
+
+  assetsLoaded = true;
+  console.log(`Ready: ${Object.keys(characterTemplates).length} chars, ${Object.keys(ualClips).length} UAL clips`);
+  setTimeout(() => document.getElementById('loadingScreen').classList.add('hidden'), 400);
+}
+
+// ===== BUILD CLASSROOM =====
+function buildClassroom() {
+  // Green grass floor — outdoor classroom feel
+  const floorGeo = new THREE.PlaneGeometry(50, 50);
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x5a8c3a, roughness: 0.95 });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, -0.01, 2);
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // Desk grid: chairtable at each grid cell, 3 seat positions per desk
+  deskPositions.length = 0;
+  const SEAT_SPREAD = 0.45;
+  let seatIdx = 0;
+  for (let row = 0; row < DESK_ROWS; row++) {
+    for (let col = 0; col < DESK_COLS; col++) {
+      const deskX = (col - (DESK_COLS - 1) / 2) * DESK_SPACING_X + DESK_OFFSET_X;
+      const deskZ = row * DESK_SPACING_Z + DESK_OFFSET_Z;
+
+      if (chairtableModel) {
+        const ct = chairtableModel.clone();
+        ct.scale.setScalar(1.0);
+        ct.position.set(deskX, 0, deskZ);
+        ct.rotation.y = Math.PI;
+        scene.add(ct);
+      }
+
+      for (let s = 0; s < SEATS_PER_DESK; s++) {
+        const seatX = deskX + (s - 1) * SEAT_SPREAD;
+        deskPositions.push({ x: seatX, z: deskZ, occupied: false, seatIndex: seatIdx++ });
+      }
+    }
+  }
+
+  // ===== NATURE ENVIRONMENT =====
+  const lastRowZ = (DESK_ROWS - 1) * DESK_SPACING_Z + DESK_OFFSET_Z;
+  const centerZ = DESK_OFFSET_Z + (lastRowZ - DESK_OFFSET_Z) / 2;
+
+  function placeNature(name, x, z, scale, rotY) {
+    const tpl = natureTemplates[name];
+    if (!tpl) return;
+    const m = tpl.clone();
+    m.scale.setScalar(scale);
+    m.position.set(x, 0, z);
+    if (rotY !== undefined) m.rotation.y = rotY;
+    scene.add(m);
+  }
+
+  // Trees lining left side (behind camera → past desks)
+  placeNature('CommonTree_1', -4.5, -4, 1.2, 0.3);
+  placeNature('Pine_1',       -5.0, -1, 1.0, 1.2);
+  placeNature('CommonTree_2', -4.2,  2, 1.3, 2.1);
+  placeNature('Pine_2',       -5.2,  5, 1.1, 0.8);
+  placeNature('CommonTree_3', -4.0,  8, 1.2, 3.5);
+  placeNature('Pine_1',       -4.8, 11, 0.9, 1.9);
+
+  // Trees lining right side
+  placeNature('Pine_2',       4.8, -3, 1.1, 2.4);
+  placeNature('CommonTree_1', 5.0,  0, 1.2, 1.0);
+  placeNature('CommonTree_3', 4.5,  3, 1.0, 3.8);
+  placeNature('Pine_1',       5.2,  6, 1.2, 0.5);
+  placeNature('CommonTree_2', 4.3,  9, 1.3, 2.7);
+  placeNature('Pine_2',       5.0, 12, 1.0, 1.4);
+
+  // Background trees (behind the last row of desks, further back)
+  placeNature('CommonTree_1', -2.0, lastRowZ + 4, 1.5, 0.7);
+  placeNature('Pine_2',        0.0, lastRowZ + 5, 1.3, 2.0);
+  placeNature('CommonTree_2',  2.5, lastRowZ + 4, 1.4, 1.3);
+  placeNature('CommonTree_3', -3.5, lastRowZ + 6, 1.2, 3.2);
+  placeNature('Pine_1',        3.8, lastRowZ + 5, 1.1, 0.4);
+
+  // Bushes scattered around edges
+  placeNature('Bush_Common', -3.5, -3, 1.0, 0.5);
+  placeNature('Bush_Common',  3.8, -2, 0.9, 2.3);
+  placeNature('Bush_Common', -3.2,  4, 1.1, 1.8);
+  placeNature('Bush_Common',  3.5,  7, 1.0, 3.0);
+  placeNature('Bush_Common', -3.0, lastRowZ + 3, 1.2, 0.9);
+  placeNature('Bush_Common',  3.0, lastRowZ + 3, 1.0, 2.5);
+
+  // Rocks near the desk area for detail
+  placeNature('Rock_Medium_1', -3.0, -5, 0.3, 0.8);
+  placeNature('Rock_Medium_2',  3.5, -4, 0.25, 1.5);
+  placeNature('Rock_Medium_1',  4.0, 10, 0.3, 2.8);
+  placeNature('Rock_Medium_2', -4.0,  9, 0.2, 0.3);
+
+  // Grass patches between desks and along edges
+  placeNature('Grass_Common_Short', -2.5, -2.5, 0.4, 0);
+  placeNature('Grass_Common_Short',  2.5, -2.5, 0.35, 1.5);
+  placeNature('Grass_Common_Short', -2.8,  1.0, 0.4, 2.8);
+  placeNature('Grass_Common_Short',  2.8,  4.0, 0.35, 0.7);
+  placeNature('Grass_Common_Short', -2.5,  7.0, 0.4, 3.5);
+  placeNature('Grass_Common_Short',  2.5, 10.0, 0.35, 1.2);
+
+  // Flowers — small colorful accents
+  placeNature('Flower_3_Group', -3.2,  0, 0.3, 0.4);
+  placeNature('Flower_3_Group',  3.3,  2, 0.25, 2.1);
+  placeNature('Flower_3_Group', -3.5,  6, 0.3, 1.0);
+  placeNature('Flower_3_Group',  3.0, lastRowZ + 2, 0.25, 3.3);
+
+  // Mushrooms — small fun details
+  placeNature('Mushroom_Common', -3.8, -1, 0.25, 0.6);
+  placeNature('Mushroom_Common',  4.2,  5, 0.2, 2.5);
+
+  console.log(`Classroom built: ${DESK_ROWS * DESK_COLS} desks, ${deskPositions.length} seats, nature environment placed`);
+}
+
+// ===== QUESTION BANK =====
+const TRIVIA_QUESTIONS = [
+  { text: "Capital of Malaysia?", answers: ["kuala lumpur", "kl"] },
+  { text: "Tallest mountain in Malaysia?", answers: ["mount kinabalu", "kinabalu", "gunung kinabalu"] },
+  { text: "What color is a banana?", answers: ["yellow", "kuning"] },
+  { text: "How many legs does a spider have?", answers: ["8", "eight", "lapan"] },
+  { text: "What planet is closest to the Sun?", answers: ["mercury"] },
+  { text: "What animal says 'meow'?", answers: ["cat", "kucing"] },
+  { text: "How many states in Malaysia?", answers: ["13", "thirteen", "tiga belas"] },
+  { text: "What is H2O?", answers: ["water", "air"] },
+  { text: "Capital of Japan?", answers: ["tokyo"] },
+  { text: "Largest ocean on Earth?", answers: ["pacific", "pacific ocean"] },
+  { text: "What color do you get mixing red + blue?", answers: ["purple", "ungu", "violet"] },
+  { text: "How many days in a week?", answers: ["7", "seven", "tujuh"] },
+  { text: "Fastest land animal?", answers: ["cheetah"] },
+  { text: "Currency of Malaysia?", answers: ["ringgit", "myr", "rm"] },
+  { text: "What gas do plants breathe in?", answers: ["carbon dioxide", "co2"] },
+];
+
+function generateMathQuestion() {
+  const ops = [
+    () => {
+      const a = Math.floor(Math.random() * 12) + 1;
+      const b = Math.floor(Math.random() * 12) + 1;
+      return { text: `${a} + ${b} = ?`, answers: [String(a + b)] };
+    },
+    () => {
+      const a = Math.floor(Math.random() * 20) + 5;
+      const b = Math.floor(Math.random() * a) + 1;
+      return { text: `${a} - ${b} = ?`, answers: [String(a - b)] };
+    },
+    () => {
+      const a = Math.floor(Math.random() * 12) + 1;
+      const b = Math.floor(Math.random() * 12) + 1;
+      return { text: `${a} x ${b} = ?`, answers: [String(a * b)] };
+    },
+    () => {
+      const b = Math.floor(Math.random() * 10) + 2;
+      const result = Math.floor(Math.random() * 12) + 1;
+      const a = b * result;
+      return { text: `${a} ÷ ${b} = ?`, answers: [String(result)] };
+    },
+  ];
+  return ops[Math.floor(Math.random() * ops.length)]();
+}
+
+// ===== QUIZ STATE =====
+let currentQuestion = null;
+let questionStartTime = 0;
+let questionTimer = 0;
+let answeredSet = new Set();
+let answeredCorrectCount = 0;
+let questionPhase = 'pause'; // 'active' | 'reveal' | 'pause'
+let phaseTimer = 2; // start with short pause before first question
+let questionNumber = 0;
+
+function pickNextQuestion() {
+  // 50/50 math vs trivia
+  if (Math.random() < 0.5) {
+    return generateMathQuestion();
+  } else {
+    return TRIVIA_QUESTIONS[Math.floor(Math.random() * TRIVIA_QUESTIONS.length)];
+  }
+}
+
+function startQuestion() {
+  currentQuestion = pickNextQuestion();
+  questionStartTime = Date.now();
+  questionTimer = 15;
+  answeredSet.clear();
+  answeredCorrectCount = 0;
+  questionPhase = 'active';
+  questionNumber++;
+
+  document.getElementById('quizQuestion').textContent = currentQuestion.text;
+  document.getElementById('quizHint').textContent = 'Type your answer in chat!';
+  document.getElementById('quizAnswer').textContent = '';
+  document.getElementById('quizStats').textContent = `Q#${questionNumber}`;
+  document.getElementById('quizTimer').classList.remove('urgent');
+}
+
+function revealAnswer() {
+  questionPhase = 'reveal';
+  phaseTimer = 3;
+  const answer = currentQuestion.answers[0];
+  document.getElementById('quizAnswer').textContent = `Answer: ${answer.toUpperCase()}`;
+  document.getElementById('quizHint').textContent = `${answeredCorrectCount} got it right!`;
+  document.getElementById('quizTimer').textContent = '--';
+  document.getElementById('quizTimer').classList.remove('urgent');
+}
+
+function updateQuiz(dt) {
+  if (bossFightActive) return; // pause quiz during boss fight
+  if (questionPhase === 'active') {
+    questionTimer -= dt;
+    const display = Math.max(0, Math.ceil(questionTimer));
+    document.getElementById('quizTimer').textContent = display;
+    if (display <= 5) {
+      document.getElementById('quizTimer').classList.add('urgent');
+    }
+    if (questionTimer <= 0) {
+      revealAnswer();
+    }
+  } else if (questionPhase === 'reveal') {
+    phaseTimer -= dt;
+    if (phaseTimer <= 0) {
+      questionPhase = 'pause';
+      phaseTimer = 2;
+      document.getElementById('quizQuestion').textContent = 'Next question coming...';
+      document.getElementById('quizHint').textContent = '';
+      document.getElementById('quizAnswer').textContent = '';
+      document.getElementById('quizTimer').textContent = '...';
+    }
+  } else if (questionPhase === 'pause') {
+    phaseTimer -= dt;
+    if (phaseTimer <= 0) {
+      startQuestion();
+    }
+  }
+}
+
+// ===== TWO-TIER PLAYER SYSTEM =====
+// allPlayers: ALL viewers (unlimited, data only)
+const allPlayers = new Map();
+// seatedPlayers: Top 24 with 3D models
+const seatedPlayers = new Map();
+
+function hashCode(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  return Math.abs(hash);
+}
+
+function getAvailableSeat() {
+  for (const seat of deskPositions) {
+    if (!seat.occupied) return seat;
+  }
+  return null;
+}
+
+// Register a viewer in allPlayers (data only, no 3D model)
+function registerPlayer(viewer) {
+  let p = allPlayers.get(viewer.uniqueId);
+  if (!p) {
+    p = {
+      uniqueId: viewer.uniqueId,
+      nickname: viewer.nickname || viewer.uniqueId,
+      score: 0,
+      lastActive: Date.now(),
+      answeredCurrent: false,
+      milestoneHit: new Set(),
+    };
+    allPlayers.set(viewer.uniqueId, p);
+  }
+  p.lastActive = Date.now();
+  if (viewer.nickname) p.nickname = viewer.nickname;
+  return p;
+}
+
+// Create 3D model + assign seat (like old createPlayer)
+function seatPlayer(playerData) {
+  if (seatedPlayers.has(playerData.uniqueId)) return seatedPlayers.get(playerData.uniqueId);
+
+  let seat = getAvailableSeat();
+  if (!seat) return null;
+  seat.occupied = true;
+
+  const hash = hashCode(playerData.uniqueId);
+  const className = 'Mannequin'; // Mannequin = perfect UAL rig, adventure chars aren't optimized
+  const isMannequin = true;
+  const color = CHAR_COLORS[hash % CHAR_COLORS.length];
+
+  let model, mixer = null;
+  const animations = {};
+  let headBone = null, upperArmL = null, upperArmR = null;
+  let lowerArmL = null, lowerArmR = null, spineBone = null;
+  let upperLegL = null, upperLegR = null, lowerLegL = null, lowerLegR = null;
+  let hipsBone = null;
+  let boneMap = {};
+  let _storedHipsRestPos = { x: 0, y: 0.85, z: 0 };
+
+  if (characterTemplates[className]) {
+    model = SkeletonUtils.clone(characterTemplates[className]);
+    model.scale.setScalar(CHAR_SCALE);
+
+    model.traverse(child => {
+      if (child.isMesh && child.material) {
+        child.material = child.material.clone();
+        child.material.color.lerp(new THREE.Color(color), 0.15);
+      }
+      if (child.isBone) {
+        if (child.name === 'head') headBone = child;
+        if (child.name === 'upperarml') upperArmL = child;
+        if (child.name === 'upperarmr') upperArmR = child;
+        if (child.name === 'lowerarml') lowerArmL = child;
+        if (child.name === 'lowerarmr') lowerArmR = child;
+        if (child.name === 'spine') spineBone = child;
+        if (child.name === 'upperlegl') upperLegL = child;
+        if (child.name === 'upperlegr') upperLegR = child;
+        if (child.name === 'lowerlegl') lowerLegL = child;
+        if (child.name === 'lowerlegr') lowerLegR = child;
+        if (child.name === 'hips') hipsBone = child;
+      }
+    });
+
+    boneMap = {};
+    model.traverse(child => {
+      if (child.isBone) boneMap[child.name] = child;
+    });
+
+    if (hipsBone) {
+      _storedHipsRestPos = { x: hipsBone.position.x, y: hipsBone.position.y, z: hipsBone.position.z };
+    }
+
+    mixer = new THREE.AnimationMixer(model);
+    if (animationClips['Idle_A']) {
+      animations.idle = mixer.clipAction(animationClips['Idle_A']);
+      animations.idle.setLoop(THREE.LoopRepeat);
+    }
+  } else {
+    model = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.3), new THREE.MeshStandardMaterial({ color }));
+    body.position.y = 0.5; body.castShadow = true; model.add(body);
+    const hd = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 5), new THREE.MeshStandardMaterial({ color }));
+    hd.position.y = 1.0; hd.castShadow = true; model.add(hd);
+  }
+
+  // Name label
+  const nc = document.createElement('canvas');
+  nc.width = 512; nc.height = 128;
+  const ctx = nc.getContext('2d');
+  const displayName = (playerData.nickname || playerData.uniqueId).slice(0, 14);
+  ctx.font = 'bold 42px Segoe UI, sans-serif';
+  const textW = Math.min(ctx.measureText(displayName).width + 40, 500);
+  const pillX = (512 - textW) / 2;
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.roundRect(pillX, 20, textW, 80, 40);
+  ctx.fill();
+  ctx.strokeStyle = '#' + color.toString(16).padStart(6, '0');
+  ctx.lineWidth = 3;
+  ctx.roundRect(pillX, 20, textW, 80, 40);
+  ctx.stroke();
+  ctx.font = 'bold 42px Segoe UI, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(displayName, 256, 72);
+  const nameSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(nc), transparent: true, depthTest: false
+  }));
+  nameSprite.scale.set(2.0, 0.5, 1);
+  nameSprite.position.y = 2.2;
+  nameSprite.renderOrder = 999;
+  model.add(nameSprite);
+
+  // Position at seat
+  model.position.set(seat.x + seatOffset.x, seatOffset.y, seat.z + seatOffset.z);
+  model.rotation.y = Math.PI;
+  scene.add(model);
+
+  if (mixer) mixer.stopAllAction();
+
+  // Start with Sitting_Enter → Sitting_Idle_Loop
+  const enterClip = ualClips['UAL_Sitting_Enter'];
+  const idleClip = ualClips['UAL_Sitting_Idle_Loop'];
+  const initialUAL = enterClip ? { clip: enterClip, time: 0, loop: false }
+                   : idleClip ? { clip: idleClip, time: 0, loop: true } : null;
+  const initialAnim = enterClip ? 'entering' : 'sitting';
+
+  const seated = {
+    uniqueId: playerData.uniqueId,
+    nickname: playerData.nickname,
+    model, mixer, animations, headBone, boneMap,
+    upperArmL, upperArmR, lowerArmL, lowerArmR, spineBone,
+    upperLegL, upperLegR, lowerLegL, lowerLegR, hipsBone,
+    currentAnim: initialAnim,
+    isMannequin,
+    _hipsRestPos: _storedHipsRestPos,
+    seat,
+    color, className,
+    chatSprite: null, chatTimeout: null,
+    ualPlayback: initialUAL,
+    writingTimer: 0,
+    celebrateTimer: 0,
+    glowTimer: 0,
+    scorePopups: [],
+    crownSprite: null,
+  };
+
+  // Apply first frame immediately to avoid T-pose flash
+  if (seated.ualPlayback) {
+    applyUALFrame(seated, 0);
+  }
+
+  seatedPlayers.set(playerData.uniqueId, seated);
+  updatePlayerCount();
+  return seated;
+}
+
+// Apply UAL bone data at a specific time
+function applyUALFrame(player, time) {
+  updateHipsCorrection();
+  for (const t of player.ualPlayback.clip.tracks) {
+    const boneName = player.isMannequin ? t.ualBone : t.kaykitBone;
+    if (!boneName) continue;
+    const bone = player.boneMap[boneName];
+    if (!bone) continue;
+    const result = t.interpolant.evaluate(time);
+    const isHips = player.isMannequin ? (t.ualBone === 'pelvis') : (t.kaykitBone === 'hips');
+
+    if (t.type === 'quaternion') {
+      if (isHips && !player.isMannequin) {
+        _tempQ.set(result[0], result[1], result[2], result[3]);
+        _tempQ.premultiply(_hipsFinalQ);
+        bone.quaternion.copy(_tempQ);
+      } else {
+        bone.quaternion.set(result[0], result[1], result[2], result[3]);
+      }
+    } else if (t.type === 'position' && isHips) {
+      if (player.isMannequin) {
+        bone.position.set(result[0], result[1], result[2]);
+      } else if (player.hipsBone) {
+        const refPos = ualPelvisStandPos || t.restPos;
+        _tempV.set(result[0] - refPos[0], result[1] - refPos[1], result[2] - refPos[2]);
+        _tempV.applyQuaternion(_hipsFinalQ);
+        player.hipsBone.position.set(
+          player._hipsRestPos.x + _tempV.x * hipsPositionScale,
+          player._hipsRestPos.y + _tempV.y * hipsPositionScale,
+          player._hipsRestPos.z + _tempV.z * hipsPositionScale
+        );
+      }
+    }
+  }
+  if (player.hipsBone && hipsDropY !== 0) {
+    player.hipsBone.position.y = player._hipsRestPos.y - hipsDropY;
+  }
+}
+
+// Remove 3D model, free seat
+function unseatPlayer(uniqueId) {
+  const p = seatedPlayers.get(uniqueId);
+  if (!p) return;
+
+  // Play exit animation briefly then remove
+  scene.remove(p.model);
+  if (p.mixer) p.mixer.stopAllAction();
+  if (p.seat) p.seat.occupied = false;
+  p.scorePopups.forEach(sp => scene.remove(sp.sprite));
+  if (p.crownSprite) p.model.remove(p.crownSprite);
+  seatedPlayers.delete(uniqueId);
+  updatePlayerCount();
+}
+
+// Check if seated player is mid-gift sequence
+function isInGiftSequence(p) {
+  return p.currentAnim === 'gift_exit' || p.currentAnim === 'gift_standing' || p.currentAnim === 'gift_enter';
+}
+
+// Reconcile: promote top 24 scorers to seats, demote others
+let reconcileTimer = 0;
+function reconcileSeating() {
+  if (bossFightActive) return; // don't reshuffle during boss fight
+  const sorted = [...allPlayers.values()].sort((a, b) => b.score - a.score);
+  const top24Ids = new Set(sorted.slice(0, MAX_SEATS).map(p => p.uniqueId));
+
+  // Demote: remove seated players not in top 24 (skip if mid-animation)
+  for (const [uid, seated] of seatedPlayers) {
+    if (!top24Ids.has(uid) && !isInGiftSequence(seated)) {
+      unseatPlayer(uid);
+    }
+  }
+
+  // Promote: seat top 24 players who aren't seated yet
+  for (const uid of top24Ids) {
+    if (!seatedPlayers.has(uid)) {
+      const data = allPlayers.get(uid);
+      if (data && data.score > 0) {
+        seatPlayer(data);
+      }
+    }
+  }
+}
+
+// ===== UAL PLAYBACK =====
+function playSittingIdle(player) {
+  const clip = ualClips['UAL_Sitting_Idle_Loop'];
+  if (clip) {
+    if (player.mixer) player.mixer.stopAllAction();
+    player.ualPlayback = { clip, time: 0, loop: true };
+    player.currentAnim = 'sitting';
+  }
+}
+
+function playUAL(player, clipName, loop) {
+  const clip = ualClips[clipName];
+  if (!clip) return;
+  if (player.mixer) player.mixer.stopAllAction();
+  player.ualPlayback = { clip, time: 0, loop: loop !== undefined ? loop : clipName.includes('Loop') };
+  player.currentAnim = '_ual';
+}
+
+function stopUAL(player) {
+  playSittingIdle(player);
+}
+
+// Gift sequence: Sitting_Exit → standing anim → Sitting_Enter → Sitting_Idle_Loop
+function playGiftSequence(player, standingAnimName, standingDuration) {
+  player.currentAnim = 'gift_exit';
+  player.celebrateTimer = standingDuration + 3;
+
+  const exitClip = ualClips['UAL_Sitting_Exit'];
+  if (!exitClip) {
+    playGiftStanding(player, standingAnimName, standingDuration);
+    return;
+  }
+
+  if (player.mixer) player.mixer.stopAllAction();
+  player.ualPlayback = { clip: exitClip, time: 0, loop: false };
+
+  const exitDuration = exitClip.duration * 1000;
+  setTimeout(() => {
+    if (!seatedPlayers.has(player.uniqueId)) return;
+    playGiftStanding(player, standingAnimName, standingDuration);
+  }, exitDuration);
+}
+
+function playGiftStanding(player, standingAnimName, standingDuration) {
+  player.currentAnim = 'gift_standing';
+  const standClip = ualClips[standingAnimName];
+  if (standClip) {
+    if (player.mixer) player.mixer.stopAllAction();
+    player.ualPlayback = { clip: standClip, time: 0, loop: standingAnimName.includes('Loop') };
+  }
+
+  setTimeout(() => {
+    if (!seatedPlayers.has(player.uniqueId)) return;
+    player.currentAnim = 'gift_enter';
+    player.celebrateTimer = 0;
+
+    // Restore rotation after fight
+    restoreRotation(player);
+
+    const enterClip = ualClips['UAL_Sitting_Enter'];
+    if (!enterClip) {
+      playSittingIdle(player);
+      return;
+    }
+    if (player.mixer) player.mixer.stopAllAction();
+    player.ualPlayback = { clip: enterClip, time: 0, loop: false };
+  }, standingDuration * 1000);
+}
+
+// ===== FIGHT ROTATION HELPERS =====
+function faceEachOther(a, b) {
+  const dx = b.model.position.x - a.model.position.x;
+  const dz = b.model.position.z - a.model.position.z;
+  const angle = Math.atan2(dx, dz);
+  a._savedRotationY = a.model.rotation.y;
+  b._savedRotationY = b.model.rotation.y;
+  a.model.rotation.y = angle;
+  b.model.rotation.y = angle + Math.PI;
+}
+
+function restoreRotation(seated) {
+  if (seated._savedRotationY !== undefined) {
+    seated.model.rotation.y = seated._savedRotationY;
+    delete seated._savedRotationY;
+  }
+}
+
+// Tier-based attack animation selection
+function pickAttackAnim(diamonds) {
+  if (diamonds >= 100) {
+    return Math.random() > 0.5 ? 'UAL_Sword_Attack' : 'UAL_Spell_Simple_Shoot';
+  } else if (diamonds >= 10) {
+    return Math.random() > 0.5 ? 'UAL_Punch_Cross' : 'UAL_Sword_Attack';
+  } else {
+    return Math.random() > 0.5 ? 'UAL_Punch_Jab' : 'UAL_Punch_Cross';
+  }
+}
+
+function pickHitAnim() {
+  return Math.random() > 0.5 ? 'UAL_Hit_Chest' : 'UAL_Hit_Head';
+}
+
+// ===== VIP BOSS FIGHT (500+ diamonds) =====
+function startBossFight(attackerUid, targetUid, damage) {
+  const attacker = seatedPlayers.get(attackerUid);
+  const target = seatedPlayers.get(targetUid);
+  if (!attacker || !target) return;
+
+  bossFightActive = true;
+  const attackerData = allPlayers.get(attackerUid);
+  const targetData = allPlayers.get(targetUid);
+
+  // Save original positions and seats
+  const atkSavedPos = { x: attacker.model.position.x, y: attacker.model.position.y, z: attacker.model.position.z };
+  const tgtSavedPos = { x: target.model.position.x, y: target.model.position.y, z: target.model.position.z };
+  const atkSavedRotY = attacker.model.rotation.y;
+  const tgtSavedRotY = target.model.rotation.y;
+
+  showPowerFlash('⚔️', 'BOSS FIGHT!', `${attacker.nickname} vs ${target.nickname}`);
+  showNotif(`<strong>⚔️ BOSS FIGHT!</strong> ${attacker.nickname} vs ${target.nickname}!`, 'fight');
+
+  // Mark both as in gift sequence to prevent reconcile interference
+  attacker.currentAnim = 'gift_exit';
+  target.currentAnim = 'gift_exit';
+  attacker.celebrateTimer = 10;
+  target.celebrateTimer = 10;
+
+  // Phase 0: Sitting_Exit on both (~0.5s)
+  const exitClip = ualClips['UAL_Sitting_Exit'];
+  if (exitClip) {
+    attacker.ualPlayback = { clip: exitClip, time: 0, loop: false };
+    target.ualPlayback = { clip: exitClip, time: 0, loop: false };
+  }
+
+  // Phase 1 (0.5s): Teleport to stage
+  setTimeout(() => {
+    if (!seatedPlayers.has(attackerUid) || !seatedPlayers.has(targetUid)) {
+      bossFightActive = false;
+      return;
+    }
+    // Teleport attacker to stage left, facing right (standing on floor, no seatOffset)
+    attacker.model.position.set(STAGE_LEFT.x, 0, STAGE_LEFT.z);
+    attacker.model.rotation.y = Math.PI / 2; // face right
+    attacker.currentAnim = 'gift_standing';
+
+    // Teleport target to stage right, facing left (standing on floor, no seatOffset)
+    target.model.position.set(STAGE_RIGHT.x, 0, STAGE_RIGHT.z);
+    target.model.rotation.y = -Math.PI / 2; // face left
+    target.currentAnim = 'gift_standing';
+
+    // Phase 2 (0.7s): First attack — Sword Attack + Hit Chest
+    setTimeout(() => {
+      if (!seatedPlayers.has(attackerUid) || !seatedPlayers.has(targetUid)) {
+        bossFightActive = false;
+        return;
+      }
+      const swordClip = ualClips['UAL_Sword_Attack'];
+      const hitChest = ualClips['UAL_Hit_Chest'];
+      if (swordClip) attacker.ualPlayback = { clip: swordClip, time: 0, loop: false };
+      if (hitChest) target.ualPlayback = { clip: hitChest, time: 0, loop: false };
+      showScorePopup(target, '⚔️', '#ff6b35');
+
+      // Phase 3 (1.7s): Second attack — Punch Cross + Hit Head
+      setTimeout(() => {
+        if (!seatedPlayers.has(attackerUid) || !seatedPlayers.has(targetUid)) {
+          bossFightActive = false;
+          return;
+        }
+        const punchClip = ualClips['UAL_Punch_Cross'];
+        const hitHead = ualClips['UAL_Hit_Head'];
+        if (punchClip) attacker.ualPlayback = { clip: punchClip, time: 0, loop: false };
+        if (hitHead) target.ualPlayback = { clip: hitHead, time: 0, loop: false };
+        showScorePopup(target, '👊', '#ff4444');
+
+        // Phase 4 (2.7s): Final attack — Spell + Death
+        setTimeout(() => {
+          if (!seatedPlayers.has(attackerUid) || !seatedPlayers.has(targetUid)) {
+            bossFightActive = false;
+            return;
+          }
+          const spellClip = ualClips['UAL_Spell_Simple_Shoot'];
+          const deathClip = ualClips['UAL_Death01'];
+          if (spellClip) attacker.ualPlayback = { clip: spellClip, time: 0, loop: false };
+          if (deathClip) target.ualPlayback = { clip: deathClip, time: 0, loop: false };
+
+          // Set target score to 0
+          if (targetData) targetData.score = 0;
+          showScorePopup(target, 'ELIMINATED!', '#ff0000');
+          showNotif(`<strong>${target.nickname}</strong> ELIMINATED! Kicked from class!`, 'fight');
+
+          // Phase 5 (4.7s): Target dead on ground, attacker victory dance
+          setTimeout(() => {
+            if (!seatedPlayers.has(attackerUid)) {
+              bossFightActive = false;
+              return;
+            }
+            const danceClip = ualClips['UAL_Dance_Loop'];
+            if (danceClip) attacker.ualPlayback = { clip: danceClip, time: 0, loop: true };
+            attacker.celebrateTimer = 3;
+
+            // Phase 6 (6.7s): Remove target, return attacker to seat
+            setTimeout(() => {
+              // Remove target
+              if (seatedPlayers.has(targetUid)) {
+                unseatPlayer(targetUid);
+              }
+
+              // Return attacker to seat
+              if (seatedPlayers.has(attackerUid)) {
+                attacker.model.position.set(atkSavedPos.x, atkSavedPos.y, atkSavedPos.z);
+                attacker.model.rotation.y = atkSavedRotY;
+                attacker.currentAnim = 'gift_enter';
+                attacker.celebrateTimer = 0;
+                const enterClip = ualClips['UAL_Sitting_Enter'];
+                if (enterClip) {
+                  attacker.ualPlayback = { clip: enterClip, time: 0, loop: false };
+                } else {
+                  playSittingIdle(attacker);
+                }
+              }
+
+              // Phase 7 (~7.5s): Unlock boss fight
+              setTimeout(() => {
+                bossFightActive = false;
+                reconcileSeating();
+              }, 800);
+            }, 2000);
+          }, 2000);
+        }, 1000);
+      }, 1000);
+    }, 200);
+  }, 500);
+}
+
+// ===== SCORE-ZERO DEATH + KICK =====
+function triggerDeathKick(targetUid, targetNickname) {
+  const targetSeated = seatedPlayers.get(targetUid);
+  if (!targetSeated) return;
+
+  // First play hit reaction so the punch visually lands
+  targetSeated.currentAnim = 'gift_standing'; // prevent reconcile removal
+  targetSeated.celebrateTimer = 5;
+  const hitClip = ualClips[pickHitAnim()];
+  if (hitClip) {
+    if (targetSeated.mixer) targetSeated.mixer.stopAllAction();
+    targetSeated.ualPlayback = { clip: hitClip, time: 0, loop: false };
+  }
+
+  showScorePopup(targetSeated, `-💀`, '#ff4444');
+
+  // After 1.2s: transition to death animation
+  setTimeout(() => {
+    if (!seatedPlayers.has(targetUid)) return;
+    const deathClip = ualClips['UAL_Death01'];
+    if (deathClip) {
+      targetSeated.ualPlayback = { clip: deathClip, time: 0, loop: false };
+    }
+    showScorePopup(targetSeated, 'ELIMINATED!', '#ff0000');
+    showNotif(`<strong>${targetNickname}</strong> ELIMINATED! Kicked from class!`, 'fight');
+
+    // After 2s on ground: remove from scene
+    setTimeout(() => {
+      if (seatedPlayers.has(targetUid)) {
+        unseatPlayer(targetUid);
+      }
+    }, 2000);
+  }, 1200);
+}
+
+// ===== SCORE POPUP =====
+function showScorePopup(seated, text, color) {
+  const cc = document.createElement('canvas');
+  cc.width = 256; cc.height = 128;
+  const ctx = cc.getContext('2d');
+  ctx.font = 'bold 48px Segoe UI, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = color || '#ffc832';
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth = 4;
+  ctx.strokeText(text, 128, 72);
+  ctx.fillText(text, 128, 72);
+
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(cc), transparent: true, depthTest: false
+  }));
+  sprite.scale.set(1.2, 0.6, 1);
+  sprite.position.set(
+    seated.model.position.x + (Math.random() - 0.5) * 0.5,
+    seated.model.position.y + 2.8,
+    seated.model.position.z
+  );
+  sprite.renderOrder = 1001;
+  scene.add(sprite);
+
+  seated.scorePopups.push({ sprite, life: 1.5, vy: 1.5 });
+}
+
+// ===== GAME ACTIONS =====
+function addScore(uniqueId, points, label) {
+  const pd = allPlayers.get(uniqueId);
+  if (!pd) return;
+  pd.score += points;
+  pd.lastActive = Date.now();
+
+  // Show popup on seated player if visible
+  const seated = seatedPlayers.get(uniqueId);
+  if (seated) {
+    showScorePopup(seated, label || `+${points}`, points >= 20 ? '#ff6b35' : points < 0 ? '#ff4444' : '#ffc832');
+  }
+
+  // Milestone checks
+  const milestones = [50, 100, 200, 500];
+  for (const m of milestones) {
+    if (pd.score >= m && !pd.milestoneHit.has(m)) {
+      pd.milestoneHit.add(m);
+      const s = seatedPlayers.get(uniqueId);
+      if (s) s.glowTimer = 2.0;
+      showNotif(`<strong>${pd.nickname}</strong> reached ${m} points!`, 'gift');
+    }
+  }
+}
+
+// Like = write on paper
+function handleLike(uniqueId, likeCount) {
+  const pd = registerPlayer({ uniqueId });
+  const likes = Math.min(likeCount || 1, 3);
+  addScore(uniqueId, likes, `+${likes}`);
+  const seated = seatedPlayers.get(uniqueId);
+  if (seated && !isInGiftSequence(seated)) seated.writingTimer = 1.5;
+}
+
+// Chat = check quiz answer + show bubble
+function handleChat(uniqueId, nickname, comment) {
+  const pd = registerPlayer({ uniqueId, nickname });
+
+  // Check quiz answer
+  if (currentQuestion && questionPhase === 'active' && !answeredSet.has(uniqueId)) {
+    const answer = comment.trim().toLowerCase();
+    if (currentQuestion.answers.includes(answer)) {
+      answeredSet.add(uniqueId);
+      answeredCorrectCount++;
+      const elapsed = (Date.now() - questionStartTime) / 1000;
+      const points = elapsed <= 3 ? 10 : elapsed <= 5 ? 7 : elapsed <= 10 ? 3 : 1;
+      addScore(uniqueId, points, `+${points}`);
+      showNotif(`<strong>${nickname}</strong> correct! +${points}`, 'correct');
+      // Play talking anim if seated
+      const seated = seatedPlayers.get(uniqueId);
+      if (seated && !isInGiftSequence(seated)) {
+        playUAL(seated, 'UAL_Sitting_Talking_Loop', true);
+        setTimeout(() => {
+          if (seated.currentAnim === '_ual') stopUAL(seated);
+        }, 2000);
+      }
+      return; // don't add +1 for chat if answer was correct
+    }
+  }
+
+  // Normal chat: +1 point + bubble
+  addScore(uniqueId, 1, '+1');
+  const seated = seatedPlayers.get(uniqueId);
+  if (seated && !isInGiftSequence(seated)) {
+    const talkClip = ualClips['UAL_Sitting_Talking_Loop'];
+    if (talkClip) {
+      playUAL(seated, 'UAL_Sitting_Talking_Loop', true);
+      setTimeout(() => {
+        if (seated.currentAnim === '_ual') stopUAL(seated);
+      }, 2500);
+    }
+  }
+  if (seated && comment) showChatBubble(uniqueId, comment);
+}
+
+// Gift = attack the player ranked above you
+function handleGift(uniqueId, nickname, diamonds) {
+  const attacker = registerPlayer({ uniqueId, nickname });
+
+  // Find target: player ranked directly above attacker
+  const sorted = [...allPlayers.values()].sort((a, b) => b.score - a.score);
+  const myIdx = sorted.findIndex(p => p.uniqueId === uniqueId);
+
+  // Calculate damage
+  const damage = diamonds >= 500 ? 50 : diamonds >= 100 ? 30 : diamonds >= 10 ? 15 : 5;
+
+  // Attacker bonus
+  attacker.score += 3;
+
+  // Find target
+  let target = null;
+  if (sorted.length > 1) {
+    const targetIdx = myIdx === 0 ? 1 : myIdx - 1; // #1 attacks #2, others attack above
+    target = sorted[targetIdx];
+  }
+
+  if (!target) {
+    // Solo player — just give attacker bonus
+    addScore(uniqueId, 0, '+3'); // show the bonus
+    showNotif(`<strong>${nickname}</strong> sent ${diamonds} diamonds! +3`, 'gift');
+    return;
+  }
+
+  // VIP Boss Fight (500+ diamonds)
+  if (diamonds >= 500) {
+    const attackerSeated = seatedPlayers.get(uniqueId);
+    const targetSeated = seatedPlayers.get(target.uniqueId);
+
+    if (!bossFightActive && attackerSeated && targetSeated
+        && !isInGiftSequence(attackerSeated) && !isInGiftSequence(targetSeated)) {
+      // Deduct target score (boss fight sets to 0 inside)
+      target.score = Math.max(0, target.score - damage);
+      if (attackerSeated) showScorePopup(attackerSeated, '+3', '#88ff88');
+      startBossFight(uniqueId, target.uniqueId, damage);
+      return;
+    }
+    // If boss fight already active, downgrade to tier 100-499 behavior
+  }
+
+  // Deduct target score
+  target.score = Math.max(0, target.score - damage);
+
+  // Animations — face each other + tier-based attack anims
+  const attackerSeated = seatedPlayers.get(uniqueId);
+  const targetSeated = seatedPlayers.get(target.uniqueId);
+
+  // Face each other before fighting
+  if (attackerSeated && targetSeated && !isInGiftSequence(attackerSeated) && !isInGiftSequence(targetSeated)) {
+    faceEachOther(attackerSeated, targetSeated);
+  }
+
+  if (attackerSeated && !isInGiftSequence(attackerSeated)) {
+    const attackAnim = pickAttackAnim(diamonds);
+    playGiftSequence(attackerSeated, attackAnim, 2);
+  }
+
+  // Check if target is eliminated (score === 0)
+  if (target.score === 0 && targetSeated && !isInGiftSequence(targetSeated)) {
+    triggerDeathKick(target.uniqueId, target.nickname);
+  } else if (targetSeated && !isInGiftSequence(targetSeated)) {
+    const hitAnim = pickHitAnim();
+    playGiftSequence(targetSeated, hitAnim, 2);
+    showScorePopup(targetSeated, `-${damage}`, '#ff4444');
+  }
+
+  // Show attacker bonus popup
+  if (attackerSeated) {
+    showScorePopup(attackerSeated, '+3', '#88ff88');
+  }
+
+  const icons = diamonds >= 100 ? '⚔️' : diamonds >= 10 ? '🗡️' : '👊';
+  showPowerFlash(icons, `${nickname} → ${target.nickname}!`, `-${damage}`);
+  showNotif(`<strong>${nickname}</strong> attacked <strong>${target.nickname}</strong>! -${damage}`, 'fight');
+}
+
+// Follow = +10
+function handleFollow(uniqueId, nickname) {
+  registerPlayer({ uniqueId, nickname });
+  addScore(uniqueId, 10, '+10');
+  showNotif(`<strong>${nickname}</strong> followed! +10`, 'gift');
+}
+
+// Share = +5
+function handleShare(uniqueId, nickname) {
+  registerPlayer({ uniqueId, nickname });
+  addScore(uniqueId, 5, '+5');
+  showNotif(`<strong>${nickname}</strong> shared! +5`);
+  const seated = seatedPlayers.get(uniqueId);
+  if (seated) seated.glowTimer = 1.0;
+}
+
+// ===== CROWN FOR #1 =====
+let topScorerLastId = null;
+
+function addCrown(player) {
+  if (player.crownSprite) return;
+  const cc = document.createElement('canvas');
+  cc.width = 128; cc.height = 128;
+  const ctx = cc.getContext('2d');
+  ctx.font = '80px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('👑', 64, 90);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(cc), transparent: true, depthTest: false
+  }));
+  sprite.scale.set(0.8, 0.8, 1);
+  sprite.position.y = 2.8;
+  sprite.renderOrder = 1002;
+  player.model.add(sprite);
+  player.crownSprite = sprite;
+}
+
+// ===== CHAT BUBBLE =====
+function showChatBubble(uniqueId, text) {
+  const player = seatedPlayers.get(uniqueId);
+  if (!player) return;
+
+  if (player.chatSprite) {
+    player.model.remove(player.chatSprite);
+    player.chatSprite = null;
+  }
+  if (player.chatTimeout) clearTimeout(player.chatTimeout);
+
+  const cc = document.createElement('canvas');
+  cc.width = 512; cc.height = 128;
+  const ctx = cc.getContext('2d');
+  const msg = text.slice(0, 20);
+  ctx.font = 'bold 32px Segoe UI, sans-serif';
+  const tw = Math.min(ctx.measureText(msg).width + 30, 490);
+  const px = (512 - tw) / 2;
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.roundRect(px, 20, tw, 70, 35);
+  ctx.fill();
+  ctx.font = 'bold 32px Segoe UI, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#333';
+  ctx.fillText(msg, 256, 65);
+
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(cc), transparent: true, depthTest: false
+  }));
+  sprite.scale.set(2.0, 0.5, 1);
+  sprite.position.y = 3.0;
+  sprite.renderOrder = 1000;
+  player.model.add(sprite);
+  player.chatSprite = sprite;
+
+  player.chatTimeout = setTimeout(() => {
+    if (player.chatSprite === sprite) {
+      player.model.remove(sprite);
+      player.chatSprite = null;
+    }
+  }, 4000);
+}
+
+// ===== UPDATE LOOP =====
+const clock = new THREE.Clock();
+let lbTimer = 0;
+
+function updatePlayers(dt) {
+  updateHipsCorrection();
+
+  seatedPlayers.forEach(player => {
+    // UAL manual bone playback
+    if (player.ualPlayback) {
+      player.ualPlayback.time += dt;
+      if (player.ualPlayback.time >= player.ualPlayback.clip.duration) {
+        if (player.ualPlayback.loop) {
+          player.ualPlayback.time %= player.ualPlayback.clip.duration;
+        } else {
+          if (player.currentAnim === 'entering' || player.currentAnim === 'gift_enter') {
+            playSittingIdle(player);
+            return;
+          }
+          player.ualPlayback.time = player.ualPlayback.clip.duration - 0.001;
+        }
+      }
+      if (player.ualPlayback) {
+        let hasPositionTrack = false;
+        for (const t of player.ualPlayback.clip.tracks) {
+          const boneName = player.isMannequin ? t.ualBone : t.kaykitBone;
+          if (!boneName) continue;
+          const bone = player.boneMap[boneName];
+          if (!bone) continue;
+          const result = t.interpolant.evaluate(player.ualPlayback.time);
+          const isHips = player.isMannequin ? (t.ualBone === 'pelvis') : (t.kaykitBone === 'hips');
+
+          if (t.type === 'quaternion') {
+            if (isHips && !player.isMannequin) {
+              _tempQ.set(result[0], result[1], result[2], result[3]);
+              _tempQ.premultiply(_hipsFinalQ);
+              bone.quaternion.copy(_tempQ);
+            } else {
+              bone.quaternion.set(result[0], result[1], result[2], result[3]);
+            }
+          } else if (t.type === 'position' && isHips) {
+            hasPositionTrack = true;
+            if (player.isMannequin) {
+              bone.position.set(result[0], result[1], result[2]);
+            } else if (player.hipsBone) {
+              const refPos = ualPelvisStandPos || t.restPos;
+              _tempV.set(
+                result[0] - refPos[0],
+                result[1] - refPos[1],
+                result[2] - refPos[2]
+              );
+              _tempV.applyQuaternion(_hipsFinalQ);
+              player.hipsBone.position.set(
+                player._hipsRestPos.x + _tempV.x * hipsPositionScale,
+                player._hipsRestPos.y + _tempV.y * hipsPositionScale,
+                player._hipsRestPos.z + _tempV.z * hipsPositionScale
+              );
+            }
+          }
+        }
+        if (!hasPositionTrack && player.hipsBone && hipsDropY !== 0) {
+          player.hipsBone.position.y = player._hipsRestPos.y - hipsDropY;
+        }
+      }
+    }
+
+    // Writing wiggle
+    if (player.writingTimer > 0 && player.ualPlayback) {
+      player.writingTimer -= dt;
+      const wiggle = Math.sin(Date.now() * 0.015) * 0.2;
+      if (player.lowerArmR) {
+        player.lowerArmR.rotation.x += -0.3 + Math.sin(Date.now() * 0.01) * 0.15;
+        player.lowerArmR.rotation.z += wiggle;
+      }
+      if (player.upperArmR) {
+        player.upperArmR.rotation.x += -0.15;
+        player.upperArmR.rotation.z += wiggle * 0.3;
+      }
+    }
+
+    // Glow effect
+    if (player.glowTimer > 0) {
+      player.glowTimer -= dt;
+      player.model.traverse(c => {
+        if (c.isMesh && c.material.emissive) {
+          c.material.emissive.setHex(0xffc832);
+          c.material.emissiveIntensity = 0.4 * (player.glowTimer / 2);
+        }
+      });
+    } else {
+      player.model.traverse(c => {
+        if (c.isMesh && c.material.emissive) c.material.emissiveIntensity = 0;
+      });
+    }
+
+    // Score popups float up and fade
+    for (let i = player.scorePopups.length - 1; i >= 0; i--) {
+      const sp = player.scorePopups[i];
+      sp.life -= dt;
+      sp.sprite.position.y += sp.vy * dt;
+      sp.sprite.material.opacity = Math.max(0, sp.life / 1.5);
+      if (sp.life <= 0) {
+        scene.remove(sp.sprite);
+        player.scorePopups.splice(i, 1);
+      }
+    }
+  });
+}
+
+// ===== LEADERBOARD =====
+function updateLeaderboard() {
+  // Show all seated players ranked by score
+  const sorted = [...allPlayers.values()]
+    .filter(p => seatedPlayers.has(p.uniqueId))
+    .sort((a, b) => b.score - a.score);
+  const container = document.getElementById('lbRows');
+  const medals = ['👑', '🥈', '🥉'];
+
+  let html = '';
+  sorted.forEach((p, i) => {
+    const rank = i < 3 ? medals[i] : `${i + 1}`;
+    html += `<div class="lb-row">
+      <span class="lb-rank">${rank}</span>
+      <span class="lb-name">${p.nickname}</span>
+      <span class="lb-score">${p.score}</span>
+    </div>`;
+  });
+  container.innerHTML = html;
+  // Update title with count
+  document.querySelector('#leaderboard .lb-title').textContent = `Students (${sorted.length})`;
+
+  // Crown management for #1
+  if (sorted.length > 0 && sorted[0].score >= 20) {
+    if (sorted[0].uniqueId !== topScorerLastId) {
+      // Remove old crown
+      if (topScorerLastId) {
+        const old = seatedPlayers.get(topScorerLastId);
+        if (old && old.crownSprite) {
+          old.model.remove(old.crownSprite);
+          old.crownSprite = null;
+        }
+      }
+      topScorerLastId = sorted[0].uniqueId;
+      const newTop = seatedPlayers.get(sorted[0].uniqueId);
+      if (newTop) addCrown(newTop);
+    }
+  }
+}
+
+// ===== HUD =====
+function updatePlayerCount() {
+  const total = allPlayers.size;
+  const seated = seatedPlayers.size;
+  document.getElementById('playerCount').textContent = `${total} viewers | ${seated} seated`;
+}
+
+function showNotif(text, type = '') {
+  const container = document.getElementById('notifications');
+  const el = document.createElement('div');
+  el.className = `notif ${type}`;
+  el.innerHTML = text;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 4500);
+  while (container.children.length > 4) container.removeChild(container.firstChild);
+}
+
+function showPowerFlash(icon, name, byName) {
+  const el = document.createElement('div');
+  el.className = 'power-flash';
+  el.innerHTML = `<span class="pf-icon">${icon}</span><div class="pf-name">${name}</div><div class="pf-by">${byName}</div>`;
+  document.getElementById('gameFrame').appendChild(el);
+  setTimeout(() => el.remove(), 2500);
+}
+
+// ===== SOCKET.IO =====
+const ROOM = params.get('room') || '';
+const socket = io({ query: { room: ROOM } });
+
+socket.on('connect', () => {
+  document.getElementById('connStatus').innerHTML = '<div class="live-dot"></div> Connected';
+});
+socket.on('disconnect', () => {
+  document.getElementById('connStatus').innerHTML = 'Disconnected';
+});
+socket.on('tiktok-connected', () => {
+  document.getElementById('connStatus').innerHTML = '<div class="live-dot"></div> LIVE';
+});
+socket.on('tiktok-disconnected', () => {
+  document.getElementById('connStatus').innerHTML = 'Stream ended';
+});
+
+socket.on('viewer-join', (viewer) => {
+  if (!assetsLoaded) return;
+  registerPlayer(viewer);
+  showNotif(`<strong>${viewer.nickname || viewer.uniqueId}</strong> joined class!`);
+});
+
+socket.on('chat', (data) => {
+  if (!assetsLoaded) return;
+  handleChat(data.uniqueId, data.nickname || data.uniqueId, data.comment);
+});
+
+socket.on('like', (data) => {
+  if (!assetsLoaded) return;
+  registerPlayer({ uniqueId: data.uniqueId, nickname: data.nickname || data.uniqueId });
+  handleLike(data.uniqueId, data.likeCount);
+});
+
+socket.on('gift', (data) => {
+  if (!assetsLoaded) return;
+  handleGift(data.uniqueId, data.nickname || data.uniqueId, data.diamondCount || 1);
+});
+
+socket.on('follow', (data) => {
+  if (!assetsLoaded) return;
+  handleFollow(data.uniqueId, data.nickname || data.uniqueId);
+});
+
+socket.on('share', (data) => {
+  if (!assetsLoaded) return;
+  handleShare(data.uniqueId, data.nickname || data.uniqueId);
+});
+
+socket.on('viewer-list', (list) => {
+  if (!assetsLoaded) return;
+  list.forEach(v => registerPlayer(v));
+});
+
+// ===== CAMERA =====
+let manualCameraOverride = false;
+let manualCameraTimer = 0;
+
+function updateCamera(dt) {
+  if (manualCameraOverride) {
+    manualCameraTimer -= dt;
+    if (manualCameraTimer <= 0) manualCameraOverride = false;
+  }
+}
+
+// ===== TEST KEYS =====
+const TEST_NAMES = ['Ali', 'Siti', 'Ahmad', 'Nurul', 'Farid', 'Aisyah', 'Hafiz', 'Zara',
+  'Iman', 'Razak', 'Maya', 'Danish', 'Lina', 'Arif', 'Nadia', 'Syafiq', 'Amira', 'Amir',
+  'Hana', 'Rizal', 'Bella', 'Haziq', 'Ain', 'Farhan', 'Mira', 'Irfan', 'Wani', 'Hakim',
+  'Yasmin', 'Danial', 'Alia', 'Luqman', 'Fatin', 'Izzat', 'Nabila', 'Azman'];
+let testIdx = 0;
+let autoInterval = null;
+
+window.addEventListener('keydown', (e) => {
+  if (!assetsLoaded) return;
+
+  // T = spawn one viewer
+  if (e.key === 't' || e.key === 'T') {
+    const name = TEST_NAMES[testIdx % TEST_NAMES.length];
+    testIdx++;
+    const uid = `test_${testIdx}_${name.toLowerCase()}`;
+    const pd = registerPlayer({ uniqueId: uid, nickname: name });
+    pd.score = Math.floor(Math.random() * 5) + 1; // 1-5 starting score to trigger seating
+    reconcileSeating();
+    showNotif(`<strong>${name}</strong> spawned!`);
+  }
+
+  // D = spawn viewers to fill all 36 seats
+  if (e.key === 'd' || e.key === 'D') {
+    let count = 0;
+    while (count < MAX_SEATS && getAvailableSeat()) {
+      const name = TEST_NAMES[testIdx % TEST_NAMES.length];
+      testIdx++;
+      const uid = `demo_${testIdx}_${name.toLowerCase()}`;
+      const pd = registerPlayer({ uniqueId: uid, nickname: name });
+      pd.score = Math.floor(Math.random() * 20) + 1;
+      count++;
+    }
+    reconcileSeating();
+    showNotif(`${count} students spawned! (full class)`);
+  }
+
+  // L = like (writing wiggle)
+  if (e.key === 'l' || e.key === 'L') {
+    allPlayers.forEach(p => handleLike(p.uniqueId, 1 + Math.floor(Math.random() * 3)));
+  }
+
+  // C = chat (submit quiz answer if active, otherwise random chat)
+  if (e.key === 'c' || e.key === 'C') {
+    if (currentQuestion && questionPhase === 'active') {
+      // Half answer correctly, half wrong
+      allPlayers.forEach(p => {
+        if (Math.random() < 0.4) {
+          handleChat(p.uniqueId, p.nickname, currentQuestion.answers[0]);
+        } else {
+          handleChat(p.uniqueId, p.nickname, 'wrong answer');
+        }
+      });
+    } else {
+      allPlayers.forEach(p => handleChat(p.uniqueId, p.nickname, 'Hello class!'));
+    }
+  }
+
+  // B = gift (trigger fight)
+  if (e.key === 'b') {
+    const arr = [...allPlayers.values()];
+    if (arr.length > 0) {
+      const p = arr[Math.floor(Math.random() * arr.length)];
+      const tiers = [5, 50, 200, 600];
+      const diamonds = tiers[Math.floor(Math.random() * tiers.length)];
+      handleGift(p.uniqueId, p.nickname, diamonds);
+    }
+  }
+  if (e.key === 'B') {
+    // Big gift from random player
+    const arr = [...allPlayers.values()];
+    if (arr.length > 0) {
+      const p = arr[Math.floor(Math.random() * arr.length)];
+      handleGift(p.uniqueId, p.nickname, 500);
+    }
+  }
+
+  // Q = skip to next question
+  if (e.key === 'q' || e.key === 'Q') {
+    if (questionPhase === 'active') {
+      revealAnswer();
+    } else {
+      startQuestion();
+    }
+    showNotif('Question skipped');
+  }
+
+  // A = auto mode
+  if (e.key === 'a' || e.key === 'A') {
+    if (autoInterval) {
+      clearInterval(autoInterval);
+      autoInterval = null;
+      showNotif('Auto OFF');
+    } else {
+      autoInterval = setInterval(() => {
+        // Spawn if < 8 players
+        if (allPlayers.size < 8) {
+          const name = TEST_NAMES[testIdx % TEST_NAMES.length];
+          testIdx++;
+          const uid = `auto_${testIdx}_${name.toLowerCase()}`;
+          const pd = registerPlayer({ uniqueId: uid, nickname: name });
+          pd.score = 1;
+        }
+
+        // Random actions on all players
+        allPlayers.forEach(p => {
+          if (Math.random() < 0.25) handleLike(p.uniqueId, 1);
+          // Try to answer quiz
+          if (Math.random() < 0.15 && currentQuestion && questionPhase === 'active') {
+            if (Math.random() < 0.5) {
+              handleChat(p.uniqueId, p.nickname, currentQuestion.answers[0]);
+            } else {
+              handleChat(p.uniqueId, p.nickname, String(Math.floor(Math.random() * 100)));
+            }
+          }
+          // Random gift/fight
+          if (Math.random() < 0.02) {
+            const tiers = [5, 20, 100, 500];
+            const diamonds = tiers[Math.floor(Math.random() * tiers.length)];
+            handleGift(p.uniqueId, p.nickname, diamonds);
+          }
+        });
+      }, 1500);
+      showNotif('Auto ON (quiz + fights)');
+    }
+  }
+
+  // R = reset all
+  if (e.key === 'r' || e.key === 'R') {
+    [...seatedPlayers.keys()].forEach(k => unseatPlayer(k));
+    allPlayers.clear();
+    testIdx = 0;
+    topScorerLastId = null;
+    if (autoInterval) { clearInterval(autoInterval); autoInterval = null; }
+    showNotif('All cleared!');
+  }
+
+  // Arrow keys = strafe camera
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','=','+','-'].includes(e.key)) {
+    const step = 0.3;
+    const move = new THREE.Vector3();
+    if (e.key === 'ArrowLeft')  move.x = -step;
+    if (e.key === 'ArrowRight') move.x = step;
+    if (e.key === 'ArrowUp')    move.z = -step;
+    if (e.key === 'ArrowDown')  move.z = step;
+    if (e.key === '=' || e.key === '+') move.y = step;
+    if (e.key === '-') move.y = -step;
+    camera.position.add(move);
+    orbitControls.target.add(move);
+  }
+
+  // P = print state to console
+  if (e.key === 'p' || e.key === 'P') {
+    console.log('=== FUNCLASS STATE ===');
+    console.log('allPlayers:', allPlayers.size, 'seatedPlayers:', seatedPlayers.size);
+    console.log('Question:', currentQuestion?.text, 'Phase:', questionPhase);
+    console.log('Scores:', [...allPlayers.values()].sort((a,b) => b.score - a.score).slice(0,10).map(p => `${p.nickname}:${p.score}`));
+    console.log('UAL clips:', Object.keys(ualClips));
+    showNotif('State printed to console (F12)');
+  }
+
+  // G = toggle debug panel
+  if (e.key === 'g' || e.key === 'G') {
+    const panel = document.getElementById('debugPanel');
+    panel.style.display = panel.style.display === 'none' ? 'grid' : 'none';
+  }
+});
+
+// ===== LIVE DEBUG VALUES =====
+function updateDebugValues() {
+  const el = document.getElementById('debugValues');
+  if (!el) return;
+  const cp = camera.position;
+  const ct = orbitControls.target;
+  el.textContent =
+    `CAM pos(${cp.x.toFixed(1)}, ${cp.y.toFixed(1)}, ${cp.z.toFixed(1)}) look(${ct.x.toFixed(1)}, ${ct.y.toFixed(1)}, ${ct.z.toFixed(1)})\n` +
+    `Players: ${allPlayers.size} total, ${seatedPlayers.size} seated | Q#${questionNumber} [${questionPhase}]${bossFightActive ? ' ⚔️BOSS' : ''}`;
+  const panel = document.getElementById('debugPanel');
+  if (panel && panel.style.display !== 'none') {
+    el.style.bottom = (panel.offsetHeight + 16) + 'px';
+  } else {
+    el.style.bottom = '8px';
+  }
+}
+setInterval(updateDebugValues, 200);
+
+// ===== MAIN ANIMATION LOOP =====
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  updatePlayers(dt);
+  updateCamera(dt);
+  orbitControls.update();
+  updateQuiz(dt);
+
+  // Reconcile seating every 0.5s
+  reconcileTimer -= dt;
+  if (reconcileTimer <= 0) {
+    reconcileSeating();
+    reconcileTimer = 0.5;
+  }
+
+  // Leaderboard update every 0.5s
+  lbTimer -= dt;
+  if (lbTimer <= 0) {
+    updateLeaderboard();
+    lbTimer = 0.5;
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ===== START =====
+loadAssets().then(() => {
+  phaseTimer = 3; // 3s pause before first question
+  animate();
+});
+</script>
+</body>
+</html>
