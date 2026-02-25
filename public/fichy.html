@@ -23,20 +23,34 @@
     }
     canvas { display: block; width: 100%; height: 100%; }
 
+    /* Loading screen */
+    .loading-screen {
+      position: absolute; inset: 0; z-index: 100;
+      background: #0a0a0a;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; transition: opacity 0.5s;
+    }
+    .loading-screen.hidden { opacity: 0; pointer-events: none; }
+    .loading-screen h1 {
+      font-size: 36px; font-weight: 800;
+      background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .loading-bar { width: 200px; height: 6px; background: #222; border-radius: 3px; overflow: hidden; }
+    .loading-fill { width: 0%; height: 100%; background: #0ea5e9; border-radius: 3px; transition: width 0.3s; }
+    .loading-text { color: #888; font-size: 12px; }
+
     /* ===== HUD ===== */
     .hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
 
-    /* Title */
     .hud-title {
       position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
       font-size: clamp(18px, 3vw, 36px); font-weight: 800;
       background: linear-gradient(135deg, #0ea5e9, #38bdf8);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      text-shadow: none; letter-spacing: 3px;
-      opacity: 0.9;
+      letter-spacing: 3px; opacity: 0.9;
     }
 
-    /* Zone indicator */
     .hud-zone {
       position: absolute; top: 12px; left: 12px;
       background: rgba(0,0,0,0.6); border-radius: 20px; padding: 6px 14px;
@@ -45,14 +59,12 @@
     }
     .hud-zone .zone-dot { width: 8px; height: 8px; border-radius: 50%; }
 
-    /* Fish Dex counter */
     .hud-dex {
       position: absolute; top: 12px; right: 12px;
       background: rgba(0,0,0,0.6); border-radius: 20px; padding: 6px 14px;
       font-size: 13px; color: #fff; font-weight: 600;
     }
 
-    /* Leaderboard */
     .hud-leaderboard {
       position: absolute; top: 50px; right: 12px;
       background: rgba(0,0,0,0.6); border-radius: 12px; padding: 10px 14px;
@@ -62,21 +74,16 @@
       font-size: 11px; color: #0ea5e9; text-transform: uppercase;
       letter-spacing: 1px; margin-bottom: 6px;
     }
-    .lb-row {
-      display: flex; justify-content: space-between; padding: 2px 0;
-      font-size: 11px;
-    }
+    .lb-row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; }
     .lb-row .lb-name { color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px; }
     .lb-row .lb-score { color: #fbbf24; font-weight: 700; }
 
-    /* Player count */
     .hud-players {
       position: absolute; bottom: 12px; left: 12px;
       background: rgba(0,0,0,0.6); border-radius: 20px; padding: 6px 14px;
       font-size: 12px; color: #888;
     }
 
-    /* Controls legend */
     .hud-controls {
       position: absolute; bottom: 12px; right: 12px;
       background: rgba(0,0,0,0.6); border-radius: 12px; padding: 8px 12px;
@@ -84,7 +91,6 @@
     }
     .hud-controls span { color: #0ea5e9; font-weight: 700; }
 
-    /* Notifications */
     .notif-container {
       position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
       display: flex; flex-direction: column-reverse; align-items: center; gap: 4px;
@@ -105,7 +111,6 @@
     .notif .rarity-legendary { color: #f59e0b; }
     .notif .rarity-mythical { color: #ef4444; }
 
-    /* Megalodon alert */
     .mega-alert {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       font-size: clamp(24px, 4vw, 48px); font-weight: 800; color: #ef4444;
@@ -115,7 +120,6 @@
     }
     @keyframes megaPulse { from { transform: translate(-50%,-50%) scale(1); } to { transform: translate(-50%,-50%) scale(1.05); } }
 
-    /* Zone buttons (active during test) */
     .hud-zone-buttons {
       position: absolute; top: 50px; left: 12px;
       display: flex; flex-direction: column; gap: 4px;
@@ -133,7 +137,15 @@
 <body>
   <div id="game-container">
     <canvas id="canvas"></canvas>
-    <div class="hud">
+
+    <!-- Loading screen -->
+    <div class="loading-screen" id="loadingScreen">
+      <h1>FICHY</h1>
+      <div class="loading-bar"><div class="loading-fill" id="progressFill"></div></div>
+      <div class="loading-text" id="loadingText">Loading assets...</div>
+    </div>
+
+    <div class="hud" id="hud" style="display:none">
       <div class="hud-title">FICHY</div>
       <div class="hud-zone" id="hudZone"><div class="zone-dot" style="background:#22c55e"></div><span>Beach</span></div>
       <div class="hud-dex" id="hudDex">Dex: 0/30</div>
@@ -148,8 +160,6 @@
       </div>
       <div class="notif-container" id="notifContainer"></div>
       <div class="mega-alert" id="megaAlert">MEGALODON<br>SPOTTED!</div>
-
-      <!-- Zone switch buttons (test + visual) -->
       <div class="hud-zone-buttons" id="zoneButtons">
         <button class="zone-btn active" data-zone="beach">Beach</button>
         <button class="zone-btn" data-zone="lava">Lava</button>
@@ -160,16 +170,27 @@
   </div>
 
   <script type="importmap">
-    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js" } }
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+    }
+  }
   </script>
   <script src="/socket.io/socket.io.js"></script>
   <script type="module">
     import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
     // ============================================================
     //  FICHY — TikTok Live Fishing Game (Landscape 16:9)
-    //  Inspired by Fish It (Roblox)
+    //  Mannequin model + UAL animations
     // ============================================================
+
+    const CHAR_SCALE = 0.55;
+    const CHAR_COLORS = [0xff6b6b, 0x4ecdc4, 0xffe66d, 0xa8e6cf, 0xdda0dd, 0x87ceeb, 0xffa07a, 0x98d8c8, 0xf0e68c, 0xadd8e6];
+    const MAX_PLAYERS = 20;
 
     // ===== FISH DATA — 30 species across 4 zones =====
     const RARITY = {
@@ -183,57 +204,55 @@
 
     const FISH = [
       // Beach (8)
-      { name: 'Sardine',       zone: 'beach', rarity: 'common',    emoji: '🐟' },
-      { name: 'Clownfish',     zone: 'beach', rarity: 'common',    emoji: '🐠' },
-      { name: 'Pufferfish',    zone: 'beach', rarity: 'uncommon',  emoji: '🐡' },
-      { name: 'Sea Bass',      zone: 'beach', rarity: 'uncommon',  emoji: '🐟' },
-      { name: 'Swordfish',     zone: 'beach', rarity: 'rare',      emoji: '🗡️' },
-      { name: 'Blue Marlin',   zone: 'beach', rarity: 'rare',      emoji: '🐟' },
-      { name: 'Golden Koi',    zone: 'beach', rarity: 'epic',      emoji: '✨' },
-      { name: 'Sea Dragon',    zone: 'beach', rarity: 'legendary', emoji: '🐉' },
+      { name: 'Sardine',        zone: 'beach', rarity: 'common',    emoji: '🐟' },
+      { name: 'Clownfish',      zone: 'beach', rarity: 'common',    emoji: '🐠' },
+      { name: 'Pufferfish',     zone: 'beach', rarity: 'uncommon',  emoji: '🐡' },
+      { name: 'Sea Bass',       zone: 'beach', rarity: 'uncommon',  emoji: '🐟' },
+      { name: 'Swordfish',      zone: 'beach', rarity: 'rare',      emoji: '🗡️' },
+      { name: 'Blue Marlin',    zone: 'beach', rarity: 'rare',      emoji: '🐟' },
+      { name: 'Golden Koi',     zone: 'beach', rarity: 'epic',      emoji: '✨' },
+      { name: 'Sea Dragon',     zone: 'beach', rarity: 'legendary', emoji: '🐉' },
       // Lava (8)
-      { name: 'Magma Guppy',   zone: 'lava', rarity: 'common',    emoji: '🔥' },
-      { name: 'Ember Eel',     zone: 'lava', rarity: 'common',    emoji: '🐍' },
-      { name: 'Lava Catfish',  zone: 'lava', rarity: 'uncommon',  emoji: '🌋' },
-      { name: 'Flame Snapper', zone: 'lava', rarity: 'uncommon',  emoji: '🔥' },
-      { name: 'Obsidian Pike', zone: 'lava', rarity: 'rare',      emoji: '⬛' },
-      { name: 'Inferno Ray',   zone: 'lava', rarity: 'rare',      emoji: '☀️' },
-      { name: 'Phoenix Fish',  zone: 'lava', rarity: 'epic',      emoji: '🦅' },
-      { name: 'Volcanic Titan',zone: 'lava', rarity: 'legendary', emoji: '🌋' },
+      { name: 'Magma Guppy',    zone: 'lava', rarity: 'common',    emoji: '🔥' },
+      { name: 'Ember Eel',      zone: 'lava', rarity: 'common',    emoji: '🐍' },
+      { name: 'Lava Catfish',   zone: 'lava', rarity: 'uncommon',  emoji: '🌋' },
+      { name: 'Flame Snapper',  zone: 'lava', rarity: 'uncommon',  emoji: '🔥' },
+      { name: 'Obsidian Pike',  zone: 'lava', rarity: 'rare',      emoji: '⬛' },
+      { name: 'Inferno Ray',    zone: 'lava', rarity: 'rare',      emoji: '☀️' },
+      { name: 'Phoenix Fish',   zone: 'lava', rarity: 'epic',      emoji: '🦅' },
+      { name: 'Volcanic Titan', zone: 'lava', rarity: 'legendary', emoji: '🌋' },
       // Temple (7)
-      { name: 'Spirit Minnow', zone: 'temple', rarity: 'common',    emoji: '👻' },
-      { name: 'Temple Guardian',zone: 'temple', rarity: 'uncommon',  emoji: '🗿' },
-      { name: 'Jade Carp',     zone: 'temple', rarity: 'uncommon',  emoji: '💎' },
-      { name: 'Sacred Koi',    zone: 'temple', rarity: 'rare',      emoji: '🏮' },
-      { name: 'Ancient Serpent',zone: 'temple', rarity: 'epic',      emoji: '🐲' },
-      { name: 'Void Leviathan',zone: 'temple', rarity: 'legendary', emoji: '🕳️' },
-      { name: 'Transcended One',zone:'temple', rarity: 'mythical',  emoji: '👁️' },
+      { name: 'Spirit Minnow',  zone: 'temple', rarity: 'common',    emoji: '👻' },
+      { name: 'Temple Guardian', zone: 'temple', rarity: 'uncommon',  emoji: '🗿' },
+      { name: 'Jade Carp',      zone: 'temple', rarity: 'uncommon',  emoji: '💎' },
+      { name: 'Sacred Koi',     zone: 'temple', rarity: 'rare',      emoji: '🏮' },
+      { name: 'Ancient Serpent', zone: 'temple', rarity: 'epic',      emoji: '🐲' },
+      { name: 'Void Leviathan', zone: 'temple', rarity: 'legendary', emoji: '🕳️' },
+      { name: 'Transcended One',zone: 'temple', rarity: 'mythical',  emoji: '👁️' },
       // Lost Isle (7)
-      { name: 'Abyssal Minnow',zone: 'lost_isle', rarity: 'uncommon',  emoji: '🌊' },
-      { name: 'Crystal Jellyfish',zone:'lost_isle',rarity:'rare',      emoji: '🪼' },
-      { name: 'Deep Sea Angler',zone: 'lost_isle', rarity: 'rare',     emoji: '🐙' },
-      { name: 'Shadow Barracuda',zone:'lost_isle', rarity: 'epic',     emoji: '🦈' },
-      { name: 'Atlantean Whale',zone: 'lost_isle', rarity: 'legendary',emoji: '🐋' },
-      { name: 'Water Snake',   zone: 'lost_isle', rarity: 'legendary', emoji: '🐍' },
-      { name: 'Megalodon',     zone: 'lost_isle', rarity: 'mythical',  emoji: '🦈' },
+      { name: 'Abyssal Minnow',   zone: 'lost_isle', rarity: 'uncommon',  emoji: '🌊' },
+      { name: 'Crystal Jellyfish', zone: 'lost_isle', rarity: 'rare',      emoji: '🪼' },
+      { name: 'Deep Sea Angler',   zone: 'lost_isle', rarity: 'rare',      emoji: '🐙' },
+      { name: 'Shadow Barracuda',  zone: 'lost_isle', rarity: 'epic',      emoji: '🦈' },
+      { name: 'Atlantean Whale',   zone: 'lost_isle', rarity: 'legendary', emoji: '🐋' },
+      { name: 'Water Snake',       zone: 'lost_isle', rarity: 'legendary', emoji: '🐍' },
+      { name: 'Megalodon',         zone: 'lost_isle', rarity: 'mythical',  emoji: '🦈' },
     ];
 
-    // Zone configs — colors, biome settings
     const ZONES = {
-      beach:     { label: 'Beach',     dot: '#22c55e', water: 0x0077be, sky: 0x87ceeb, skyTop: 0x0077be, fog: 0x87ceeb, sunColor: 0xffdd44, ambient: 0xffffff },
-      lava:      { label: 'Lava',      dot: '#ef4444', water: 0xcc3300, sky: 0x331100, skyTop: 0x110000, fog: 0x331100, sunColor: 0xff4400, ambient: 0xff6633 },
-      temple:    { label: 'Temple',    dot: '#a855f7', water: 0x1a0033, sky: 0x1a0044, skyTop: 0x0d0022, fog: 0x1a0044, sunColor: 0xcc88ff, ambient: 0x9966cc },
-      lost_isle: { label: 'Lost Isle', dot: '#0ea5e9', water: 0x001133, sky: 0x001122, skyTop: 0x000011, fog: 0x001122, sunColor: 0x2288ff, ambient: 0x4488cc },
+      beach:     { label: 'Beach',     dot: '#22c55e', water: 0x0077be, sky: 0x87ceeb, skyTop: 0x0077be, fog: 0x87ceeb, sunColor: 0xffdd44, ambient: 0xffffff, ambientI: 0.6, dirI: 1.0 },
+      lava:      { label: 'Lava',      dot: '#ef4444', water: 0xcc3300, sky: 0x331100, skyTop: 0x110000, fog: 0x331100, sunColor: 0xff4400, ambient: 0xff6633, ambientI: 0.4, dirI: 0.8 },
+      temple:    { label: 'Temple',    dot: '#a855f7', water: 0x1a0033, sky: 0x1a0044, skyTop: 0x0d0022, fog: 0x1a0044, sunColor: 0xcc88ff, ambient: 0x9966cc, ambientI: 0.3, dirI: 0.6 },
+      lost_isle: { label: 'Lost Isle', dot: '#0ea5e9', water: 0x001133, sky: 0x001122, skyTop: 0x000011, fog: 0x001122, sunColor: 0x2288ff, ambient: 0x4488cc, ambientI: 0.25, dirI: 0.5 },
     };
 
-    // Rod tiers
     const RODS = [
-      { name: 'Starter Rod',  luck: 0,   color: 0x8b6914 },
-      { name: 'Grass Rod',    luck: 0.1, color: 0x22c55e },
-      { name: 'Lava Rod',     luck: 0.2, color: 0xef4444 },
-      { name: 'Chrome Rod',   luck: 0.35, color: 0xc0c0c0 },
-      { name: 'Grand Rod',    luck: 0.5, color: 0xfbbf24 },
-      { name: 'Mythic Rod',   luck: 0.75, color: 0xa855f7 },
+      { name: 'Starter Rod', luck: 0,    color: 0x8b6914 },
+      { name: 'Grass Rod',   luck: 0.1,  color: 0x22c55e },
+      { name: 'Lava Rod',    luck: 0.2,  color: 0xef4444 },
+      { name: 'Chrome Rod',  luck: 0.35, color: 0xc0c0c0 },
+      { name: 'Grand Rod',   luck: 0.5,  color: 0xfbbf24 },
+      { name: 'Mythic Rod',  luck: 0.75, color: 0xa855f7 },
     ];
 
     // ===== THREE.JS SCENE =====
@@ -242,15 +261,16 @@
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x87ceeb);
+    renderer.shadowMap.enabled = true;
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x87ceeb, 0.006);
 
     const camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 500);
-    camera.position.set(0, 12, 30);
-    camera.lookAt(0, 0, -5);
+    camera.position.set(0, 10, 28);
+    camera.lookAt(0, 1, 0);
 
-    // Sky sphere
+    // Sky
     const skyGeo = new THREE.SphereGeometry(200, 32, 16);
     const skyMat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
@@ -264,20 +284,16 @@
           vec4 worldPos = modelMatrix * vec4(position, 1.0);
           vWorldPosition = worldPos.xyz;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
+        }`,
       fragmentShader: `
-        uniform vec3 topColor;
-        uniform vec3 bottomColor;
+        uniform vec3 topColor; uniform vec3 bottomColor;
         varying vec3 vWorldPosition;
         void main() {
           float h = normalize(vWorldPosition).y;
           gl_FragColor = vec4(mix(bottomColor, topColor, max(h, 0.0)), 1.0);
-        }
-      `,
+        }`,
     });
-    const sky = new THREE.Mesh(skyGeo, skyMat);
-    scene.add(sky);
+    scene.add(new THREE.Mesh(skyGeo, skyMat));
 
     // Sun
     const sunGeo = new THREE.SphereGeometry(4, 16, 16);
@@ -286,11 +302,16 @@
     sun.position.set(60, 40, -100);
     scene.add(sun);
 
-    // Lighting
+    // Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
     const dirLight = new THREE.DirectionalLight(0xffeecc, 1.0);
     dirLight.position.set(60, 40, -100);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(1024, 1024);
+    dirLight.shadow.camera.near = 1; dirLight.shadow.camera.far = 200;
+    dirLight.shadow.camera.left = -30; dirLight.shadow.camera.right = 30;
+    dirLight.shadow.camera.top = 30; dirLight.shadow.camera.bottom = -30;
     scene.add(dirLight);
 
     // Water
@@ -301,160 +322,289 @@
     });
     const water = new THREE.Mesh(waterGeo, waterMat);
     water.rotation.x = -Math.PI / 2;
+    water.receiveShadow = true;
     scene.add(water);
 
-    // Dock / pier (simple boxes)
+    // Dock
     const dockMat = new THREE.MeshLambertMaterial({ color: 0x8b6914 });
-    const dockPlanks = new THREE.Mesh(new THREE.BoxGeometry(30, 0.3, 6), dockMat);
+    const dockPlanks = new THREE.Mesh(new THREE.BoxGeometry(32, 0.3, 6), dockMat);
     dockPlanks.position.set(0, 1.5, 18);
+    dockPlanks.receiveShadow = true; dockPlanks.castShadow = true;
     scene.add(dockPlanks);
-    // Dock legs
-    for (let x = -12; x <= 12; x += 6) {
+    for (let x = -14; x <= 14; x += 4) {
       const leg = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3, 0.5), dockMat);
-      leg.position.set(x, 0, 18);
+      leg.position.set(x, 0, 18); leg.castShadow = true;
       scene.add(leg);
     }
-
-    // Dock railing
+    // Railing
     const railMat = new THREE.MeshLambertMaterial({ color: 0x6b4f12 });
-    const railL = new THREE.Mesh(new THREE.BoxGeometry(30, 0.2, 0.2), railMat);
-    railL.position.set(0, 2.8, 20.8);
-    scene.add(railL);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(32, 0.2, 0.2), railMat);
+    rail.position.set(0, 2.8, 20.8);
+    scene.add(rail);
+    // Posts
+    for (let x = -14; x <= 14; x += 7) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.3, 0.2), railMat);
+      post.position.set(x, 2.15, 20.8);
+      scene.add(post);
+    }
 
-    // Water vertex base for waves
+    // Wave base positions
     const posAttr = waterGeo.attributes.position;
     const baseZ = new Float32Array(posAttr.count);
     for (let i = 0; i < posAttr.count; i++) baseZ[i] = posAttr.getZ(i);
 
+    // ===== ASSET LOADING =====
+    const loader = new GLTFLoader();
+    let mannequinTemplate = null;
+    const ualClips = {};
+    let assetsLoaded = false;
+
+    // UAL bone names work directly on Mannequin (same skeleton)
+    function parseUALClip(clip) {
+      const tracks = [];
+      for (const track of clip.tracks) {
+        const dotIdx = track.name.indexOf('.');
+        const boneName = track.name.substring(0, dotIdx);
+        const property = track.name.substring(dotIdx + 1);
+        if (property === 'quaternion') {
+          tracks.push({ boneName, interpolant: track.createInterpolant(), type: 'quaternion' });
+        } else if (property === 'position' && boneName === 'pelvis') {
+          const interp = track.createInterpolant();
+          tracks.push({ boneName, interpolant: interp, type: 'position' });
+        }
+      }
+      return { name: clip.name, duration: clip.duration, tracks };
+    }
+
+    async function loadAssets() {
+      const totalAssets = 4; // Mannequin + UAL1 + UAL2 + Rigs
+      let loaded = 0;
+      function progress(text) {
+        loaded++;
+        document.getElementById('progressFill').style.width = Math.round((loaded / totalAssets) * 100) + '%';
+        document.getElementById('loadingText').textContent = text;
+      }
+
+      // 1. Mannequin model
+      try {
+        const gltf = await loader.loadAsync('/characters/Mannequin_F.glb');
+        gltf.scene.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+        mannequinTemplate = gltf.scene;
+        progress('Mannequin loaded');
+      } catch (e) { console.error('Mannequin load failed:', e); progress('Mannequin failed'); }
+
+      // 2. UAL1 animations
+      try {
+        const ual = await loader.loadAsync('/characters/UAL1_Standard.glb');
+        ual.animations.forEach(clip => {
+          const parsed = parseUALClip(clip);
+          if (parsed.tracks.length > 0) ualClips['UAL_' + clip.name] = parsed;
+        });
+        progress(`UAL1 (${Object.keys(ualClips).length} clips)`);
+      } catch (e) { console.warn('UAL1 failed:', e); progress('UAL1 failed'); }
+
+      // 3. UAL2 animations (dance, punch, etc.)
+      try {
+        const ual2 = await loader.loadAsync('/characters/UAL2_Standard.glb');
+        let count = 0;
+        ual2.animations.forEach(clip => {
+          const parsed = parseUALClip(clip);
+          if (parsed.tracks.length > 0) { ualClips['UAL_' + clip.name] = parsed; count++; }
+        });
+        progress(`UAL2 (+${count} clips)`);
+      } catch (e) { console.warn('UAL2 failed:', e); progress('UAL2 failed'); }
+
+      // 4. KayKit rigs (extra animations)
+      try {
+        const g = await loader.loadAsync('/characters/Rig_Medium_General.glb');
+        // These use KayKit bone names — skip for mannequin, but count as loaded
+        progress('Rigs loaded');
+      } catch (e) { progress('Rigs skipped'); }
+
+      assetsLoaded = true;
+      console.log(`Fichy ready: mannequin=${!!mannequinTemplate}, UAL clips=${Object.keys(ualClips).length}`);
+      console.log('Available UAL:', Object.keys(ualClips).slice(0, 20));
+
+      document.getElementById('loadingScreen').classList.add('hidden');
+      document.getElementById('hud').style.display = '';
+    }
+
     // ===== GAME STATE =====
-    const players = new Map(); // uniqueId -> player state
+    const players = new Map();
     let currentZone = 'beach';
     let globalDex = new Set();
     let megalodonActive = false;
-    let megalodonTimer = null;
 
-    // ===== PLAYER MANAGEMENT =====
+    // ===== PLAYER =====
+    function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
+
     function getOrCreatePlayer(data) {
-      const id = data.uniqueId || data.userId || data.nickname;
+      const id = data.uniqueId || data.userId || data.nickname || ('anon_' + Math.random().toString(36).slice(2, 6));
       if (players.has(id)) return players.get(id);
+      if (players.size >= MAX_PLAYERS) return null; // cap
 
       const player = {
-        id,
-        nickname: data.nickname || id,
-        gold: 0,
-        rodTier: 0,
-        luck: 0,     // bonus luck from gifts/enchants
-        catches: [],
-        dex: new Set(),
-        totalCatches: 0,
-        bestRarity: 0,
-        casting: false,
-        castTimer: null,
-        bobber: null,
-        line: null,
-        rodMesh: null,
-        label: null,
-        position: null,
+        id, nickname: data.nickname || id,
+        gold: 0, rodTier: 0, luck: 0,
+        dex: new Set(), totalCatches: 0,
+        casting: false, castTimer: null,
+        // 3D
+        model: null, boneMap: {}, rodMesh: null,
+        bobber: null, line: null, label: null,
+        position: { x: 0, z: 0 },
+        // UAL
+        ualPlayback: null,
+        hipsBone: null,
       };
 
-      // Create 3D objects for player
-      spawnPlayerVisual(player);
+      spawnPlayerModel(player);
       players.set(id, player);
       updateHUD();
       return player;
     }
 
-    function spawnPlayerVisual(player) {
+    function spawnPlayerModel(player) {
       const idx = players.size;
-      const spread = 24;
-      const x = -spread/2 + (idx % 10) * (spread/9);
-      const z = 16 + Math.floor(idx / 10) * 2;
+      const spread = 28;
+      const x = -spread / 2 + (idx % 10) * (spread / 9);
+      const z = 16 + Math.floor(idx / 10) * 2.5;
+      player.position = { x, z };
 
-      // Character body (simple capsule)
-      const bodyGeo = new THREE.CapsuleGeometry(0.3, 0.8, 4, 8);
-      const bodyMat = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(Math.random(), 0.7, 0.5) });
-      const body = new THREE.Mesh(bodyGeo, bodyMat);
-      body.position.set(x, 2.4, z);
-      scene.add(body);
+      // Clone mannequin or fallback to capsule
+      if (mannequinTemplate) {
+        const model = SkeletonUtils.clone(mannequinTemplate);
+        model.scale.setScalar(CHAR_SCALE);
 
-      // Rod (thin cylinder)
+        // Tint with player color
+        const color = CHAR_COLORS[hashCode(player.id) % CHAR_COLORS.length];
+        model.traverse(child => {
+          if (child.isMesh && child.material) {
+            child.material = child.material.clone();
+            child.material.color.lerp(new THREE.Color(color), 0.25);
+          }
+          if (child.isBone) {
+            player.boneMap[child.name] = child;
+            if (child.name === 'pelvis') player.hipsBone = child;
+          }
+        });
+
+        model.position.set(x, 1.65, z);
+        model.rotation.y = Math.PI; // Face water
+        scene.add(model);
+        player.model = model;
+
+        // Start with idle
+        const idleClip = ualClips['UAL_Idle_Loop'];
+        if (idleClip) {
+          player.ualPlayback = { clip: idleClip, time: Math.random() * idleClip.duration, loop: true };
+        }
+      } else {
+        // Fallback capsule
+        const bodyGeo = new THREE.CapsuleGeometry(0.3, 0.8, 4, 8);
+        const bodyMat = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(Math.random(), 0.7, 0.5) });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.set(x, 2.4, z);
+        body.castShadow = true;
+        scene.add(body);
+        player.model = body;
+      }
+
+      // Rod mesh (attached near hand)
       const rodColor = RODS[player.rodTier].color;
-      const rodGeo = new THREE.CylinderGeometry(0.03, 0.05, 3, 6);
-      const rodMat = new THREE.MeshLambertMaterial({ color: rodColor });
-      const rod = new THREE.Mesh(rodGeo, rodMat);
-      rod.rotation.x = -Math.PI / 4;
-      rod.position.set(x + 0.5, 3, z - 1);
-      scene.add(rod);
-      player.rodMesh = rod;
+      const rodGeo = new THREE.CylinderGeometry(0.02, 0.04, 2.5, 6);
+      const rodMesh = new THREE.Mesh(rodGeo, new THREE.MeshLambertMaterial({ color: rodColor }));
+      rodMesh.rotation.x = -Math.PI / 3.5;
+      rodMesh.position.set(x + 0.4, 2.6, z - 0.8);
+      rodMesh.castShadow = true;
+      scene.add(rodMesh);
+      player.rodMesh = rodMesh;
 
-      // Name label (sprite)
-      const labelCanvas = document.createElement('canvas');
-      labelCanvas.width = 256; labelCanvas.height = 64;
-      const ctx = labelCanvas.getContext('2d');
+      // Name label sprite
+      const nc = document.createElement('canvas');
+      nc.width = 256; nc.height = 64;
+      const ctx = nc.getContext('2d');
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.roundRect(0, 0, 256, 64, 12);
       ctx.fill();
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 28px sans-serif';
+      ctx.font = 'bold 26px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(player.nickname.slice(0, 12), 128, 42);
-      const tex = new THREE.CanvasTexture(labelCanvas);
-      const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true });
-      const sprite = new THREE.Sprite(spriteMat);
-      sprite.scale.set(3, 0.75, 1);
-      sprite.position.set(x, 4, z);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(nc), transparent: true, depthTest: false }));
+      sprite.scale.set(2.5, 0.625, 1);
+      sprite.position.set(x, 3.8, z);
+      sprite.renderOrder = 999;
       scene.add(sprite);
       player.label = sprite;
-
-      player.position = { x, z };
-      player._body = body;
     }
 
-    function removePlayer(id) {
-      const p = players.get(id);
-      if (!p) return;
-      if (p._body) scene.remove(p._body);
-      if (p.rodMesh) scene.remove(p.rodMesh);
-      if (p.label) scene.remove(p.label);
-      if (p.bobber) scene.remove(p.bobber);
-      if (p.line) scene.remove(p.line);
-      if (p.castTimer) clearTimeout(p.castTimer);
-      players.delete(id);
-      updateHUD();
+    // ===== UAL PLAYBACK =====
+    function playUAL(player, clipName, loop) {
+      const clip = ualClips[clipName];
+      if (!clip) return;
+      player.ualPlayback = { clip, time: 0, loop: loop !== undefined ? loop : clipName.includes('Loop') };
     }
 
-    // ===== FISHING MECHANIC =====
+    function playIdle(player) {
+      const clip = ualClips['UAL_Idle_Loop'];
+      if (clip) player.ualPlayback = { clip, time: Math.random() * clip.duration, loop: true };
+    }
+
+    function applyUALFrame(player, time) {
+      if (!player.ualPlayback) return;
+      for (const t of player.ualPlayback.clip.tracks) {
+        const bone = player.boneMap[t.boneName];
+        if (!bone) continue;
+        const result = t.interpolant.evaluate(time);
+        if (t.type === 'quaternion') {
+          bone.quaternion.set(result[0], result[1], result[2], result[3]);
+        } else if (t.type === 'position') {
+          bone.position.set(result[0], result[1], result[2]);
+        }
+      }
+    }
+
+    // ===== FISHING =====
     function castLine(player) {
-      if (player.casting) return;
+      if (!player || player.casting) return;
       player.casting = true;
 
-      // Create bobber
+      // Play cast animation (Spell_Simple_Shoot looks like a cast motion)
+      const castClip = ualClips['UAL_Spell_Simple_Shoot'] || ualClips['UAL_Punch_Jab'];
+      if (castClip) playUAL(player, castClip === ualClips['UAL_Spell_Simple_Shoot'] ? 'UAL_Spell_Simple_Shoot' : 'UAL_Punch_Jab', false);
+
+      // Bobber
       const bobGeo = new THREE.SphereGeometry(0.15, 8, 8);
       const bobMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
       const bobber = new THREE.Mesh(bobGeo, bobMat);
-      const targetX = player.position.x + (Math.random() - 0.5) * 6;
+      const targetX = player.position.x + (Math.random() - 0.5) * 8;
       const targetZ = player.position.z - 6 - Math.random() * 10;
       bobber.position.set(targetX, 0.3, targetZ);
       scene.add(bobber);
       player.bobber = bobber;
 
-      // Create line
+      // Line
       const lineGeo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(player.position.x + 0.5, 3, player.position.z - 1),
+        new THREE.Vector3(player.position.x + 0.4, 2.8, player.position.z - 0.8),
         bobber.position,
       ]);
-      const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
-      const line = new THREE.Line(lineGeo, lineMat);
+      const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }));
       scene.add(line);
       player.line = line;
 
-      // Wait to catch (2-4 seconds)
-      const catchDelay = 2000 + Math.random() * 2000;
-      player.castTimer = setTimeout(() => catchFish(player), catchDelay);
+      // Return to idle after cast anim
+      if (castClip) {
+        setTimeout(() => {
+          if (player.ualPlayback && !player.ualPlayback.loop) playIdle(player);
+        }, (castClip.duration || 0.8) * 1000);
+      }
+
+      // Catch delay
+      const delay = 2000 + Math.random() * 2500;
+      player.castTimer = setTimeout(() => catchFish(player), delay);
     }
 
     function catchFish(player) {
-      // Pick fish from current zone
       const zoneFish = FISH.filter(f => f.zone === currentZone);
       const fish = rollFish(zoneFish, player);
 
@@ -465,31 +615,27 @@
 
         player.gold += gold;
         player.totalCatches++;
-        player.catches.push(fish.name);
         player.dex.add(fish.name);
         globalDex.add(fish.name);
 
-        // Track best rarity for leaderboard
-        const rarityOrder = ['common','uncommon','rare','epic','legendary','mythical'];
-        const rarityIdx = rarityOrder.indexOf(fish.rarity);
-        if (rarityIdx > player.bestRarity) player.bestRarity = rarityIdx;
-
-        // Auto-upgrade rod based on gold
         upgradeRod(player);
-
-        // Notification
         showNotif(`${fish.emoji} <b>${player.nickname}</b> caught <span class="${rarity.css}">${fish.name}</span> (${weight}kg) +${gold}g`);
-
-        // Splash effect at bobber
         if (player.bobber) splashEffect(player.bobber.position.clone());
 
-        // Megalodon special
+        // Celebrate rare catches
+        if (['epic', 'legendary', 'mythical'].includes(fish.rarity)) {
+          const danceClip = ualClips['UAL_Dance_Loop'];
+          if (danceClip) {
+            playUAL(player, 'UAL_Dance_Loop', true);
+            setTimeout(() => playIdle(player), 2500);
+          }
+        }
         if (fish.name === 'Megalodon') {
           showNotif(`🦈🦈🦈 <b>${player.nickname}</b> caught the <span class="rarity-mythical">MEGALODON</span>!! 🦈🦈🦈`);
         }
       }
 
-      // Clean up
+      // Cleanup
       if (player.bobber) { scene.remove(player.bobber); player.bobber = null; }
       if (player.line) { scene.remove(player.line); player.line = null; }
       player.casting = false;
@@ -497,99 +643,74 @@
     }
 
     function rollFish(zoneFish, player) {
-      // Luck = base rod luck + gift luck bonus
       const totalLuck = RODS[player.rodTier].luck + player.luck;
-
-      // Sort fish by rarity (rarest first) and try to hit
-      const rarityOrder = ['mythical','legendary','epic','rare','uncommon','common'];
-
+      const rarityOrder = ['mythical', 'legendary', 'epic', 'rare', 'uncommon', 'common'];
       for (const rarity of rarityOrder) {
         const candidates = zoneFish.filter(f => f.rarity === rarity);
-        if (candidates.length === 0) continue;
-
-        const baseOdds = RARITY[rarity].odds;
-        const boostedOdds = Math.min(baseOdds * (1 + totalLuck), 0.95); // cap at 95%
-
-        if (Math.random() < boostedOdds) {
-          return candidates[Math.floor(Math.random() * candidates.length)];
-        }
+        if (!candidates.length) continue;
+        const boosted = Math.min(RARITY[rarity].odds * (1 + totalLuck), 0.95);
+        if (Math.random() < boosted) return candidates[Math.floor(Math.random() * candidates.length)];
       }
-      // Fallback: always catch something common
       const commons = zoneFish.filter(f => f.rarity === 'common');
-      if (commons.length > 0) return commons[Math.floor(Math.random() * commons.length)];
-      return zoneFish[0];
+      return commons.length ? commons[Math.floor(Math.random() * commons.length)] : zoneFish[0];
     }
 
     function upgradeRod(player) {
-      // Auto-upgrade based on gold milestones
       const thresholds = [0, 50, 200, 800, 3000, 10000];
       for (let i = thresholds.length - 1; i >= 0; i--) {
         if (player.gold >= thresholds[i] && player.rodTier < i) {
           player.rodTier = i;
           if (player.rodMesh) player.rodMesh.material.color.setHex(RODS[i].color);
-          showNotif(`🎣 <b>${player.nickname}</b> upgraded to <span style="color:${RODS[i].color.toString(16).padStart(6,'0')}">${RODS[i].name}</span>!`);
+          showNotif(`🎣 <b>${player.nickname}</b> upgraded to <b style="color:#${RODS[i].color.toString(16).padStart(6,'0')}">${RODS[i].name}</b>!`);
           break;
         }
       }
     }
 
-    // ===== GIFT EFFECTS =====
+    // ===== GIFTS =====
     function applyGift(player, diamondCount) {
+      if (!player) return;
       if (diamondCount >= 500) {
-        // VIP: Legendary lure — guaranteed rare+ catch
         player.luck += 5;
         showNotif(`🌟 <b>${player.nickname}</b> activated <span class="rarity-legendary">LEGENDARY LURE</span>!`);
-        // Trigger Megalodon event for everyone
         triggerMegalodon();
-        setTimeout(() => { player.luck -= 5; }, 30000);
+        setTimeout(() => { player.luck = Math.max(0, player.luck - 5); }, 30000);
       } else if (diamondCount >= 100) {
-        // Big: Enchant stone — +50% luck for 60s
         player.luck += 0.5;
         showNotif(`💎 <b>${player.nickname}</b> used <span class="rarity-epic">Enchant Stone</span> (+50% luck)`);
-        setTimeout(() => { player.luck -= 0.5; }, 60000);
+        setTimeout(() => { player.luck = Math.max(0, player.luck - 0.5); }, 60000);
       } else if (diamondCount >= 10) {
-        // Med: Golden hook — instant catch 3x
         showNotif(`🪝 <b>${player.nickname}</b> got <span class="rarity-rare">Golden Hook</span> x3!`);
-        for (let i = 0; i < 3; i++) setTimeout(() => castLine(player), i * 500);
+        for (let i = 0; i < 3; i++) setTimeout(() => castLine(player), i * 600);
       } else {
-        // Small: Bait boost — +luck for 30s
         player.luck += 0.2;
         showNotif(`🪱 <b>${player.nickname}</b> used <span class="rarity-uncommon">Lucky Bait</span> (+20% luck)`);
-        setTimeout(() => { player.luck -= 0.2; }, 30000);
+        setTimeout(() => { player.luck = Math.max(0, player.luck - 0.2); }, 30000);
       }
     }
 
-    // ===== MEGALODON EVENT =====
+    // ===== MEGALODON =====
     function triggerMegalodon() {
       if (megalodonActive) return;
       megalodonActive = true;
-      const el = document.getElementById('megaAlert');
-      el.style.display = 'block';
-
-      // Switch to Lost Isle temporarily
+      document.getElementById('megaAlert').style.display = 'block';
       const prevZone = currentZone;
       switchZone('lost_isle');
-
       showNotif('🦈 <b>MEGALODON SPOTTED!</b> Everyone cast now! 30 seconds!');
-
-      // Auto-cast for everyone
       players.forEach(p => { if (!p.casting) castLine(p); });
-
-      megalodonTimer = setTimeout(() => {
+      setTimeout(() => {
         megalodonActive = false;
-        el.style.display = 'none';
+        document.getElementById('megaAlert').style.display = 'none';
         switchZone(prevZone);
         showNotif('🦈 The Megalodon retreated to the depths...');
       }, 30000);
     }
 
-    // ===== ZONE SWITCHING =====
+    // ===== ZONES =====
     function switchZone(zoneName) {
       if (!ZONES[zoneName]) return;
       currentZone = zoneName;
       const z = ZONES[zoneName];
-
-      // Lerp water color
       waterMat.color.setHex(z.water);
       skyMat.uniforms.topColor.value.setHex(z.skyTop);
       skyMat.uniforms.bottomColor.value.setHex(z.sky);
@@ -597,43 +718,30 @@
       renderer.setClearColor(z.sky);
       sunMat.color.setHex(z.sunColor);
       ambientLight.color.setHex(z.ambient);
-
-      // Update HUD
-      const hudZone = document.getElementById('hudZone');
-      hudZone.innerHTML = `<div class="zone-dot" style="background:${z.dot}"></div><span>${z.label}</span>`;
-
-      // Update zone buttons
-      document.querySelectorAll('.zone-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.zone === zoneName);
-      });
+      ambientLight.intensity = z.ambientI;
+      dirLight.intensity = z.dirI;
+      document.getElementById('hudZone').innerHTML = `<div class="zone-dot" style="background:${z.dot}"></div><span>${z.label}</span>`;
+      document.querySelectorAll('.zone-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.zone === zoneName));
     }
 
-    // ===== SPLASH EFFECT =====
+    // ===== SPLASH =====
     const splashParticles = [];
     function splashEffect(pos) {
-      for (let i = 0; i < 8; i++) {
-        const geo = new THREE.SphereGeometry(0.08, 4, 4);
-        const mat = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.8 });
-        const p = new THREE.Mesh(geo, mat);
+      for (let i = 0; i < 10; i++) {
+        const mat = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.9 });
+        const p = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), mat);
         p.position.copy(pos);
-        const vel = new THREE.Vector3((Math.random()-0.5)*0.3, 0.2+Math.random()*0.3, (Math.random()-0.5)*0.3);
         scene.add(p);
-        splashParticles.push({ mesh: p, vel, life: 1.0 });
+        splashParticles.push({ mesh: p, vel: new THREE.Vector3((Math.random()-0.5)*0.4, 0.3+Math.random()*0.4, (Math.random()-0.5)*0.4), life: 1.0 });
       }
     }
 
-    // ===== HUD UPDATES =====
+    // ===== HUD =====
     function updateHUD() {
-      // Dex
       document.getElementById('hudDex').textContent = `Dex: ${globalDex.size}/30`;
-
-      // Player count
       document.getElementById('hudPlayers').textContent = `${players.size} angler${players.size !== 1 ? 's' : ''}`;
-
-      // Leaderboard (top 8 by gold)
       const sorted = Array.from(players.values()).sort((a, b) => b.gold - a.gold).slice(0, 8);
-      const lbEl = document.getElementById('lbRows');
-      lbEl.innerHTML = sorted.map((p, i) => {
+      document.getElementById('lbRows').innerHTML = sorted.map((p, i) => {
         const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
         return `<div class="lb-row"><span class="lb-name">${medal} ${p.nickname}</span><span class="lb-score">${p.gold}g</span></div>`;
       }).join('');
@@ -646,14 +754,12 @@
       el.innerHTML = html;
       cont.appendChild(el);
       setTimeout(() => el.remove(), 4000);
-      // Cap at 6 visible
       while (cont.children.length > 6) cont.removeChild(cont.firstChild);
     }
 
     // ===== RESIZE =====
     function onResize() {
-      const w = container.clientWidth;
-      const h = container.clientHeight;
+      const w = container.clientWidth, h = container.clientHeight;
       renderer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
@@ -661,7 +767,7 @@
     window.addEventListener('resize', onResize);
     onResize();
 
-    // ===== ANIMATION LOOP =====
+    // ===== RENDER LOOP =====
     const clock = new THREE.Clock();
 
     function animate() {
@@ -670,20 +776,29 @@
       const t = clock.getElapsedTime();
 
       // Waves
+      const waveH = currentZone === 'lava' ? 0.3 : 0.5;
       for (let i = 0; i < posAttr.count; i++) {
-        const x = posAttr.getX(i);
-        const y = posAttr.getY(i);
-        const waveHeight = currentZone === 'lava' ? 0.3 : 0.5;
-        posAttr.setZ(i, baseZ[i] + Math.sin(x * 0.05 + t * 0.8) * waveHeight + Math.cos(y * 0.04 + t * 0.6) * waveHeight * 0.6);
+        const x = posAttr.getX(i), y = posAttr.getY(i);
+        posAttr.setZ(i, baseZ[i] + Math.sin(x * 0.05 + t * 0.8) * waveH + Math.cos(y * 0.04 + t * 0.6) * waveH * 0.6);
       }
       posAttr.needsUpdate = true;
       waterGeo.computeVertexNormals();
 
-      // Bobber bobbing
+      // Player updates
       players.forEach(p => {
+        // UAL bone playback
+        if (p.ualPlayback) {
+          p.ualPlayback.time += dt;
+          if (p.ualPlayback.time >= p.ualPlayback.clip.duration) {
+            if (p.ualPlayback.loop) p.ualPlayback.time %= p.ualPlayback.clip.duration;
+            else { playIdle(p); return; }
+          }
+          applyUALFrame(p, p.ualPlayback.time);
+        }
+
+        // Bobber bob
         if (p.bobber) {
           p.bobber.position.y = 0.3 + Math.sin(t * 3 + p.position.x) * 0.15;
-          // Update line endpoint
           if (p.line) {
             const pts = p.line.geometry.attributes.position;
             pts.setXYZ(1, p.bobber.position.x, p.bobber.position.y, p.bobber.position.z);
@@ -696,74 +811,62 @@
       for (let i = splashParticles.length - 1; i >= 0; i--) {
         const sp = splashParticles[i];
         sp.mesh.position.add(sp.vel.clone().multiplyScalar(dt * 4));
-        sp.vel.y -= dt * 2; // gravity
+        sp.vel.y -= dt * 2;
         sp.life -= dt * 1.5;
-        sp.mesh.material.opacity = sp.life;
-        if (sp.life <= 0) {
-          scene.remove(sp.mesh);
-          splashParticles.splice(i, 1);
-        }
+        sp.mesh.material.opacity = Math.max(0, sp.life);
+        if (sp.life <= 0) { scene.remove(sp.mesh); splashParticles.splice(i, 1); }
       }
 
       renderer.render(scene, camera);
     }
-    animate();
 
-    // ===== SOCKET.IO + TIKTOK EVENTS =====
+    // ===== SOCKET.IO =====
     const params = new URLSearchParams(window.location.search);
     const room = params.get('room') || '';
     const socket = io({ query: { room } });
 
-    socket.on('connect', () => console.log('Fichy connected to room:', room || 'default'));
+    socket.on('connect', () => console.log('Fichy connected, room:', room || 'default'));
 
-    // Like → Cast
     socket.on('like', (data) => {
-      const player = getOrCreatePlayer(data);
-      if (!player.casting) castLine(player);
+      const p = getOrCreatePlayer(data);
+      if (p && !p.casting) castLine(p);
     });
 
-    // Chat → Zone command or just acknowledge
     socket.on('chat', (data) => {
-      const player = getOrCreatePlayer(data);
+      getOrCreatePlayer(data);
       const msg = (data.comment || '').toLowerCase().trim();
-
-      // Zone commands
       if (msg === 'beach' || msg === 'shore') switchZone('beach');
       else if (msg === 'lava' || msg === 'fire' || msg === 'volcano') switchZone('lava');
       else if (msg === 'temple' || msg === 'sacred') switchZone('temple');
-      else if (msg === 'lost isle' || msg === 'deep' || msg === 'abyss' || msg === 'atlantis') switchZone('lost_isle');
+      else if (msg === 'deep' || msg === 'abyss' || msg === 'atlantis' || msg === 'lost isle') switchZone('lost_isle');
     });
 
-    // Gift → Tiered boosts
     socket.on('gift', (data) => {
-      const player = getOrCreatePlayer(data);
-      applyGift(player, data.diamondCount || 1);
+      const p = getOrCreatePlayer(data);
+      applyGift(p, data.diamondCount || 1);
     });
 
-    // Follow → Rod upgrade + bonus casts
     socket.on('follow', (data) => {
-      const player = getOrCreatePlayer(data);
-      if (player.rodTier < 1) {
-        player.rodTier = 1;
-        if (player.rodMesh) player.rodMesh.material.color.setHex(RODS[1].color);
+      const p = getOrCreatePlayer(data);
+      if (!p) return;
+      if (p.rodTier < 1) {
+        p.rodTier = 1;
+        if (p.rodMesh) p.rodMesh.material.color.setHex(RODS[1].color);
       }
-      showNotif(`⭐ <b>${player.nickname}</b> followed! Got <span style="color:#22c55e">Grass Rod</span> + 5 casts!`);
-      for (let i = 0; i < 5; i++) setTimeout(() => { if (!player.casting) castLine(player); }, i * 800);
+      showNotif(`⭐ <b>${p.nickname}</b> followed! Got <span style="color:#22c55e">Grass Rod</span> + 5 casts!`);
+      for (let i = 0; i < 5; i++) setTimeout(() => { if (!p.casting) castLine(p); }, i * 800);
     });
 
-    // Share → Bonus casts
     socket.on('share', (data) => {
-      const player = getOrCreatePlayer(data);
-      showNotif(`📢 <b>${player.nickname}</b> shared! +3 casts!`);
-      for (let i = 0; i < 3; i++) setTimeout(() => { if (!player.casting) castLine(player); }, i * 600);
+      const p = getOrCreatePlayer(data);
+      if (!p) return;
+      showNotif(`📢 <b>${p.nickname}</b> shared! +3 casts!`);
+      for (let i = 0; i < 3; i++) setTimeout(() => { if (!p.casting) castLine(p); }, i * 600);
     });
 
-    // Join → Spawn
-    socket.on('viewer-join', (data) => {
-      getOrCreatePlayer(data);
-    });
+    socket.on('viewer-join', (data) => getOrCreatePlayer(data));
 
-    // ===== ZONE BUTTONS (click) =====
+    // Zone buttons
     document.querySelectorAll('.zone-btn').forEach(btn => {
       btn.addEventListener('click', () => switchZone(btn.dataset.zone));
     });
@@ -771,39 +874,33 @@
     // ===== TEST KEYS =====
     document.addEventListener('keydown', (e) => {
       if (e.key === 't' || e.key === 'T') {
-        // Spawn test player
         const id = 'test_' + Math.floor(Math.random() * 999);
-        const player = getOrCreatePlayer({ uniqueId: id, nickname: 'Tester' + id.slice(5) });
-        castLine(player);
+        const p = getOrCreatePlayer({ uniqueId: id, nickname: 'Tester' + id.slice(5) });
+        if (p) castLine(p);
       }
       if (e.key === 'l' || e.key === 'L') {
-        // Like for all
         players.forEach(p => { if (!p.casting) castLine(p); });
       }
       if (e.key === 'b' || e.key === 'B') {
-        // Gift for first player
         const first = players.values().next().value;
         if (first) applyGift(first, 150);
       }
-      if (e.key === 'm' || e.key === 'M') {
-        triggerMegalodon();
-      }
+      if (e.key === 'm' || e.key === 'M') triggerMegalodon();
       if (e.key === 'a' || e.key === 'A') {
-        // Auto mode — spawn 5 players, continuous fishing
-        for (let i = 0; i < 5; i++) {
-          const id = 'auto_' + i;
-          getOrCreatePlayer({ uniqueId: id, nickname: ['Aisyah','Haziq','MeiLing','Arjun','Nurul'][i] });
+        const names = ['Aisyah','Haziq','MeiLing','Arjun','Nurul','Danish','Siti','Yuki'];
+        for (let i = 0; i < names.length; i++) {
+          getOrCreatePlayer({ uniqueId: 'auto_' + i, nickname: names[i] });
         }
-        setInterval(() => {
-          players.forEach(p => { if (!p.casting) castLine(p); });
-        }, 3000);
+        setInterval(() => players.forEach(p => { if (!p.casting) castLine(p); }), 3000);
       }
-      // Zone shortcuts
       if (e.key === '1') switchZone('beach');
       if (e.key === '2') switchZone('lava');
       if (e.key === '3') switchZone('temple');
       if (e.key === '4') switchZone('lost_isle');
     });
+
+    // ===== INIT =====
+    loadAssets().then(() => animate());
 
   </script>
 </body>
