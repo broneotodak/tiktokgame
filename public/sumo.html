@@ -2146,67 +2146,45 @@ let cameraShakeTimer = 0;
 function updateCamera(dt) {
   orbitControls.update();
 
-  // During ACTIVE — user controls camera freely, no auto movement
-  if (roundState === 'ACTIVE' && !focusCamEnabled) {
-    if (cameraShakeTimer > 0) {
-      cameraShakeTimer -= dt;
-      camera.position.x += (Math.random() - 0.5) * 0.3;
-      camera.position.y += (Math.random() - 0.5) * 0.2;
-    }
+  // Camera shake (works in any state)
+  if (cameraShakeTimer > 0) {
+    cameraShakeTimer -= dt;
+    camera.position.x += (Math.random() - 0.5) * 0.3;
+    camera.position.y += (Math.random() - 0.5) * 0.2;
+  }
+
+  // Focus mode — orbit close around selected player (debug)
+  if (focusCamEnabled && focusPlayer && focusPlayer.model) {
+    cameraOrbitAngle += dt * 0.04;
+    const fp = focusPlayer;
+    const orbitDist = 3.0;
+    const targetX = fp.x + Math.sin(cameraOrbitAngle * 1.5) * orbitDist;
+    const targetZ = fp.z + Math.cos(cameraOrbitAngle * 1.5) * orbitDist;
+    const targetY = 2.5;
+    const lookTarget = new THREE.Vector3(fp.x, 1.0, fp.z);
+    camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), dt * 4);
+    orbitControls.target.lerp(lookTarget, dt * 4);
     return;
   }
 
-  cameraOrbitAngle += dt * 0.04; // Slow, cinematic orbit (WAITING/INTERMISSION only)
-
-  const orbitRadius = 14;
-  const height = 28;
-
-  let targetX = Math.sin(cameraOrbitAngle) * orbitRadius * 0.2;
-  let targetZ = Math.cos(cameraOrbitAngle) * orbitRadius;
-  let targetY = height;
-  let lookY = 0.5;
-
-  if (roundState === 'COUNTDOWN') {
-    const progress = 1 - countdownValue / ROUND_COUNTDOWN;
-    targetY = height - progress * 3;
-    targetZ *= (1 - progress * 0.1);
-  }
-
-  let lookTarget = new THREE.Vector3(0, lookY, 0);
-
+  // Winner celebration — slow orbit around winner
   if (roundState === 'ENDED') {
     const winner = getWinner();
     if (winner) {
+      cameraOrbitAngle += dt * 0.3;
       const orbitDist = 2.5;
-      targetX = winner.x + Math.sin(cameraOrbitAngle * 2) * orbitDist;
-      targetZ = winner.z + Math.cos(cameraOrbitAngle * 2) * orbitDist;
-      targetY = 1.8;
-      lookTarget.set(winner.x, 1.0, winner.z);
+      const targetX = winner.x + Math.sin(cameraOrbitAngle) * orbitDist;
+      const targetZ = winner.z + Math.cos(cameraOrbitAngle) * orbitDist;
+      const targetY = 1.8;
+      const lookTarget = new THREE.Vector3(winner.x, 1.0, winner.z);
+      camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), dt * 4);
+      orbitControls.target.lerp(lookTarget, dt * 4);
+      return;
     }
   }
 
-  // Camera shake
-  if (cameraShakeTimer > 0) {
-    cameraShakeTimer -= dt;
-    targetX += (Math.random() - 0.5) * 0.3;
-    targetY += (Math.random() - 0.5) * 0.2;
-    targetZ += (Math.random() - 0.5) * 0.3;
-  }
-
-  // Focus mode — orbit close around selected player
-  if (focusCamEnabled && focusPlayer && focusPlayer.model) {
-    const fp = focusPlayer;
-    const orbitDist = 3.0;
-    targetX = fp.x + Math.sin(cameraOrbitAngle * 1.5) * orbitDist;
-    targetZ = fp.z + Math.cos(cameraOrbitAngle * 1.5) * orbitDist;
-    targetY = 2.5;
-    lookTarget.set(fp.x, 1.0, fp.z);
-  }
-
-  // Smooth follow
-  const lerpSpeed = (roundState === 'ENDED' || focusCamEnabled) ? dt * 4 : dt * 2;
-  camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), lerpSpeed);
-  orbitControls.target.lerp(lookTarget, lerpSpeed);
+  // All other states (WAITING, COUNTDOWN, ACTIVE, INTERMISSION)
+  // — fully manual camera via OrbitControls, no auto movement
 }
 
 function shakeCamera(duration = 0.3) {
