@@ -169,6 +169,25 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
       return `${contextStr}\nViewers are chatting:\n${eventData.messages}\n\nRespond to ALL of them naturally in one flowing response, like you're reading chat and reacting out loud. Address each person by name. Keep total response under 40 words.`;
     case 'milestone':
       return `${contextStr}\nViewer count hit ${eventData.count}! Celebrate casually.`;
+
+    // ===== SUMO SMASH GAME COMMENTARY (BM Pasar / Manglish) =====
+    case 'sumo_round_start':
+      return `${contextStr}\nKau tengah commentate game SUMO SMASH live. Round ${eventData.round} nak start! ${eventData.playerCount} fighters atas arena. Nama dorang: ${eventData.players}. Hype kan macam commentator boxing Malaysia! Cakap BM pasar campur English. SHORT dan HYPE. 10-20 words je.`;
+    case 'sumo_fight':
+      return `${contextStr}\nFIGHT! Round ${eventData.round} dah start! ${eventData.playerCount} fighters tengah belasah. Kau commentator — panaskan suasana! Cakap BM pasar. SHORT. 10-20 words.`;
+    case 'sumo_elimination':
+      return `${contextStr}\n${eventData.victim} baru kena tolak jatuh dari arena${eventData.killer ? ` oleh ${eventData.killer}` : ''}! Tinggal ${eventData.remaining} fighters je. React macam commentator sukan — dramatic tapi pendek! BM pasar. 10-20 words.`;
+    case 'sumo_gift_power':
+      return `${contextStr}\n${eventData.nickname} baru guna ${eventData.powerName} (${eventData.diamonds} diamonds)! ${eventData.effect}. Kau excited gila sebab gift besar! BM pasar. 10-20 words.`;
+    case 'sumo_winner':
+      return `${contextStr}\n${eventData.winner} menang Round ${eventData.round}! ${eventData.kills} kills round ni. Total ${eventData.totalWins} wins. Celebrate champion macam commentator UFC Malaysia! BM pasar. 15-25 words.`;
+    case 'sumo_draw':
+      return `${contextStr}\nRound ${eventData.round} SERI! Semua mati, takde sapa menang! Kau terkejut gila. BM pasar. 10-15 words.`;
+    case 'sumo_shrink_warning':
+      return `${contextStr}\nArena tengah mengecik! Tinggal ${eventData.timeLeft} saat je dan ${eventData.alive} fighters masih hidup. Buat suspens macam commentator! BM pasar. 10-20 words.`;
+    case 'sumo_join':
+      return `${contextStr}\n${eventData.nickname} baru masuk arena Sumo Smash${eventData.character ? ` sebagai ${eventData.character}` : ''}! Welcome dia macam kawan join group. BM pasar. 10-15 words.`;
+
     default:
       return `${contextStr}\nSomething happened on stream. Give a casual comment.`;
   }

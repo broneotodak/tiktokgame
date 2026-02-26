@@ -245,6 +245,15 @@
       </div>
     </div>
 
+    <!-- Voice Commentary Indicator -->
+    <div id="voiceIndicator" style="display:none; position:absolute; bottom:12px; left:50%; transform:translateX(-50%); z-index:50; background:rgba(0,0,0,0.7); border:1px solid #ec4899; border-radius:20px; padding:6px 14px; font-size:12px; color:#ec4899; pointer-events:none; white-space:nowrap;">
+      <span id="voiceSpeakerIcon" style="margin-right:4px;">🎙️</span>
+      <span id="voiceStatusText">Voice Ready</span>
+    </div>
+
+    <!-- Voice Commentary Text (shows what AI is saying) -->
+    <div id="voiceSubtitle" style="display:none; position:absolute; bottom:44px; left:50%; transform:translateX(-50%); z-index:50; background:rgba(0,0,0,0.85); border-radius:12px; padding:8px 16px; font-size:13px; color:#fff; max-width:80%; text-align:center; pointer-events:none; line-height:1.4;"></div>
+
     <!-- Power Flash -->
     <div id="powerFlash"></div>
   </div>
@@ -266,6 +275,9 @@
     <button class="dbtn" onclick="window._debugAction('round')">Start (R)</button>
     <button class="dbtn" onclick="window._debugAction('auto')">Auto (A)</button>
     <button class="dbtn" onclick="window._debugAction('shrink')">Shrink (S)</button>
+    <div class="debug-title" style="margin-top:8px;">VOICE</div>
+    <button class="dbtn" id="voiceToggleBtn" onclick="window._toggleVoice()" style="border-left:3px solid #ec4899;">Voice: OFF</button>
+    <button class="dbtn" onclick="window._testVoice()" style="border-left:3px solid #ec4899;">Test Voice</button>
   </div>
   <style>
     #debugPanel {
@@ -875,6 +887,14 @@ function setRoundState(state) {
       countdownValue = ROUND_COUNTDOWN;
       info.textContent = `ROUND ${roundNumber}`;
       showBanner(String(ROUND_COUNTDOWN), 'Get ready!');
+      // Voice: announce round start
+      const pNames = [];
+      players.forEach(p => pNames.push(p.nickname));
+      queueVoiceEvent('sumo_round_start', {
+        round: roundNumber,
+        playerCount: players.size,
+        players: pNames.slice(0, 8).join(', ')
+      }, 4);
       // Reset all players for new round
       players.forEach(p => {
         p.alive = true;
@@ -905,6 +925,11 @@ function setRoundState(state) {
       showBanner('FIGHT!', '');
       SFX.fight();
       setTimeout(hideBanner, 1500);
+      // Voice: FIGHT call
+      queueVoiceEvent('sumo_fight', {
+        round: roundNumber,
+        playerCount: countAlivePlayers()
+      }, 5);
       break;
 
     // SUDDEN_DEATH removed — arena shrinks continuously during ACTIVE
@@ -926,6 +951,13 @@ function setRoundState(state) {
         spawnConfetti(0, 3, 0);
         shakeCamera(0.5);
         SFX.win();
+        // Voice: winner announcement
+        queueVoiceEvent('sumo_winner', {
+          winner: winner.nickname,
+          round: roundNumber,
+          kills: winner.roundKills,
+          totalWins: winner.wins
+        }, 5);
         // All losers play death animation and stay visible (dead on ground)
         players.forEach(p => {
           if (p.uniqueId === winner.uniqueId) return;
@@ -936,6 +968,7 @@ function setRoundState(state) {
         });
       } else {
         showBanner('DRAW!', 'No one survived...');
+        queueVoiceEvent('sumo_draw', { round: roundNumber }, 4);
         players.forEach(p => {
           p.alive = false;
           p.model.visible = true;
@@ -995,6 +1028,10 @@ function updateRoundState(dt) {
         if (!window._lastShrinkBeep || window._lastShrinkBeep !== display) {
           window._lastShrinkBeep = display;
           SFX.shrinkWarning();
+          // Voice: shrink warning at 30s and 15s
+          if (display === 30 || display === 15) {
+            queueVoiceEvent('sumo_shrink_warning', { timeLeft: display, alive: countAlivePlayers() }, 2);
+          }
         }
       }
 
@@ -1621,6 +1658,14 @@ function eliminatePlayer(player) {
   spawnSplash(player.x, -2, player.z, player.color);
   updatePlayerCount();
 
+  // Voice: elimination commentary
+  const killerName = player.lastPushedBy ? players.get(player.lastPushedBy)?.nickname : null;
+  queueVoiceEvent('sumo_elimination', {
+    victim: player.nickname,
+    killer: killerName || null,
+    remaining: countAlivePlayers()
+  }, 3);
+
   // Hide model after death animation plays (2 seconds)
   setTimeout(() => {
     if (player.model) player.model.visible = false;
@@ -1705,6 +1750,7 @@ async function handleChat(data) {
         const charLabel = p._meshyId ? ` as ${p._meshyId}` : '';
         SFX.join();
         addNotification(`<strong>${p.nickname}</strong> joined${charLabel}! 👊`, 'power');
+        queueVoiceEvent('sumo_join', { nickname: p.nickname, character: p._meshyId || null }, 1);
       }
     }
     return; // Not in game yet
@@ -1769,6 +1815,7 @@ async function handleGift(data) {
     });
     SFX.giftVIP();
     addNotification(`<strong>${p.nickname}</strong> used METEOR SPIN — EVERYONE FLIES!`, 'gift');
+    queueVoiceEvent('sumo_gift_power', { nickname: p.nickname, powerName: 'METEOR SPIN', diamonds, effect: 'Every fighter on the arena got launched into the sky!' }, 4);
     // Spin animation on gifter + bright purple aura
     if (p.alive) { setPlayerAnim(p, 'spin', 5); p.punchTimer = getAnimDuration(p, 'spin'); }
     highlightGifter(p, 0xff00ff, 4.0);
@@ -1804,6 +1851,7 @@ async function handleGift(data) {
     spawnExplosion(p.x, 0.5, p.z);
     SFX.giftBig();
     addNotification(`<strong>${p.nickname}</strong> used SHOCKWAVE SLAM!`, 'gift');
+    queueVoiceEvent('sumo_gift_power', { nickname: p.nickname, powerName: 'SHOCKWAVE SLAM', diamonds, effect: 'Massive ground slam that blasted everyone nearby!' }, 3);
     showPowerFlash();
     showGiftBanner(p.nickname, 'SHOCKWAVE SLAM', '#ff4400', diamonds);
     shakeCamera(1.0);
@@ -2552,6 +2600,164 @@ window._debugAction = function(action) {
       break;
   }
 };
+
+// ===== VOICE COMMENTARY SYSTEM =====
+let voiceEnabled = false;
+let voiceIsGenerating = false;
+let voiceIsPlaying = false;
+const voiceQueue = []; // { eventType, eventData, priority }
+const voiceAudioQueue = []; // { url, text }
+const voiceRecentContext = [];
+const MAX_VOICE_CONTEXT = 5;
+const MAX_VOICE_QUEUE = 4;
+const VOICE_COOLDOWN = 3000; // min gap between API calls
+let lastVoiceTime = 0;
+let voiceSubtitleTimer = null;
+
+function toggleVoiceCommentary() {
+  voiceEnabled = !voiceEnabled;
+  const btn = document.getElementById('voiceToggleBtn');
+  const indicator = document.getElementById('voiceIndicator');
+  btn.textContent = voiceEnabled ? 'Voice: ON' : 'Voice: OFF';
+  btn.style.background = voiceEnabled ? '#ec4899' : '#222';
+  btn.style.color = voiceEnabled ? '#fff' : '#ccc';
+  indicator.style.display = voiceEnabled ? 'block' : 'none';
+  if (voiceEnabled) {
+    // Unlock audio context for autoplay
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.connect(ctx.destination); src.start();
+    document.getElementById('voiceStatusText').textContent = 'Voice Ready';
+  }
+}
+
+function testVoice() {
+  if (!voiceEnabled) toggleVoiceCommentary();
+  queueVoiceEvent('sumo_fight', {
+    round: roundNumber || 1,
+    playerCount: players.size || 3
+  }, 3);
+}
+
+// Queue a game event for voice commentary
+function queueVoiceEvent(eventType, eventData, priority = 1) {
+  if (!voiceEnabled) return;
+  // Drop low priority events if queue is full
+  if (voiceQueue.length >= MAX_VOICE_QUEUE) {
+    const lowIdx = voiceQueue.findIndex(q => q.priority < priority);
+    if (lowIdx !== -1) {
+      voiceQueue.splice(lowIdx, 1);
+    } else {
+      return; // queue full with higher priority
+    }
+  }
+  voiceQueue.push({ eventType, eventData, priority });
+  processVoiceQueue();
+}
+
+async function processVoiceQueue() {
+  if (voiceIsGenerating) return;
+  if (voiceQueue.length === 0) return;
+  if (Date.now() - lastVoiceTime < VOICE_COOLDOWN) {
+    setTimeout(processVoiceQueue, VOICE_COOLDOWN - (Date.now() - lastVoiceTime));
+    return;
+  }
+
+  // Pick highest priority event
+  voiceQueue.sort((a, b) => b.priority - a.priority);
+  const event = voiceQueue.shift();
+  voiceIsGenerating = true;
+  document.getElementById('voiceStatusText').textContent = 'Generating...';
+
+  try {
+    const res = await fetch('/api/voice/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: event.eventType,
+        eventData: event.eventData,
+        recentContext: voiceRecentContext,
+        room: ROOM
+      }),
+    });
+
+    if (!res.ok) {
+      console.error('Voice API error:', res.status);
+      document.getElementById('voiceStatusText').textContent = 'API Error';
+      return;
+    }
+
+    const text = decodeURIComponent(res.headers.get('X-Commentary-Text') || '');
+    const blob = await res.blob();
+
+    // Add to context
+    voiceRecentContext.push(`${event.eventType}: ${text}`);
+    if (voiceRecentContext.length > MAX_VOICE_CONTEXT) voiceRecentContext.shift();
+
+    lastVoiceTime = Date.now();
+    enqueueVoiceAudio(blob, text);
+  } catch (err) {
+    console.error('Voice commentary error:', err);
+    document.getElementById('voiceStatusText').textContent = 'Error';
+  } finally {
+    voiceIsGenerating = false;
+    // Process next in queue
+    if (voiceQueue.length > 0) {
+      setTimeout(processVoiceQueue, 500);
+    }
+  }
+}
+
+function enqueueVoiceAudio(blob, text) {
+  if (voiceAudioQueue.length >= 3) {
+    // Drop oldest
+    const old = voiceAudioQueue.shift();
+    URL.revokeObjectURL(old.url);
+  }
+  const url = URL.createObjectURL(blob);
+  voiceAudioQueue.push({ url, text });
+  if (!voiceIsPlaying) playNextVoice();
+}
+
+function playNextVoice() {
+  if (voiceAudioQueue.length === 0) {
+    voiceIsPlaying = false;
+    document.getElementById('voiceStatusText').textContent = 'Voice Ready';
+    document.getElementById('voiceSubtitle').style.display = 'none';
+    return;
+  }
+  voiceIsPlaying = true;
+  const item = voiceAudioQueue.shift();
+
+  // Show subtitle
+  const subtitleEl = document.getElementById('voiceSubtitle');
+  subtitleEl.textContent = item.text;
+  subtitleEl.style.display = 'block';
+  document.getElementById('voiceStatusText').textContent = 'Speaking...';
+  document.getElementById('voiceSpeakerIcon').textContent = '🔊';
+
+  const audio = new Audio(item.url);
+  audio.volume = 0.85;
+  audio.onended = () => {
+    URL.revokeObjectURL(item.url);
+    document.getElementById('voiceSpeakerIcon').textContent = '🎙️';
+    // Keep subtitle visible for 1 second after audio ends
+    clearTimeout(voiceSubtitleTimer);
+    voiceSubtitleTimer = setTimeout(() => {
+      subtitleEl.style.display = 'none';
+    }, 1000);
+    playNextVoice();
+  };
+  audio.onerror = () => {
+    URL.revokeObjectURL(item.url);
+    playNextVoice();
+  };
+  audio.play().catch(() => playNextVoice());
+}
+
+window._toggleVoice = toggleVoiceCommentary;
+window._testVoice = testVoice;
 
 // ===== INIT =====
 async function init() {
