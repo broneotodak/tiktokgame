@@ -208,7 +208,7 @@
     <div id="guidePanel">
       <div class="guide-item" style="border-color: rgba(255,68,68,0.4); background: rgba(255,68,68,0.15);">
         <div class="guide-icon">💬</div>
-        <div><div class="guide-label" style="color:#ff4444;">TYPE "JOIN"</div><div class="guide-desc">Enter arena!</div></div>
+        <div><div class="guide-label" style="color:#ff4444;">TYPE "JOIN"</div><div class="guide-desc">or join djt/neo/vp</div></div>
       </div>
       <div class="guide-item">
         <div class="guide-icon">❤️</div>
@@ -272,13 +272,14 @@
       position: fixed; right: 10px; top: 50%; transform: translateY(-50%);
       z-index: 9999; display: flex; flex-direction: column; gap: 4px;
       background: rgba(20,20,20,0.95); border: 1px solid #333; border-radius: 10px;
-      padding: 10px; min-width: 100px; max-height: 80vh; overflow-y: auto;
+      padding: 10px; width: 110px; max-height: 80vh; overflow-y: auto;
     }
     .debug-title { font-size: 10px; color: #ff8800; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; text-align: center; margin-bottom: 2px; }
     .dbtn {
       background: #222; color: #ccc; border: 1px solid #444; border-radius: 6px;
       padding: 6px 8px; font-size: 11px; cursor: pointer; text-align: left;
       transition: background 0.15s;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .dbtn:hover { background: #333; color: #fff; border-color: #ff8800; }
     .dbtn.spawn { border-left: 3px solid #ff4444; }
@@ -1109,7 +1110,10 @@ async function createPlayer(viewer) {
   let isMannequin = false;
   let isMeshy = false;
 
-  const meshyId = meshyIds.length > 0 ? meshyIds[hash % meshyIds.length] : null;
+  // Character selection: forced by "join [char]" or random hash
+  const forceChar = viewer._forceChar;
+  const meshyId = forceChar && meshyTemplates[forceChar] ? forceChar
+    : meshyIds.length > 0 ? meshyIds[hash % meshyIds.length] : null;
 
   if (meshyId && meshyTemplates[meshyId]) {
     // Load fresh GLB per player — browser caches the file, each gets own skeleton + bindings
@@ -1197,6 +1201,18 @@ async function createPlayer(viewer) {
   nameSprite.renderOrder = 999;
   model.add(nameSprite);
 
+  // Chat bubble sprite (reused for each message)
+  const chatCanvas = document.createElement('canvas');
+  chatCanvas.width = 512; chatCanvas.height = 128;
+  const chatSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(chatCanvas), transparent: true, depthTest: false
+  }));
+  chatSprite.scale.set(3.0, 0.75, 1);
+  chatSprite.position.y = 3.0;
+  chatSprite.renderOrder = 1000;
+  chatSprite.visible = false;
+  model.add(chatSprite);
+
   // Aim arrow indicator
   const arrowGeo = new THREE.ConeGeometry(0.12, 0.4, 4);
   arrowGeo.rotateX(Math.PI / 2);
@@ -1218,7 +1234,7 @@ async function createPlayer(viewer) {
     uniqueId: viewer.uniqueId,
     nickname: viewer.nickname || viewer.uniqueId,
     model, mixer, animations, boneMap, hipsBone, isMannequin, isMeshy,
-    _hipsRestPos, aimArrow, nameSprite,
+    _meshyId: meshyId, _hipsRestPos, aimArrow, nameSprite, chatSprite, chatCanvas,
     // Physics
     x, z, y: 0.25, vx: 0, vz: 0, vy: 0, onGround: true,
     // Combat
@@ -1674,18 +1690,31 @@ async function handleLike(data) {
 async function handleChat(data) {
   const msg = (data.comment || '').toLowerCase().trim();
 
-  // JOIN command — type "join" to enter the arena
+  // JOIN command — type "join" or "join [character]" to enter the arena
   let p = players.get(data.uniqueId);
   if (!p) {
-    if (msg === 'join' || msg === 'masuk' || msg === 'nak main') {
+    const joinMatch = msg.match(/^(join|masuk|nak main)\s*(.*)$/);
+    if (joinMatch) {
+      // Check if user requested a specific character
+      const charRequest = joinMatch[2].trim().toUpperCase();
+      if (charRequest && meshyTemplates[charRequest]) {
+        data._forceChar = charRequest;
+      }
       p = await createPlayer(data);
-      if (p) { SFX.join(); addNotification(`<strong>${p.nickname}</strong> joined the arena! 👊`, 'power'); }
+      if (p) {
+        const charLabel = p._meshyId ? ` as ${p._meshyId}` : '';
+        SFX.join();
+        addNotification(`<strong>${p.nickname}</strong> joined${charLabel}! 👊`, 'power');
+      }
     }
     return; // Not in game yet
   }
 
   p.lastActive = Date.now();
   p.score += 1;
+
+  // Show chat bubble above character
+  showChatBubble(p, data.comment || '');
 
   if (!p.alive || roundState !== 'ACTIVE') return;
 
@@ -1860,6 +1889,42 @@ function getLeader() {
     if (p.alive && (!leader || p.score > leader.score)) leader = p;
   });
   return leader;
+}
+
+// ===== CHAT BUBBLE =====
+function showChatBubble(player, text) {
+  if (!player.chatSprite || !player.chatCanvas) return;
+  const c = player.chatCanvas;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 512, 128);
+
+  // Truncate long messages
+  const msg = text.length > 20 ? text.slice(0, 20) + '...' : text;
+
+  // Draw bubble background
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.beginPath();
+  ctx.roundRect(10, 10, 492, 90, 20);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Draw text
+  ctx.font = 'bold 36px Segoe UI, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(msg, 256, 68);
+
+  // Update texture
+  player.chatSprite.material.map.needsUpdate = true;
+  player.chatSprite.visible = true;
+
+  // Hide after 3 seconds
+  if (player._chatTimeout) clearTimeout(player._chatTimeout);
+  player._chatTimeout = setTimeout(() => {
+    if (player.chatSprite) player.chatSprite.visible = false;
+  }, 3000);
 }
 
 // ===== NOTIFICATIONS =====
@@ -2081,9 +2146,8 @@ let cameraShakeTimer = 0;
 function updateCamera(dt) {
   orbitControls.update();
 
-  // If user is manually controlling camera, let OrbitControls handle it
-  if (manualCamera && !focusCamEnabled && roundState !== 'ENDED') {
-    // Camera shake still applies
+  // During ACTIVE — user controls camera freely, no auto movement
+  if (roundState === 'ACTIVE' && !focusCamEnabled) {
     if (cameraShakeTimer > 0) {
       cameraShakeTimer -= dt;
       camera.position.x += (Math.random() - 0.5) * 0.3;
@@ -2092,7 +2156,7 @@ function updateCamera(dt) {
     return;
   }
 
-  cameraOrbitAngle += dt * 0.04; // Slow, cinematic orbit
+  cameraOrbitAngle += dt * 0.04; // Slow, cinematic orbit (WAITING/INTERMISSION only)
 
   const orbitRadius = 14;
   const height = 28;
@@ -2103,7 +2167,6 @@ function updateCamera(dt) {
   let lookY = 0.5;
 
   if (roundState === 'COUNTDOWN') {
-    manualCamera = false; // Reset for new round
     const progress = 1 - countdownValue / ROUND_COUNTDOWN;
     targetY = height - progress * 3;
     targetZ *= (1 - progress * 0.1);
@@ -2112,7 +2175,6 @@ function updateCamera(dt) {
   let lookTarget = new THREE.Vector3(0, lookY, 0);
 
   if (roundState === 'ENDED') {
-    manualCamera = false; // Auto-cam for winner
     const winner = getWinner();
     if (winner) {
       const orbitDist = 2.5;
@@ -2244,9 +2306,16 @@ document.addEventListener('keydown', (e) => {
       addNotification(autoPlay ? 'Auto-play ON' : 'Auto-play OFF');
       break;
     case 'C': {
-      // Simulate a chat "join" from a new viewer
-      const id = 'chat_' + Math.floor(Math.random() * 10000);
-      handleChat({ uniqueId: id, nickname: 'Chatter_' + id.slice(-4), comment: 'join' });
+      // Simulate chat — if players exist, send chat bubble; otherwise join
+      const existing = Array.from(players.values());
+      if (existing.length > 0) {
+        const msgs = ['Haha!', 'Let\'s go!', 'Punch him!', 'GG', 'Lari!', 'Kanan!', 'Left!', 'Terbaik!'];
+        const t = existing[Math.floor(Math.random() * existing.length)];
+        handleChat({ uniqueId: t.uniqueId, nickname: t.nickname, comment: msgs[Math.floor(Math.random() * msgs.length)] });
+      } else {
+        const id = 'chat_' + Math.floor(Math.random() * 10000);
+        handleChat({ uniqueId: id, nickname: 'Chatter_' + id.slice(-4), comment: 'join' });
+      }
       break;
     }
     case 'S':
