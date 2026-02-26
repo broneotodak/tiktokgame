@@ -1942,6 +1942,7 @@ function getLeader() {
 // ===== CHAT BUBBLE =====
 function showChatBubble(player, text) {
   if (!player.chatSprite || !player.chatCanvas) return;
+  if (!text || !text.trim()) return; // Skip empty messages
   const c = player.chatCanvas;
   const ctx = c.getContext('2d');
   ctx.clearRect(0, 0, 512, 128);
