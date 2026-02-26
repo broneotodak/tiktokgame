@@ -297,6 +297,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 // ===== CONFIG =====
@@ -319,7 +320,6 @@ const MESHY_CHARACTERS = [
     id: 'DJT',
     path: '/sumo-assets/characters/DJT/DJT_Merged_Animations.glb',
     animMap: {
-      // clipName → game action. Verified by visual testing.
       'Face_Punch_Reaction': 'idle',
       'Walking': 'walk',
       'Running': 'run',
@@ -334,30 +334,61 @@ const MESHY_CHARACTERS = [
       'Angry_To_Tantrum_Sit': 'tantrum',
       'Punch_Combo_1': 'kick',
       'Idle_03': 'groundslam',
+    },
+    animDurations: {
+      punch: 2.3, hit: 2.9, death: 3.0, dance: 4.1, slam: 2.8,
+      dodge: 1.9, block: 3.5, spin: 3.1, tantrum: 3.5, kick: 4.7, groundslam: 3.0
     }
   },
   {
     id: 'NEO',
     path: '/sumo-assets/characters/NEO/NEO_Merged_Animations.glb',
     animMap: {
-      // clipName → game action. Verified by Neo's visual testing.
-      'Idle_10': 'idle',             // 1=idle ✅
-      'Running': 'walk',             // 3=walk
-      'Dodge_and_Counter': 'run',    // 9=run
-      'Jump_with_Arms_and_Legs_Open': 'punch', // Q=punch
-      'Block6': 'hit',              // 0=being hit
-      'Upside_Down_Rope_Hang': 'death', // E=die
-      'FunnyDancing_01': 'dance',    // 7=dance ✅
-      'Dive_Down_and_Land_2': 'slam', // 8=slam ✅
-      'Double_kick_forward': 'dodge', // F=dodge
-      'dying_backwards': 'block',    // 6=block
-      'Punch_Combo_5': 'spin',      // 4=VIP gift (spin)
-      'Walking': 'tantrum',          // 2=tantrum
-      'Face_Punch_Reaction_2': 'kick', // 5=kick
-      'Angry_Ground_Stomp': 'groundslam', // G=groundslam ✅
+      'Idle_10': 'idle',
+      'Running': 'walk',
+      'Dodge_and_Counter': 'run',
+      'Jump_with_Arms_and_Legs_Open': 'punch',
+      'Block6': 'hit',
+      'Upside_Down_Rope_Hang': 'death',
+      'FunnyDancing_01': 'dance',
+      'Dive_Down_and_Land_2': 'slam',
+      'Double_kick_forward': 'dodge',
+      'dying_backwards': 'block',
+      'Punch_Combo_5': 'spin',
+      'Walking': 'tantrum',
+      'Face_Punch_Reaction_2': 'kick',
+      'Angry_Ground_Stomp': 'groundslam',
+    },
+    animDurations: {
+      punch: 3.9, hit: 5.6, death: 2.3, dance: 7.8, slam: 2.6,
+      dodge: 3.5, block: 1.7, spin: 2.5, tantrum: 1.5, kick: 2.7, groundslam: 3.1
     }
   },
-  // Future: { id: 'PUTIN', path: '/sumo-assets/characters/PUTIN/PUTIN_Merged.glb', animMap: { ... } },
+  {
+    id: 'VP',
+    path: '/sumo-assets/characters/VP/VP_Merged_Animations.glb',
+    animMap: {
+      'Running': 'idle',
+      'Fast_Lightning': 'walk',
+      'Crouch_and_Step_Back': 'run',
+      'Walking': 'punch',
+      'Breakdance_1990': 'hit',
+      'Finger_Wag_No': 'death',
+      'Ground_Flip_and_Sweep_Up': 'dance',
+      'Block5': 'slam',
+      'dying_backwards': 'dodge',
+      'Block4': 'block',
+      'Idle': 'spin',
+      'Handstand_Flip': 'tantrum',
+      'Backflip': 'kick',
+      'Punch_Combo_4': 'groundslam',
+    },
+    animDurations: {
+      punch: 3.8, hit: 2.7, death: 2.3, dance: 10.8, slam: 0.6,
+      dodge: 2.2, block: 2.6, spin: 4.0, tantrum: 5.0, kick: 1.6, groundslam: 3.3
+    }
+  },
+  // Future: { id: 'KIM', path: '/sumo-assets/characters/KIM/KIM_Merged.glb', animMap: { ... } },
 ];
 // Loaded Meshy data: { path, preloaded, animMap } keyed by id
 const meshyTemplates = {};
@@ -384,6 +415,19 @@ const aspect = 9 / 16;
 const camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 200);
 camera.position.set(0, 28, 14);
 camera.lookAt(0, 0, 0);
+
+// OrbitControls — manual mouse camera during gameplay
+const orbitControls = new OrbitControls(camera, canvas);
+orbitControls.target.set(0, 0, 0);
+orbitControls.enableDamping = true;
+orbitControls.dampingFactor = 0.12;
+orbitControls.maxPolarAngle = Math.PI / 2.2; // Don't go below ground
+orbitControls.minDistance = 5;
+orbitControls.maxDistance = 40;
+let manualCamera = false; // True when user drags mouse
+
+// Detect manual camera interaction
+canvas.addEventListener('pointerdown', () => { manualCamera = true; ensureAudio(); });
 
 function resize() {
   const w = canvas.parentElement.clientWidth;
@@ -427,22 +471,16 @@ scene.add(new THREE.Mesh(skyGeo, skyMat));
 
 // ===== ARENA =====
 let arenaRadius = ARENA_START_RADIUS;
-const arenaMat = new THREE.MeshStandardMaterial({ color: 0xc4956a, roughness: 0.8, metalness: 0.1 });
-const arenaGeo = new THREE.CylinderGeometry(ARENA_START_RADIUS, ARENA_START_RADIUS, 0.5, 64);
-const arenaMesh = new THREE.Mesh(arenaGeo, arenaMat);
-arenaMesh.receiveShadow = true;
-arenaMesh.position.y = -0.25;
-scene.add(arenaMesh);
+let arenaMesh = null; // Will be loaded from GLB
+const ARENA_BASE_SCALE = ARENA_START_RADIUS; // GLB is ~2 units, scale to match radius
 
-// Edge glow ring
+// Edge glow ring (kept for visual shrink indicator)
 const edgeRingGeo = new THREE.TorusGeometry(ARENA_START_RADIUS, 0.15, 8, 64);
 const edgeRingMat = new THREE.MeshStandardMaterial({ color: 0xff4444, emissive: 0xff2200, emissiveIntensity: 1.5, transparent: true, opacity: 0.8 });
 const edgeRing = new THREE.Mesh(edgeRingGeo, edgeRingMat);
 edgeRing.rotation.x = -Math.PI / 2;
-edgeRing.position.y = 0.02;
+edgeRing.position.y = 0.05;
 scene.add(edgeRing);
-
-// No outer ring — just the arena platform + edge glow. Clean and clear.
 
 // Water/lava below
 const waterGeo = new THREE.PlaneGeometry(100, 100);
@@ -452,17 +490,275 @@ water.rotation.x = -Math.PI / 2;
 water.position.y = -5;
 scene.add(water);
 
-// (Pillars removed — cleaner scene, lighter load)
-
 function updateArenaVisuals() {
-  // Scale arena platform + edge ring together
   const s = arenaRadius / ARENA_START_RADIUS;
-  arenaMesh.scale.set(s, 1, s);
+  // Scale arena GLB model
+  if (arenaMesh) {
+    arenaMesh.scale.setScalar(ARENA_BASE_SCALE * s);
+  }
+  // Edge ring shrinks with arena
   edgeRing.scale.set(s, s, 1);
-  // Edge ring pulse speed increases as arena shrinks
   const intensity = 1.0 + (1 - s) * 3;
   edgeRingMat.emissiveIntensity = intensity + Math.sin(Date.now() * 0.005 * intensity) * 0.5;
 }
+
+// ===== SOUND SYSTEM =====
+// Procedural Web Audio API sounds — no files needed
+// Future: replace with custom .mp3/.ogg from /sumo-assets/sounds/
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// Master volume
+const SOUND_VOLUME = 0.35;
+
+const SFX = {
+  punch() {
+    const ctx = ensureAudio();
+    // Short punchy noise burst
+    const dur = 0.12;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const noise = ctx.createOscillator();
+    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + dur);
+    noise.type = 'square'; noise.frequency.setValueAtTime(400, ctx.currentTime);
+    noise.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + dur);
+    gain.gain.setValueAtTime(SOUND_VOLUME * 0.8, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+    osc.connect(gain); noise.connect(gain); gain.connect(ctx.destination);
+    osc.start(); noise.start();
+    osc.stop(ctx.currentTime + dur); noise.stop(ctx.currentTime + dur);
+  },
+
+  hit() {
+    const ctx = ensureAudio();
+    // Meaty impact — low thud + crunch
+    const dur = 0.2;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.setValueAtTime(120, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + dur);
+    gain.gain.setValueAtTime(SOUND_VOLUME, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + dur);
+    // Crunch layer
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+    const src = ctx.createBufferSource();
+    const g2 = ctx.createGain();
+    src.buffer = buf; g2.gain.value = SOUND_VOLUME * 0.5;
+    src.connect(g2); g2.connect(ctx.destination);
+    src.start();
+  },
+
+  dodge() {
+    const ctx = ensureAudio();
+    // Quick whoosh
+    const dur = 0.18;
+    const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / data.length;
+      data[i] = (Math.random() * 2 - 1) * Math.sin(t * Math.PI) * 0.4;
+    }
+    const src = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    src.buffer = buf;
+    filter.type = 'bandpass'; filter.frequency.setValueAtTime(2000, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + dur);
+    filter.Q.value = 2;
+    gain.gain.value = SOUND_VOLUME * 0.6;
+    src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+    src.start();
+  },
+
+  eliminate() {
+    const ctx = ensureAudio();
+    // Falling + splash
+    const dur = 0.6;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.setValueAtTime(400, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + dur);
+    gain.gain.setValueAtTime(SOUND_VOLUME * 0.7, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + dur);
+    // Splash noise
+    setTimeout(() => {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.3, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const t = i / data.length;
+        data[i] = (Math.random() * 2 - 1) * (1 - t) * 0.5;
+      }
+      const src = ctx.createBufferSource();
+      const g = ctx.createGain(); g.gain.value = SOUND_VOLUME * 0.4;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass'; filter.frequency.value = 1500;
+      src.buffer = buf; src.connect(filter); filter.connect(g); g.connect(ctx.destination);
+      src.start();
+    }, 300);
+  },
+
+  countdown() {
+    const ctx = ensureAudio();
+    // Short beep
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.value = 880;
+    gain.gain.setValueAtTime(SOUND_VOLUME * 0.5, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.15);
+  },
+
+  fight() {
+    const ctx = ensureAudio();
+    // Rising power chord — FIGHT!
+    const dur = 0.4;
+    [440, 554, 660].forEach(freq => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(SOUND_VOLUME * 0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + dur);
+    });
+  },
+
+  win() {
+    const ctx = ensureAudio();
+    // Victory fanfare — ascending notes
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t = ctx.currentTime + i * 0.15;
+      osc.type = 'triangle'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(SOUND_VOLUME * 0.4, t + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t); osc.stop(t + 0.3);
+    });
+  },
+
+  giftSmall() {
+    const ctx = ensureAudio();
+    // Quick power-up ding
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle'; osc.frequency.setValueAtTime(600, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(SOUND_VOLUME * 0.5, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.25);
+  },
+
+  giftMedium() {
+    const ctx = ensureAudio();
+    // Charge-up slam
+    const dur = 0.35;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + dur * 0.6);
+    osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + dur);
+    gain.gain.setValueAtTime(SOUND_VOLUME * 0.5, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + dur);
+  },
+
+  giftBig() {
+    const ctx = ensureAudio();
+    // Explosive shockwave
+    const dur = 0.5;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(600, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + dur);
+    gain.gain.setValueAtTime(SOUND_VOLUME, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + dur);
+    // Sub bass boom
+    const sub = ctx.createOscillator();
+    const sg = ctx.createGain();
+    sub.type = 'sine'; sub.frequency.value = 50;
+    sg.gain.setValueAtTime(SOUND_VOLUME * 0.8, ctx.currentTime);
+    sg.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+    sub.connect(sg); sg.connect(ctx.destination);
+    sub.start(); sub.stop(ctx.currentTime + 0.4);
+  },
+
+  giftVIP() {
+    const ctx = ensureAudio();
+    // Epic meteor — rising sweep into explosion
+    const dur = 0.8;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(2000, ctx.currentTime + dur * 0.5);
+    osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + dur);
+    gain.gain.setValueAtTime(SOUND_VOLUME * 0.3, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(SOUND_VOLUME, ctx.currentTime + dur * 0.5);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + dur);
+    // Explosion noise
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / data.length;
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 1.5);
+    }
+    const src = ctx.createBufferSource();
+    const g2 = ctx.createGain(); g2.gain.value = SOUND_VOLUME * 0.6;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass'; filter.frequency.value = 2000;
+    src.buffer = buf;
+    src.connect(filter); filter.connect(g2); g2.connect(ctx.destination);
+    src.start(ctx.currentTime + dur * 0.4);
+  },
+
+  shrinkWarning() {
+    const ctx = ensureAudio();
+    // Pulsing alarm tone
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square'; osc.frequency.value = 440;
+    gain.gain.setValueAtTime(SOUND_VOLUME * 0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.1);
+  },
+
+  join() {
+    const ctx = ensureAudio();
+    // Welcome chime — two quick ascending notes
+    [660, 880].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t = ctx.currentTime + i * 0.1;
+      osc.type = 'triangle'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(SOUND_VOLUME * 0.3, t);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t); osc.stop(t + 0.15);
+    });
+  },
+};
 
 // ===== ASSET LOADING =====
 const loader = new GLTFLoader();
@@ -503,7 +799,7 @@ function parseUALClip(clip) {
 }
 
 async function loadAssets() {
-  const totalAssets = MESHY_CHARACTERS.length;
+  const totalAssets = MESHY_CHARACTERS.length + 1; // +1 for arena
   let loaded = 0;
   function updateProgress(text) {
     loaded++;
@@ -511,11 +807,35 @@ async function loadAssets() {
     document.getElementById('loadingText').textContent = text;
   }
 
+  // Load arena GLB
+  try {
+    const arenaGltf = await loader.loadAsync('/sumo-assets/base.glb');
+    arenaMesh = arenaGltf.scene;
+    arenaMesh.scale.setScalar(ARENA_BASE_SCALE);
+    arenaMesh.position.y = 0; // Adjust if needed
+    arenaMesh.traverse(child => {
+      if (child.isMesh) { child.receiveShadow = true; child.castShadow = true; }
+    });
+    scene.add(arenaMesh);
+    updateProgress('Arena loaded');
+    console.log('Arena GLB loaded OK');
+  } catch (e) {
+    console.warn('Arena GLB failed, using fallback cylinder:', e.message);
+    // Fallback: simple cylinder
+    const fallbackGeo = new THREE.CylinderGeometry(ARENA_START_RADIUS, ARENA_START_RADIUS, 0.5, 64);
+    const fallbackMat = new THREE.MeshStandardMaterial({ color: 0xc4956a, roughness: 0.8 });
+    arenaMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
+    arenaMesh.receiveShadow = true;
+    arenaMesh.position.y = -0.25;
+    scene.add(arenaMesh);
+    loaded++;
+  }
+
   // Pre-load Meshy characters (verify they exist + warm browser cache)
   for (const mc of MESHY_CHARACTERS) {
     try {
       const gltf = await loader.loadAsync(mc.path);
-      meshyTemplates[mc.id] = { path: mc.path, preloaded: true, animMap: mc.animMap };
+      meshyTemplates[mc.id] = { path: mc.path, preloaded: true, animMap: mc.animMap, animDurations: mc.animDurations || {} };
       updateProgress(`${mc.id} (${gltf.animations.length} anims: ${gltf.animations.map(a => a.name).join(', ')})`);
       console.log(`Meshy ${mc.id} preloaded OK — ${gltf.animations.length} animations`);
     } catch (e) { console.warn(`Meshy ${mc.id} failed:`, e.message); loaded++; }
@@ -582,6 +902,7 @@ function setRoundState(state) {
       roundTimer = ROUND_DURATION;
       hideBanner();
       showBanner('FIGHT!', '');
+      SFX.fight();
       setTimeout(hideBanner, 1500);
       break;
 
@@ -603,6 +924,7 @@ function setRoundState(state) {
         winner.punchTimer = 6; // hold dance for full ENDED duration
         spawnConfetti(0, 3, 0);
         shakeCamera(0.5);
+        SFX.win();
         // All losers play death animation and stay visible (dead on ground)
         players.forEach(p => {
           if (p.uniqueId === winner.uniqueId) return;
@@ -650,6 +972,7 @@ function updateRoundState(dt) {
         const v = Math.ceil(countdownValue);
         document.getElementById('roundTimer').textContent = v;
         showBanner(String(v), v === 1 ? 'FIGHT!' : 'Get ready!');
+        SFX.countdown();
       }
       break;
 
@@ -666,6 +989,13 @@ function updateRoundState(dt) {
       const timerEl = document.getElementById('roundTimer');
       timerEl.textContent = display;
       timerEl.classList.toggle('urgent', display <= 15);
+      // Shrink warning beep at key moments
+      if (display === 60 || display === 30 || display === 15 || display === 10 || display <= 5) {
+        if (!window._lastShrinkBeep || window._lastShrinkBeep !== display) {
+          window._lastShrinkBeep = display;
+          SFX.shrinkWarning();
+        }
+      }
 
       // Check win condition
       const alive = countAlivePlayers();
@@ -899,6 +1229,7 @@ async function createPlayer(viewer) {
     // Animation
     ualPlayback: null, currentAnim: 'idle',
     punchTimer: 0, hitTimer: 0,
+    animDurations: (meshyId && meshyTemplates[meshyId]) ? meshyTemplates[meshyId].animDurations : {},
     // Meta
     color, score: 0, lastActive: Date.now(),
   };
@@ -928,6 +1259,16 @@ function updatePlayerCount() {
 
 // ===== ANIMATION =====
 // Priority levels: 0=idle/walk/run, 1=punch/hit, 2=small gift, 3=medium gift, 4=big gift, 5=VIP gift, 6=death/win
+// Per-character animation duration lookup (fallback to sensible defaults)
+const DEFAULT_DURATIONS = {
+  punch: 2.5, hit: 3.0, death: 3.0, dance: 5.0, slam: 2.5,
+  dodge: 2.0, block: 3.0, spin: 3.0, tantrum: 3.5, kick: 3.0, groundslam: 3.0
+};
+function getAnimDuration(player, animName, cap) {
+  const d = (player.animDurations && player.animDurations[animName]) || DEFAULT_DURATIONS[animName] || 3.0;
+  return cap ? Math.min(d, cap) : d;
+}
+
 function setPlayerAnim(player, animName, priority = 0) {
   // Block if current animation has higher priority and timer hasn't expired
   if (priority < player.animPriority && (player.punchTimer > 0 || player.hitTimer > 0)) {
@@ -1071,7 +1412,18 @@ function updatePhysics(dt) {
   if (roundState !== 'ACTIVE' && roundState !== 'COUNTDOWN') return;
 
   players.forEach(p => {
-    if (!p.alive) return;
+    // Dead players still need gravity to fall visually
+    if (!p.alive) {
+      if (!p.onGround) {
+        p.vy -= GRAVITY * dt;
+        p.x += p.vx * dt;
+        p.z += p.vz * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.98; p.vz *= 0.98; // slight air drag
+        if (p.model) p.model.position.set(p.x, p.y, p.z);
+      }
+      return;
+    }
 
     // Friction
     p.vx *= FRICTION;
@@ -1139,31 +1491,28 @@ function updatePhysics(dt) {
 
     // Ground check — on arena surface (y=0.25)
     const distFromCenter = Math.sqrt(p.x * p.x + p.z * p.z);
+    // Use full arena radius during non-ACTIVE states
+    const effectiveRadius = roundState === 'ACTIVE' ? arenaRadius : ARENA_START_RADIUS;
 
-    if (roundState === 'ACTIVE') {
-      if (distFromCenter <= arenaRadius + 0.3) {
-        // On arena (with tiny grace buffer at edge)
-        if (p.y <= 0.25) { p.y = 0.25; p.vy = 0; p.onGround = true; }
-        // Nudge inward if in grace buffer
-        if (distFromCenter > arenaRadius && distFromCenter > 0.1) {
-          const nx = -p.x / distFromCenter;
-          const nz = -p.z / distFromCenter;
-          p.vx += nx * 4.0 * dt;
-          p.vz += nz * 4.0 * dt;
-        }
-      } else {
-        // Past arena edge — fall into the abyss!
-        p.onGround = false;
-        if (p.vy >= 0) p.vy = -1.0; // kick downward immediately
-      }
-
-      // Elimination check
-      if (p.y < -3) {
-        eliminatePlayer(p);
+    if (distFromCenter <= effectiveRadius + 0.3) {
+      // On arena (with tiny grace buffer at edge)
+      if (p.y <= 0.25) { p.y = 0.25; p.vy = 0; p.onGround = true; }
+      // Nudge inward if in grace buffer
+      if (distFromCenter > effectiveRadius && distFromCenter > 0.1) {
+        const nx = -p.x / distFromCenter;
+        const nz = -p.z / distFromCenter;
+        p.vx += nx * 4.0 * dt;
+        p.vz += nz * 4.0 * dt;
       }
     } else {
-      // During countdown, keep on platform
-      if (p.y <= 0.25) { p.y = 0.25; p.vy = 0; p.onGround = true; }
+      // Past arena edge — fall into the abyss!
+      p.onGround = false;
+      if (p.vy >= 0) p.vy = -3.0; // strong downward kick
+    }
+
+    // Elimination check (works in all states)
+    if (p.y < -3 && roundState === 'ACTIVE') {
+      eliminatePlayer(p);
     }
 
     // Update model position
@@ -1228,6 +1577,8 @@ function updatePhysics(dt) {
 function eliminatePlayer(player) {
   if (!player.alive) return;
   player.alive = false;
+  player.onGround = false; // Let gravity pull them down
+  if (player.vy >= 0) player.vy = -2.0; // Ensure falling
 
   // Play death animation (keep model visible during it) — highest priority
   setPlayerAnim(player, 'death', 6);
@@ -1249,7 +1600,8 @@ function eliminatePlayer(player) {
     addNotification(`<strong>${player.nickname}</strong> fell off the arena!`, 'kill');
   }
 
-  // Splash particles
+  // Splash particles + sound
+  SFX.eliminate();
   spawnSplash(player.x, -2, player.z, player.color);
   updatePlayerCount();
 
@@ -1290,7 +1642,8 @@ async function handleLike(data) {
     // Hit animation on target + small stagger bounce
     if (target.hitTimer <= 0) {
       setPlayerAnim(target, 'hit', 1);
-      target.hitTimer = 2.9; // hit clip = 2.83s
+      target.hitTimer = getAnimDuration(target, 'hit');
+      SFX.hit();
       // Stagger bounce — makes hit visually clear
       target.vy = 1.5;
       target.onGround = false;
@@ -1301,6 +1654,7 @@ async function handleLike(data) {
     p.aimAngle = Math.atan2(dx, dz);
 
     spawnPushParticles(target.x, 1, target.z);
+    SFX.punch();
     addNotification(`<strong>${p.nickname}</strong> punched <strong>${target.nickname}</strong>!`);
   } else {
     // No one in range — lunge forward
@@ -1313,7 +1667,7 @@ async function handleLike(data) {
   // Punch animation on attacker
   if (p.punchTimer <= 0) {
     setPlayerAnim(p, 'punch', 1);
-    p.punchTimer = 2.3; // punch clip = 2.23s
+    p.punchTimer = getAnimDuration(p, 'punch');
   }
 }
 
@@ -1325,7 +1679,7 @@ async function handleChat(data) {
   if (!p) {
     if (msg === 'join' || msg === 'masuk' || msg === 'nak main') {
       p = await createPlayer(data);
-      if (p) addNotification(`<strong>${p.nickname}</strong> joined the arena! 👊`, 'power');
+      if (p) { SFX.join(); addNotification(`<strong>${p.nickname}</strong> joined the arena! 👊`, 'power'); }
     }
     return; // Not in game yet
   }
@@ -1354,8 +1708,9 @@ async function handleChat(data) {
   // Dodge animation (priority 1 — can be overridden by gifts)
   if (p.punchTimer <= 0 && p.hitTimer <= 0) {
     setPlayerAnim(p, 'dodge', 1);
-    p.punchTimer = 1.9; // dodge clip = 1.83s
+    p.punchTimer = getAnimDuration(p, 'dodge');
   }
+  SFX.dodge();
   addNotification(`<strong>${p.nickname}</strong> dodged!`);
 }
 
@@ -1380,12 +1735,13 @@ async function handleGift(data) {
       other.onGround = false;
       other.lastPushedBy = p.uniqueId;
       setPlayerAnim(other, 'death', 5);
-      other.hitTimer = 4.0; other.punchTimer = 0;
+      other.hitTimer = getAnimDuration(other, 'death', 4.0); other.punchTimer = 0;
       spawnExplosion(other.x, 1, other.z);
     });
+    SFX.giftVIP();
     addNotification(`<strong>${p.nickname}</strong> used METEOR SPIN — EVERYONE FLIES!`, 'gift');
     // Spin animation on gifter + bright purple aura
-    if (p.alive) { setPlayerAnim(p, 'spin', 5); p.punchTimer = 3.2; } // spin clip = 3.07s
+    if (p.alive) { setPlayerAnim(p, 'spin', 5); p.punchTimer = getAnimDuration(p, 'spin'); }
     highlightGifter(p, 0xff00ff, 4.0);
     showPowerFlash();
     showGiftBanner(p.nickname, 'VIP METEOR SPIN', '#ff00ff', diamonds);
@@ -1406,17 +1762,18 @@ async function handleGift(data) {
         other.onGround = false;
         other.lastPushedBy = p.uniqueId;
         if (dist < 3) {
-          setPlayerAnim(other, 'death', 4); other.hitTimer = 4.0;
+          setPlayerAnim(other, 'death', 4); other.hitTimer = getAnimDuration(other, 'death', 4.0);
         } else {
-          setPlayerAnim(other, 'hit', 4); other.hitTimer = 2.9; // hit clip = 2.83s
+          setPlayerAnim(other, 'hit', 4); other.hitTimer = getAnimDuration(other, 'hit');
         }
         other.punchTimer = 0;
       }
     });
     // Slam animation on gifter
-    if (p.alive) { setPlayerAnim(p, 'slam', 4); p.punchTimer = 2.9; } // slam clip = 2.77s
+    if (p.alive) { setPlayerAnim(p, 'slam', 4); p.punchTimer = getAnimDuration(p, 'slam'); }
     highlightGifter(p, 0xff4400, 3.0);
     spawnExplosion(p.x, 0.5, p.z);
+    SFX.giftBig();
     addNotification(`<strong>${p.nickname}</strong> used SHOCKWAVE SLAM!`, 'gift');
     showPowerFlash();
     showGiftBanner(p.nickname, 'SHOCKWAVE SLAM', '#ff4400', diamonds);
@@ -1433,7 +1790,7 @@ async function handleGift(data) {
       nearest.vx += nx * 6; nearest.vz += nz * 6;
       nearest.vy = 3; nearest.onGround = false;
       nearest.lastPushedBy = p.uniqueId;
-      setPlayerAnim(nearest, 'hit', 3); nearest.hitTimer = 2.9; nearest.punchTimer = 0; // hit clip = 2.83s
+      setPlayerAnim(nearest, 'hit', 3); nearest.hitTimer = getAnimDuration(nearest, 'hit'); nearest.punchTimer = 0;
       // Also push nearby players (smaller AoE) + hit animation
       players.forEach(other => {
         if (other.uniqueId === p.uniqueId || other.uniqueId === nearest.uniqueId || !other.alive) return;
@@ -1444,15 +1801,16 @@ async function handleGift(data) {
           other.vx += (odx / odist) * force; other.vz += (odz / odist) * force;
           other.vy = 1.5; other.onGround = false;
           other.lastPushedBy = p.uniqueId;
-          setPlayerAnim(other, 'hit', 3); other.hitTimer = 2.9; other.punchTimer = 0; // hit clip = 2.83s
+          setPlayerAnim(other, 'hit', 3); other.hitTimer = getAnimDuration(other, 'hit'); other.punchTimer = 0;
         }
       });
+      SFX.giftMedium();
       addNotification(`<strong>${p.nickname}</strong> used GROUND SLAM on <strong>${nearest.nickname}</strong>!`, 'gift');
     } else {
       addNotification(`<strong>${p.nickname}</strong> used GROUND SLAM!`, 'gift');
     }
     // Ground slam animation on gifter
-    if (p.alive) { setPlayerAnim(p, 'groundslam', 3); p.punchTimer = 3.1; } // groundslam clip = 3.00s
+    if (p.alive) { setPlayerAnim(p, 'groundslam', 3); p.punchTimer = getAnimDuration(p, 'groundslam'); }
     highlightGifter(p, 0xffaa00, 2.5);
     spawnShockwave(p.x, 0.3, p.z);
     showGiftBanner(p.nickname, 'GROUND SLAM', '#ffaa00', diamonds);
@@ -1463,8 +1821,9 @@ async function handleGift(data) {
     p.pushPower = p.basePushPower * 2;
     setTimeout(() => { if (p) p.pushPower = p.basePushPower; }, 5000);
     // Tantrum animation
-    if (p.alive) { setPlayerAnim(p, 'tantrum', 2); p.punchTimer = 3.5; } // tantrum clip = 8.50s (capped for gameplay)
+    if (p.alive) { setPlayerAnim(p, 'tantrum', 2); p.punchTimer = getAnimDuration(p, 'tantrum', 4.0); }
     highlightGifter(p, 0x44ff44, 2.0);
+    SFX.giftSmall();
     addNotification(`<strong>${p.nickname}</strong> is POWERED UP! 2x punch for 5s!`, 'power');
   }
 }
@@ -1480,7 +1839,7 @@ async function handleFollow(data) {
   p.basePushPower = Math.min(p.basePushPower * 1.3, 3.0);
   p.pushPower = p.basePushPower;
   // Tantrum flex animation
-  if (p.alive && p.punchTimer <= 0) { setPlayerAnim(p, 'tantrum', 2); p.punchTimer = 3.0; } // tantrum clip = 8.50s (capped)
+  if (p.alive && p.punchTimer <= 0) { setPlayerAnim(p, 'tantrum', 2); p.punchTimer = getAnimDuration(p, 'tantrum', 4.0); }
   addNotification(`<strong>${p.nickname}</strong> followed! +30% POWER!`, 'power');
 }
 
@@ -1491,7 +1850,7 @@ async function handleShare(data) {
   p.speedBoost = 3;
   p.shieldHits = Math.max(p.shieldHits, 1);
   // Block/shield animation
-  if (p.alive && p.punchTimer <= 0) { setPlayerAnim(p, 'block', 2); p.punchTimer = 3.5; } // block clip = 3.47s
+  if (p.alive && p.punchTimer <= 0) { setPlayerAnim(p, 'block', 2); p.punchTimer = getAnimDuration(p, 'block'); }
   addNotification(`<strong>${p.nickname}</strong> shared! Speed + Shield!`, 'power');
 }
 
@@ -1720,6 +2079,19 @@ let cameraOrbitAngle = 0;
 let cameraShakeTimer = 0;
 
 function updateCamera(dt) {
+  orbitControls.update();
+
+  // If user is manually controlling camera, let OrbitControls handle it
+  if (manualCamera && !focusCamEnabled && roundState !== 'ENDED') {
+    // Camera shake still applies
+    if (cameraShakeTimer > 0) {
+      cameraShakeTimer -= dt;
+      camera.position.x += (Math.random() - 0.5) * 0.3;
+      camera.position.y += (Math.random() - 0.5) * 0.2;
+    }
+    return;
+  }
+
   cameraOrbitAngle += dt * 0.04; // Slow, cinematic orbit
 
   const orbitRadius = 14;
@@ -1731,6 +2103,7 @@ function updateCamera(dt) {
   let lookY = 0.5;
 
   if (roundState === 'COUNTDOWN') {
+    manualCamera = false; // Reset for new round
     const progress = 1 - countdownValue / ROUND_COUNTDOWN;
     targetY = height - progress * 3;
     targetZ *= (1 - progress * 0.1);
@@ -1739,9 +2112,9 @@ function updateCamera(dt) {
   let lookTarget = new THREE.Vector3(0, lookY, 0);
 
   if (roundState === 'ENDED') {
+    manualCamera = false; // Auto-cam for winner
     const winner = getWinner();
     if (winner) {
-      // Close-up orbit around winner
       const orbitDist = 2.5;
       targetX = winner.x + Math.sin(cameraOrbitAngle * 2) * orbitDist;
       targetZ = winner.z + Math.cos(cameraOrbitAngle * 2) * orbitDist;
@@ -1768,10 +2141,10 @@ function updateCamera(dt) {
     lookTarget.set(fp.x, 1.0, fp.z);
   }
 
-  // Smooth follow — faster during winner close-up or focus mode
+  // Smooth follow
   const lerpSpeed = (roundState === 'ENDED' || focusCamEnabled) ? dt * 4 : dt * 2;
   camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), lerpSpeed);
-  camera.lookAt(lookTarget);
+  orbitControls.target.lerp(lookTarget, lerpSpeed);
 }
 
 function shakeCamera(duration = 0.3) {
