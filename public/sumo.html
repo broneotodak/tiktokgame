@@ -2403,7 +2403,9 @@ function connectSocket() {
     });
 
     socket.on('viewer-join', async (data) => {
-      await createPlayer(data);
+      // Don't auto-create player — viewers must type "join" in chat
+      // But track for voice greeting
+      handleViewerJoin(data);
     });
 
     socket.on('room-stats', (data) => {
@@ -2430,6 +2432,7 @@ function animate() {
   updateParticles(dt);
   updateCamera(dt);
   updateAutoPlay(dt);
+  updateInviteTimer(dt);
 
   // Water animation
   water.material.emissiveIntensity = 0.3 + Math.sin(Date.now() * 0.002) * 0.1;
@@ -2777,6 +2780,71 @@ function playNextVoice() {
     playNextVoice();
   };
   audio.play().catch(() => playNextVoice());
+}
+
+// ===== PROACTIVE VIEWER GREETING =====
+const viewerJoinBatch = [];
+let viewerBatchTimer = null;
+let totalViewersGreeted = 0;
+const VIEWER_BATCH_DELAY = 8000; // 8 seconds batching window
+const VIEWER_GREET_COOLDOWN = 30000; // min 30s between greetings
+let lastViewerGreetTime = 0;
+let inviteTimer = 0;
+const INVITE_INTERVAL = 120; // invite friends every 2 minutes
+
+function handleViewerJoin(data) {
+  // Collect viewers into a batch
+  viewerJoinBatch.push({
+    nickname: data.nickname || data.uniqueId || 'Someone',
+    uniqueId: data.uniqueId || '',
+  });
+
+  // Reset batch timer
+  if (viewerBatchTimer) clearTimeout(viewerBatchTimer);
+  viewerBatchTimer = setTimeout(flushViewerBatch, VIEWER_BATCH_DELAY);
+}
+
+function flushViewerBatch() {
+  if (viewerJoinBatch.length === 0) return;
+  if (!voiceEnabled) { viewerJoinBatch.length = 0; return; }
+  if (Date.now() - lastViewerGreetTime < VIEWER_GREET_COOLDOWN) {
+    viewerJoinBatch.length = 0;
+    return;
+  }
+
+  const batch = viewerJoinBatch.splice(0);
+  totalViewersGreeted += batch.length;
+  lastViewerGreetTime = Date.now();
+
+  const names = batch.map(v => v.nickname);
+  const nameStr = names.length <= 4
+    ? names.join(', ')
+    : names.slice(0, 3).join(', ') + ` dan ${names.length - 3} lagi`;
+
+  queueVoiceEvent('sumo_viewers_welcome', {
+    count: batch.length,
+    names: nameStr
+  }, 2);
+}
+
+// Periodic invite friends call — runs in animate loop
+function updateInviteTimer(dt) {
+  if (!voiceEnabled) return;
+  if (roundState !== 'ACTIVE') return;
+  inviteTimer -= dt;
+  if (inviteTimer <= 0) {
+    inviteTimer = INVITE_INTERVAL;
+
+    // Pick a random language to invite in
+    const languages = ['BM pasar', 'English casual', 'Bahasa Indonesia santai', 'Thai friendly'];
+    const lang = languages[Math.floor(Math.random() * languages.length)];
+
+    queueVoiceEvent('sumo_invite_friends', {
+      playerCount: players.size,
+      viewerCount: totalViewersGreeted,
+      language: lang
+    }, 1);
+  }
 }
 
 window._toggleVoice = toggleVoiceCommentary;

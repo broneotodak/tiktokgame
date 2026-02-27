@@ -187,6 +187,10 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
       return `${contextStr}\nKau Nurin, host perempuan. Arena tengah mengecik! Tinggal ${eventData.timeLeft} saat je dan ${eventData.alive} fighters masih hidup. Buat suspens dengan gaya cheerful. BM pasar. 10-20 words.`;
     case 'sumo_join':
       return `${contextStr}\nKau Nurin, host perempuan yang friendly. ${eventData.nickname} baru masuk arena Sumo Smash${eventData.character ? ` sebagai ${eventData.character}` : ''}! Welcome dia macam kawan baru. BM pasar. 10-15 words.`;
+    case 'sumo_viewers_welcome':
+      return `${contextStr}\nKau Nurin, host perempuan SUMO SMASH yang ceria dan welcoming. ${eventData.count} viewers baru masuk live! Nama dorang: ${eventData.names}. Welcome semua sekali, ajak dorang type "JOIN" untuk main. Cakap fun dan inviting. Kalau ramai sangat, sebut 2-3 nama je then "dan kawan-kawan". BM pasar campur English. 15-25 words.`;
+    case 'sumo_invite_friends':
+      return `${contextStr}\nKau Nurin, host game SUMO SMASH. Sekarang ada ${eventData.playerCount} fighters dan ${eventData.viewerCount} viewers. Ajak viewers invite kawan dorang join live ni. Buat dia rasa excited nak share. Cakap dalam ${eventData.language || 'BM pasar'}. Fun dan persuasive. 15-25 words.`;
 
     default:
       return `${contextStr}\nSomething happened on stream. Give a casual comment.`;
