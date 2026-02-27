@@ -2418,6 +2418,7 @@ function connectSocket() {
 // ===== MAIN LOOP =====
 const clock = new THREE.Clock();
 let leaderboardTimer = 0;
+let inactiveCheckTimer = 10;
 
 function animate() {
   requestAnimationFrame(animate);
@@ -2438,6 +2439,25 @@ function animate() {
   if (leaderboardTimer <= 0) {
     updateLeaderboard();
     leaderboardTimer = 1;
+  }
+
+  // Inactive player cleanup — remove players with no activity for 60s
+  // Only during WAITING or INTERMISSION (don't remove mid-round)
+  inactiveCheckTimer -= dt;
+  if (inactiveCheckTimer <= 0) {
+    inactiveCheckTimer = 10; // check every 10 seconds
+    if (roundState === 'WAITING' || roundState === 'INTERMISSION') {
+      const now = Date.now();
+      const INACTIVE_MS = 60000; // 60 seconds
+      const toRemove = [];
+      players.forEach(p => {
+        if (now - p.lastActive > INACTIVE_MS) toRemove.push(p);
+      });
+      toRemove.forEach(p => {
+        addNotification(`<strong>${p.nickname}</strong> removed (inactive)`, '');
+        removePlayer(p.uniqueId);
+      });
+    }
   }
 
   renderer.render(scene, camera);
