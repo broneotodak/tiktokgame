@@ -2612,6 +2612,7 @@ const voiceRecentContext = [];
 const MAX_VOICE_CONTEXT = 5;
 const MAX_VOICE_QUEUE = 4;
 const VOICE_COOLDOWN = 3000; // min gap between API calls
+const SUMO_VOICE_ID = 'INmScOFtmeMGA4p0XRr1'; // Nurin — Malaysian female, upbeat & cheerful
 let lastVoiceTime = 0;
 let voiceSubtitleTimer = null;
 
@@ -2679,7 +2680,8 @@ async function processVoiceQueue() {
         eventType: event.eventType,
         eventData: event.eventData,
         recentContext: voiceRecentContext,
-        room: ROOM
+        room: ROOM,
+        voiceId: SUMO_VOICE_ID
       }),
     });
 

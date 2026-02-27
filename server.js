@@ -170,23 +170,23 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
     case 'milestone':
       return `${contextStr}\nViewer count hit ${eventData.count}! Celebrate casually.`;
 
-    // ===== SUMO SMASH GAME COMMENTARY (BM Pasar / Manglish) =====
+    // ===== SUMO SMASH GAME COMMENTARY — Nurin (Female Host, BM Pasar / Manglish) =====
     case 'sumo_round_start':
-      return `${contextStr}\nKau tengah commentate game SUMO SMASH live. Round ${eventData.round} nak start! ${eventData.playerCount} fighters atas arena. Nama dorang: ${eventData.players}. Hype kan macam commentator boxing Malaysia! Cakap BM pasar campur English. SHORT dan HYPE. 10-20 words je.`;
+      return `${contextStr}\nKau Nurin, host perempuan game SUMO SMASH live. Kau ceria, playful dan hype! Round ${eventData.round} nak start! ${eventData.playerCount} fighters atas arena. Nama dorang: ${eventData.players}. Hype kan macam host sukan perempuan Malaysia! Cakap BM pasar campur English. Gaya perempuan muda yang excited. SHORT dan HYPE. 10-20 words je.`;
     case 'sumo_fight':
-      return `${contextStr}\nFIGHT! Round ${eventData.round} dah start! ${eventData.playerCount} fighters tengah belasah. Kau commentator — panaskan suasana! Cakap BM pasar. SHORT. 10-20 words.`;
+      return `${contextStr}\nKau Nurin, host perempuan yang ceria. FIGHT! Round ${eventData.round} dah start! ${eventData.playerCount} fighters tengah belasah. Panaskan suasana! Cakap BM pasar, gaya cheerful. SHORT. 10-20 words.`;
     case 'sumo_elimination':
-      return `${contextStr}\n${eventData.victim} baru kena tolak jatuh dari arena${eventData.killer ? ` oleh ${eventData.killer}` : ''}! Tinggal ${eventData.remaining} fighters je. React macam commentator sukan — dramatic tapi pendek! BM pasar. 10-20 words.`;
+      return `${contextStr}\nKau Nurin, host perempuan yang expressive. ${eventData.victim} baru kena tolak jatuh dari arena${eventData.killer ? ` oleh ${eventData.killer}` : ''}! Tinggal ${eventData.remaining} fighters je. React dramatic tapi cute! BM pasar. 10-20 words.`;
     case 'sumo_gift_power':
-      return `${contextStr}\n${eventData.nickname} baru guna ${eventData.powerName} (${eventData.diamonds} diamonds)! ${eventData.effect}. Kau excited gila sebab gift besar! BM pasar. 10-20 words.`;
+      return `${contextStr}\nKau Nurin, host perempuan. ${eventData.nickname} baru guna ${eventData.powerName} (${eventData.diamonds} diamonds)! ${eventData.effect}. Kau excited gila sebab gift besar! Tunjuk appreciation. BM pasar. 10-20 words.`;
     case 'sumo_winner':
-      return `${contextStr}\n${eventData.winner} menang Round ${eventData.round}! ${eventData.kills} kills round ni. Total ${eventData.totalWins} wins. Celebrate champion macam commentator UFC Malaysia! BM pasar. 15-25 words.`;
+      return `${contextStr}\nKau Nurin, host perempuan yang hype. ${eventData.winner} menang Round ${eventData.round}! ${eventData.kills} kills round ni. Total ${eventData.totalWins} wins. Celebrate champion dengan semangat! BM pasar. 15-25 words.`;
     case 'sumo_draw':
-      return `${contextStr}\nRound ${eventData.round} SERI! Semua mati, takde sapa menang! Kau terkejut gila. BM pasar. 10-15 words.`;
+      return `${contextStr}\nKau Nurin, host perempuan. Round ${eventData.round} SERI! Semua mati, takde sapa menang! Kau terkejut dan gelak sikit. BM pasar. 10-15 words.`;
     case 'sumo_shrink_warning':
-      return `${contextStr}\nArena tengah mengecik! Tinggal ${eventData.timeLeft} saat je dan ${eventData.alive} fighters masih hidup. Buat suspens macam commentator! BM pasar. 10-20 words.`;
+      return `${contextStr}\nKau Nurin, host perempuan. Arena tengah mengecik! Tinggal ${eventData.timeLeft} saat je dan ${eventData.alive} fighters masih hidup. Buat suspens dengan gaya cheerful. BM pasar. 10-20 words.`;
     case 'sumo_join':
-      return `${contextStr}\n${eventData.nickname} baru masuk arena Sumo Smash${eventData.character ? ` sebagai ${eventData.character}` : ''}! Welcome dia macam kawan join group. BM pasar. 10-15 words.`;
+      return `${contextStr}\nKau Nurin, host perempuan yang friendly. ${eventData.nickname} baru masuk arena Sumo Smash${eventData.character ? ` sebagai ${eventData.character}` : ''}! Welcome dia macam kawan baru. BM pasar. 10-15 words.`;
 
     default:
       return `${contextStr}\nSomething happened on stream. Give a casual comment.`;
@@ -292,7 +292,7 @@ app.post('/api/voice/generate', async (req, res) => {
   }
 
   try {
-    const { eventType, eventData, recentContext, room } = req.body;
+    const { eventType, eventData, recentContext, room, voiceId } = req.body;
     const userPrompt = buildCommentaryPrompt(eventType, eventData, recentContext || []);
 
     // Step 1: GPT-4o-mini -> commentary text
@@ -329,7 +329,8 @@ app.post('/api/voice/generate', async (req, res) => {
     }
 
     // Step 2: ElevenLabs TTS -> audio/mpeg
-    const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`, {
+    const selectedVoice = voiceId || ELEVENLABS_VOICE_ID;
+    const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${selectedVoice}/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
