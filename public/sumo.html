@@ -212,7 +212,7 @@
       </div>
       <div class="guide-item">
         <div class="guide-icon">❤️</div>
-        <div><div class="guide-label">LIKE</div><div class="guide-desc">Punch!</div></div>
+        <div><div class="guide-label">LIKE</div><div class="guide-desc">SUPER Punch!</div></div>
       </div>
       <div class="guide-item">
         <div class="guide-icon">💬</div>
@@ -1285,6 +1285,7 @@ async function createPlayer(viewer) {
     animDurations: (meshyId && meshyTemplates[meshyId]) ? meshyTemplates[meshyId].animDurations : {},
     // Meta
     color, score: 0, lastActive: Date.now(),
+    autoPunchTimer: Math.random() * AUTO_PUNCH_INTERVAL, // stagger so they don't all punch at once
   };
 
   // Start idle (fallback to first available anim)
@@ -1449,6 +1450,8 @@ const WALK_SPEED = 1.8;       // Auto-walk speed toward opponents
 const ENGAGE_DIST = 1.8;      // Distance to stop and face opponent
 const PUNCH_RANGE = 2.2;      // Max range for like-to-punch
 const DODGE_FORCE = 4.0;      // Dodge sidestep force
+const AUTO_PUNCH_INTERVAL = 1.8; // seconds between auto punches
+const AUTO_PUNCH_FORCE = 0.4;    // auto punch = 40% of manual punch
 
 function findNearestAlive(player) {
   let nearest = null, minDist = Infinity;
@@ -1528,6 +1531,28 @@ function updatePhysics(dt) {
         if (curSpeed > speed) {
           p.vx = (p.vx / curSpeed) * speed;
           p.vz = (p.vz / curSpeed) * speed;
+        }
+      }
+    }
+
+    // ===== AUTO-PUNCH =====
+    if (roundState === 'ACTIVE' && p.onGround && p.punchTimer <= 0 && p.hitTimer <= 0) {
+      p.autoPunchTimer -= dt;
+      if (p.autoPunchTimer <= 0) {
+        p.autoPunchTimer = AUTO_PUNCH_INTERVAL + Math.random() * 0.5; // slight randomness
+        const { target, dist } = findNearestAlive(p);
+        if (target && dist < PUNCH_RANGE) {
+          const dx = target.x - p.x, dz = target.z - p.z;
+          const nx = dx / dist, nz = dz / dist;
+          const force = BASE_PUSH * p.pushPower * AUTO_PUNCH_FORCE;
+          target.vx += nx * force;
+          target.vz += nz * force;
+          target.lastPushedBy = p.uniqueId;
+          p.aimAngle = Math.atan2(dx, dz);
+          // Light hit — no stagger bounce, just push
+          setPlayerAnim(p, 'punch', 1);
+          p.punchTimer = getAnimDuration(p, 'punch');
+          SFX.punch();
         }
       }
     }
