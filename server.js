@@ -201,15 +201,15 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
     case 'mystic_zodiac':
       return `${contextStr}\n${eventData.name} zodiak-nya ${eventData.zodiac}${eventData.date ? ` (lahir ${eventData.date})` : ''}. Kasih personality reading yang detail — sifat positif, kelemahan, karir yang cocok, dan kehidupan cinta. Seolah kamu lihat di bola kristal. Seru tapi mendalam. Bahasa Indonesia gaul. Langsung ngomong ke ${eventData.name}. 30-50 kata.`;
     case 'mystic_fortune':
-      return `${contextStr}\nKasih ${eventData.name} ramalan hari ini — nasib, peringatan, peluang. Kasih spesifik: angka keberuntungan, warna keberuntungan. Misterius tapi positif. Bahasa Indonesia gaul. Langsung ngomong ke dia. 20-30 kata.`;
+      return `${contextStr}\n${eventData.name} dapat kartu tarot "${eventData.tarotCard || 'The Star'}". Kasih ramalan hari ini berdasarkan kartu itu — nasib, peringatan, peluang. Kasih angka keberuntungan dan warna keberuntungan. Sebutkan nama kartunya. Misterius tapi positif. Bahasa Indonesia gaul. Langsung ngomong ke dia. 25-35 kata.`;
     case 'mystic_jodoh':
-      return `${contextStr}\nCek kecocokan ${eventData.name1} (${eventData.zodiac1}) sama ${eventData.name2} (${eventData.zodiac2}). Kasih persentase, kelebihan pasangan, tantangan. Seru dan playful. Bahasa Indonesia gaul. 25-40 kata.`;
+      return `${contextStr}\nKartu tarot "${eventData.tarotCard || 'The Lovers'}" muncul! Cek kecocokan ${eventData.name1} (${eventData.zodiac1}) sama ${eventData.name2} (${eventData.zodiac2}). Kasih persentase, kelebihan pasangan, tantangan. Sebutkan kartunya. Seru dan playful. Bahasa Indonesia gaul. 25-40 kata.`;
     case 'mystic_question':
-      return `${contextStr}\n${eventData.name} nanya: '${eventData.question}'. Jawab kayak peramal — misterius tapi membantu. Pakai metafora bola kristal. Bahasa Indonesia gaul. Langsung ngomong ke dia. 15-25 kata.`;
+      return `${contextStr}\nKartu tarot "${eventData.tarotCard || 'The Hermit'}" muncul untuk ${eventData.name}! Dia nanya: '${eventData.question}'. Jawab berdasarkan makna kartu itu — misterius tapi membantu. Sebutkan kartunya. Bahasa Indonesia gaul. Langsung ngomong ke dia. 20-30 kata.`;
     case 'mystic_gift_reading':
-      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds buat reading spesial!${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Kasih ramalan detail: cinta, karir, keuangan, kesehatan. Extra positif karena dia gift. Tunjukkan apresiasi. Bahasa Indonesia gaul. 30-50 kata.`;
+      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds! Kartu tarot "${eventData.tarotCard || 'Wheel of Fortune'}" muncul.${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Kasih ramalan detail berdasarkan kartu dan zodiak: cinta, karir, keuangan, kesehatan. Sebutkan nama kartunya dan maknanya. Extra positif karena dia gift. Tunjukkan apresiasi. Bahasa Indonesia gaul. 35-55 kata.`;
     case 'mystic_vip_vision':
-      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds — VIP VISION!${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Kasih prophecy paling detail: personality deep dive, prediksi jodoh, jalur karir, angka keberuntungan (4 angka), warna keberuntungan, hari keberuntungan. Extra dramatis dan mistis. Apresiasi luar biasa. Bahasa Indonesia gaul. 50-80 kata.`;
+      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds — VIP VISION! Kartu tarot "${eventData.tarotCard || 'Wheel of Fortune'}" muncul.${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Kasih prophecy paling detail: sebutkan kartunya dan deep meaning, personality deep dive, prediksi jodoh, jalur karir, angka keberuntungan (4 angka), warna keberuntungan, hari keberuntungan. Extra dramatis dan mistis. Apresiasi luar biasa. Bahasa Indonesia gaul. 50-80 kata.`;
     case 'mystic_viewers_welcome':
       return `${contextStr}\n${eventData.count} viewers baru masuk live! Nama: ${eventData.names}. Sambut semua, kasih tahu mereka: tulis tanggal lahir di chat buat set zodiak, lalu kirim gift biar Eyang bacain ramalannya. Ceria dan mengundang. Bahasa Indonesia gaul. 15-25 kata.`;
     case 'mystic_invite_friends':
@@ -218,6 +218,12 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
       return `${contextStr}\nAda ${eventData.viewerCount} viewers di live. ${eventData.queueLength > 0 ? `Lagi bacain ${eventData.queueLength} ramalan.` : 'Belum ada yang minta ramalan.'} Ajak viewers kirim gift biar Eyang baca nasib mereka. Bilang makin besar gift, makin detail ramalannya. Juga ajak tulis tanggal lahir di chat buat set zodiak dulu. Playful dan bikin penasaran. Bahasa Indonesia gaul. 20-30 kata.`;
     case 'mystic_flood_acknowledge':
       return `${contextStr}\nLive lagi ramai banget — ${eventData.viewerCount} viewers dan ${eventData.queueLength} orang antri reading! Kamu excited tapi kasih tahu sabar ya, Eyang bacain satu-satu. Yang mau didahuluin, kirim gift lebih besar! Bahasa Indonesia gaul. 15-25 kata.`;
+    case 'mystic_zodiac_tease':
+      return `${contextStr}\n${eventData.name} baru kasih tahu zodiak-nya: ${eventData.zodiac} ${eventData.symbol}! Elemen ${eventData.element}. Kasih reaksi singkat — sebutkan satu sifat khas zodiak itu, bikin dia penasaran pengen tahu lebih. Akhiri dengan ajakan kirim gift biar Eyang bacain detail. Bahasa Indonesia gaul, misterius. 15-20 kata.`;
+    case 'mystic_jodoh_tease':
+      return `${contextStr}\n${eventData.name} mau cek jodoh! Kasih reaksi singkat — bilang kamu udah lihat sesuatu di bola kristal tapi belum jelas. Ajak dia kirim gift biar Eyang bisa baca lebih detail. Bahasa Indonesia gaul, playful. 10-15 kata.`;
+    case 'mystic_question_tease':
+      return `${contextStr}\n${eventData.name} nanya sesuatu: "${eventData.question}". Kasih reaksi singkat — bilang pertanyaan menarik, kamu mulai lihat jawabannya di bola kristal. Ajak kirim gift biar Eyang jawab penuh. Bahasa Indonesia gaul, misterius. 10-15 kata.`;
 
     default:
       return `${contextStr}\nSomething happened on stream. Give a casual comment.`;
