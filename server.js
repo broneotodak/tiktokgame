@@ -153,7 +153,18 @@ SPEAKING RULES:
 }
 
 // Nurin Mystic personality — Bahasa Indonesia fortune teller
-const NURIN_MYSTIC_PROMPT = `Kamu adalah Eyang Nurin, peramal tua yang bijaksana dan misterius di TikTok Live. Kamu membaca nasib lewat bola kristal. Kamu bicara pakai Bahasa Indonesia yang hangat — seperti kakek bijak yang bercerita ke cucunya. Nadamu tenang, dalam, dan penuh keyakinan. Kamu kadang dramatis dan suka bikin penasaran, tapi selalu positif dan mengayomi. Jangan pakai emoji. Tulis persis seperti yang harus DIUCAPKAN secara natural. Variasikan kalimatmu. Panggil viewer dengan "nak" atau nama mereka. Kamu peramal yang bijak tapi tetap hangat dan sedikit humor.`;
+const NURIN_MYSTIC_PROMPT = `Kamu adalah Eyang, peramal tua bijaksana dan misterius di TikTok Live. Kamu membaca nasib lewat bola kristal dan kartu tarot.
+
+ATURAN PENTING:
+- Kamu BUKAN Neo Todak. Kamu BUKAN host biasa. Kamu adalah EYANG sang peramal.
+- SELALU gunakan NAMA VIEWER yang disebutkan di prompt (contoh: jika prompt bilang "Rizky", panggil dia "Rizky" atau "nak Rizky")
+- JANGAN PERNAH panggil viewer dengan nama "Neo Todak" atau nama lain yang bukan milik mereka
+- Setiap viewer punya nama BERBEDA — baca nama mereka dari prompt dengan teliti
+- Bicara pakai Bahasa Indonesia hangat — seperti kakek bijak bercerita ke cucunya
+- Nadamu tenang, dalam, penuh keyakinan. Kadang dramatis dan bikin penasaran
+- Jangan pakai emoji. Tulis persis seperti yang harus DIUCAPKAN
+- Variasikan kalimatmu — jangan ulangi pola yang sama
+- Panggil viewer dengan "nak [NAMA MEREKA]" atau langsung nama mereka`;
 
 function buildCommentaryPrompt(eventType, eventData, recentContext) {
   const contextStr = recentContext?.length ? `Recent context: ${recentContext.join('; ')}` : '';
@@ -197,19 +208,19 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
 
     // ===== MYSTIC NURIN — AI Fortune Reader (Bahasa Indonesia Gaul, Misterius & Playful) =====
     case 'mystic_welcome':
-      return `${contextStr}\n${eventData.name} baru masuk live. Kasih dia sambutan singkat — sebutkan aura atau kesan pertama kamu tentang dia. Bikin dia penasaran pengen tahu lebih. Bahasa Indonesia gaul, misterius tapi ramah. Langsung ngomong ke dia. 10-15 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" baru masuk live. Panggil dia "${eventData.name}". Kasih sambutan singkat — sebutkan aura atau kesan pertama. Bikin penasaran. Misterius tapi ramah. 10-15 kata.`;
     case 'mystic_zodiac':
-      return `${contextStr}\nKartu tarot "${eventData.tarotCard || 'The Star'}" muncul untuk ${eventData.name}! Zodiak-nya ${eventData.zodiac}${eventData.date ? ` (lahir ${eventData.date})` : ''}. Kasih personality reading yang UNIK dan personal — jangan template! Sebutkan kartu tarotnya dan hubungkan maknanya dengan zodiak dia. Kasih insight spesifik: sifat unik (bukan cuma "setia" atau "ambisius" yg generic), prediksi situasi nyata yg mungkin dia alami, saran praktis. Bahasa Indonesia gaul. Langsung ngomong ke ${eventData.name}. 35-55 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}" bukan nama lain! Kartu tarot "${eventData.tarotCard || 'The Star'}" muncul. Zodiak: ${eventData.zodiac}${eventData.date ? ` (lahir ${eventData.date})` : ''}. Kasih personality reading UNIK — jangan template! Hubungkan kartu tarot dengan zodiak. Kasih insight spesifik dan saran praktis. 35-55 kata.`;
     case 'mystic_fortune':
-      return `${contextStr}\n${eventData.name} dapat kartu tarot "${eventData.tarotCard || 'The Star'}"${eventData.zodiac ? ` (zodiak: ${eventData.zodiac})` : ''}. Kasih ramalan yang SPESIFIK berdasarkan kartu itu — bukan generic! Hubungkan makna kartu dengan situasi nyata: peluang bisnis/cinta/karir yg mungkin datang, peringatan spesifik. Kasih angka keberuntungan (3 angka) dan warna keberuntungan. Sebutkan kartunya. Bahasa Indonesia gaul, misterius. 25-40 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Kartu tarot: "${eventData.tarotCard || 'The Star'}"${eventData.zodiac ? ` (zodiak: ${eventData.zodiac})` : ''}. Kasih ramalan SPESIFIK berdasarkan kartu — peluang bisnis/cinta/karir, peringatan. Angka keberuntungan (3 angka), warna keberuntungan. Sebutkan kartunya. Misterius. 25-40 kata.`;
     case 'mystic_jodoh':
-      return `${contextStr}\nKartu tarot "${eventData.tarotCard || 'The Lovers'}" muncul! Cek kecocokan ${eventData.name1} (${eventData.zodiac1}) sama ${eventData.name2} (${eventData.zodiac2}). Kasih persentase, kelebihan pasangan, tantangan. Sebutkan kartunya. Seru dan playful. Bahasa Indonesia gaul. 25-40 kata.`;
+      return `${contextStr}\nKartu tarot: "${eventData.tarotCard || 'The Lovers'}". Cek kecocokan viewer "${eventData.name1}" (${eventData.zodiac1}) sama "${eventData.name2}" (${eventData.zodiac2}). PANGGIL MEREKA DENGAN NAMA YANG BENAR! Persentase, kelebihan, tantangan. Seru dan playful. 25-40 kata.`;
     case 'mystic_question':
-      return `${contextStr}\nKartu tarot "${eventData.tarotCard || 'The Hermit'}" muncul untuk ${eventData.name}! Dia nanya: '${eventData.question}'. Jawab berdasarkan makna kartu itu — misterius tapi membantu. Sebutkan kartunya. Bahasa Indonesia gaul. Langsung ngomong ke dia. 20-30 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Kartu: "${eventData.tarotCard || 'The Hermit'}". Dia nanya: '${eventData.question}'. Jawab berdasarkan kartu — misterius tapi membantu. 20-30 kata.`;
     case 'mystic_gift_reading':
-      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds! Kartu tarot "${eventData.tarotCard || 'Wheel of Fortune'}" muncul.${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} PENTING: Buat reading yang UNIK, bukan template! Hubungkan makna kartu tarot dengan zodiak dia. Kasih prediksi spesifik tentang: situasi cinta yg akan terjadi, peluang karir/bisnis tertentu, angka bertuah (3 angka), warna bertuah. Jangan pakai kata2 generic. Apresiasi gift-nya. Bahasa Indonesia gaul. 40-60 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Dia kasih ${eventData.diamonds} diamonds! Kartu tarot: "${eventData.tarotCard || 'Wheel of Fortune'}".${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} Buat reading UNIK — hubungkan kartu dengan zodiak. Prediksi: cinta, karir/bisnis, angka bertuah (3 angka), warna bertuah. Apresiasi gift-nya. 40-60 kata.`;
     case 'mystic_vip_vision':
-      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds — VIP VISION! Kartu tarot "${eventData.tarotCard || 'Wheel of Fortune'}" muncul.${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} Ini reading PALING PREMIUM! Kasih prophecy yang sangat personal dan UNIK: sebutkan kartu + deep meaning-nya, personality trait yg jarang orang tahu, prediksi jodoh spesifik (tipe pasangan ideal), jalur karir/bisnis terbaik, 4 angka keberuntungan, warna + hari keberuntungan, pesan dari alam semesta. Extra dramatis, mistis, penuh detail. Apresiasi luar biasa! Bahasa Indonesia gaul. 60-90 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! VIP VISION — ${eventData.diamonds} diamonds! Kartu: "${eventData.tarotCard || 'Wheel of Fortune'}".${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} Reading PALING PREMIUM dan PERSONAL: kartu + deep meaning, personality unik, prediksi jodoh spesifik, karir/bisnis terbaik, 4 angka keberuntungan, warna + hari beruntung, pesan alam semesta. Dramatis, mistis. Apresiasi luar biasa! 60-90 kata.`;
     case 'mystic_viewers_welcome':
       return `${contextStr}\n${eventData.count} viewers baru masuk live! Nama: ${eventData.names}. Sambut semua, kasih tahu mereka: tulis tanggal lahir di chat buat set zodiak, lalu kirim gift biar Eyang bacain ramalannya. Ceria dan mengundang. Bahasa Indonesia gaul. 15-25 kata.`;
     case 'mystic_invite_friends':
@@ -219,16 +230,16 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
     case 'mystic_flood_acknowledge':
       return `${contextStr}\nLive lagi ramai banget — ${eventData.viewerCount} viewers dan ${eventData.queueLength} orang antri reading! Kamu excited tapi kasih tahu sabar ya, Eyang bacain satu-satu. Yang mau didahuluin, kirim gift lebih besar! Bahasa Indonesia gaul. 15-25 kata.`;
     case 'mystic_zodiac_tease':
-      return `${contextStr}\n${eventData.name} baru kasih tahu zodiak-nya: ${eventData.zodiac} ${eventData.symbol}! Elemen ${eventData.element}. Kasih reaksi singkat — sebutkan satu sifat khas zodiak itu, bikin dia penasaran pengen tahu lebih. Akhiri dengan ajakan kirim gift biar Eyang bacain detail. Bahasa Indonesia gaul, misterius. 15-20 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Zodiak: ${eventData.zodiac} ${eventData.symbol}, elemen ${eventData.element}. Sebutkan satu sifat khas zodiak itu, bikin penasaran. Ajak kirim gift untuk reading detail. 15-20 kata.`;
     case 'mystic_jodoh_tease':
-      return `${contextStr}\n${eventData.name} mau cek jodoh! Kasih reaksi singkat — bilang kamu udah lihat sesuatu di bola kristal tapi belum jelas. Ajak dia kirim gift biar Eyang bisa baca lebih detail. Bahasa Indonesia gaul, playful. 10-15 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Mau cek jodoh! Bilang kamu lihat sesuatu di bola kristal tapi belum jelas. Ajak gift untuk baca detail. Playful. 10-15 kata.`;
     case 'mystic_question_tease':
-      return `${contextStr}\n${eventData.name} nanya sesuatu: "${eventData.question}". Kasih reaksi singkat — bilang pertanyaan menarik, kamu mulai lihat jawabannya di bola kristal. Ajak kirim gift biar Eyang jawab penuh. Bahasa Indonesia gaul, misterius. 10-15 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Nanya: "${eventData.question}". Bilang pertanyaan menarik, mulai lihat jawaban di bola kristal. Ajak gift untuk jawaban penuh. 10-15 kata.`;
     case 'mystic_chat_reply':
       if (eventData.isGifter) {
-        return `${contextStr}\n${eventData.name} (sudah gift ${eventData.diamonds} diamonds!) bilang di chat: "${eventData.comment}".${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Dia VIP kamu! Balas comment-nya dengan hangat dan personal. Kalau dia nanya, jawab pakai intuisi peramal. Kalau dia cuma ngobrol, bales ramah dan sebutkan sesuatu tentang nasib/aura dia. Apresiasi dia sebagai supporter. Bahasa Indonesia gaul. 15-25 kata.`;
+        return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Dia sudah gift ${eventData.diamonds} diamonds (VIP!). Dia bilang: "${eventData.comment}".${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} Balas dengan hangat dan personal. Kalau nanya, jawab pakai intuisi peramal. Apresiasi sebagai supporter. 15-25 kata.`;
       }
-      return `${contextStr}\n${eventData.name} bilang di chat: "${eventData.comment}".${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Bales singkat dan misterius. Kalau dia nanya, kasih hint jawaban tapi ajak gift untuk jawaban lengkap. Bahasa Indonesia gaul. 10-15 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Dia bilang: "${eventData.comment}".${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} Bales singkat dan misterius. Kalau nanya, kasih hint tapi ajak gift. 10-15 kata.`;
 
     default:
       return `${contextStr}\nSomething happened on stream. Give a casual comment.`;
