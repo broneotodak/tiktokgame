@@ -1672,9 +1672,37 @@ function handleChat(data) {
     return;
   }
 
-  // Regular chat
+  // Regular chat — gifters get voice reply, others get occasional response
   viewer.score += 1;
   addNotification(`<strong>${nick}</strong>: ${comment}`);
+
+  const isGifter = (viewer.totalGifted || 0) > 0;
+  const hasQuestion = comment.includes('?') || lower.includes('gimana') || lower.includes('kenapa')
+    || lower.includes('kapan') || lower.includes('siapa') || lower.includes('apa') || lower.includes('bagaimana')
+    || lower.includes('berapa') || lower.includes('dimana') || lower.includes('boleh');
+
+  if (isGifter) {
+    // Gift givers ALWAYS get a voice reply to their comments
+    queueVoiceEvent('mystic_chat_reply', {
+      name: nick,
+      comment,
+      diamonds: viewer.totalGifted,
+      zodiac: viewer.zodiac || null,
+      isGifter: true
+    }, 3); // priority 3 — higher than teases
+    showViewerFocus(uid, nick, '💎 VIP Chat');
+  } else if (hasQuestion && !voiceIsGenerating && !voiceIsPlaying && readingQueue.length === 0) {
+    // Non-gifters with questions get reply when host is free
+    queueVoiceEvent('mystic_chat_reply', {
+      name: nick,
+      comment,
+      diamonds: 0,
+      zodiac: viewer.zodiac || null,
+      isGifter: false
+    }, 1);
+    showViewerFocus(uid, nick, '💬 Chat');
+  }
+
   updateLeaderboard();
 }
 
@@ -1690,6 +1718,7 @@ function handleGift(data) {
   const viewer = viewers.get(uid);
   viewer.lastActive = Date.now();
   if (!viewer.profilePic && pic) viewer.profilePic = pic;
+  viewer.totalGifted = (viewer.totalGifted || 0) + diamonds;
   trackEvent();
 
   // Check per-user cooldown (VIP bypasses)

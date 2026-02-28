@@ -224,6 +224,11 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
       return `${contextStr}\n${eventData.name} mau cek jodoh! Kasih reaksi singkat — bilang kamu udah lihat sesuatu di bola kristal tapi belum jelas. Ajak dia kirim gift biar Eyang bisa baca lebih detail. Bahasa Indonesia gaul, playful. 10-15 kata.`;
     case 'mystic_question_tease':
       return `${contextStr}\n${eventData.name} nanya sesuatu: "${eventData.question}". Kasih reaksi singkat — bilang pertanyaan menarik, kamu mulai lihat jawabannya di bola kristal. Ajak kirim gift biar Eyang jawab penuh. Bahasa Indonesia gaul, misterius. 10-15 kata.`;
+    case 'mystic_chat_reply':
+      if (eventData.isGifter) {
+        return `${contextStr}\n${eventData.name} (sudah gift ${eventData.diamonds} diamonds!) bilang di chat: "${eventData.comment}".${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Dia VIP kamu! Balas comment-nya dengan hangat dan personal. Kalau dia nanya, jawab pakai intuisi peramal. Kalau dia cuma ngobrol, bales ramah dan sebutkan sesuatu tentang nasib/aura dia. Apresiasi dia sebagai supporter. Bahasa Indonesia gaul. 15-25 kata.`;
+      }
+      return `${contextStr}\n${eventData.name} bilang di chat: "${eventData.comment}".${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Bales singkat dan misterius. Kalau dia nanya, kasih hint jawaban tapi ajak gift untuk jawaban lengkap. Bahasa Indonesia gaul. 10-15 kata.`;
 
     default:
       return `${contextStr}\nSomething happened on stream. Give a casual comment.`;
