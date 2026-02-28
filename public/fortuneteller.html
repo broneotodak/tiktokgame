@@ -1708,23 +1708,37 @@ function handleChat(data) {
     return;
   }
 
-  // Check for jodoh/love — voice tease + notify
+  // Check for jodoh/love — store pending request + voice tease
   const lower = comment.toLowerCase();
-  if (lower.includes('jodoh') || lower.includes('love') || lower.includes('match') || lower.includes('cinta')) {
+  if (lower.includes('jodoh') || lower.includes('love') || lower.includes('match') || lower.includes('cinta') || lower.includes('pasangan')) {
     viewer.score += 2;
-    addNotification(`<strong>${nick}</strong> mau cek jodoh? Eyang lihat dulu...`, 'zodiac');
+    viewer.pendingRequest = { type: 'jodoh', comment, time: Date.now() };
+    addNotification(`<strong>${nick}</strong> mau cek jodoh? Kirim gift ya!`, 'zodiac');
     queueVoiceEvent('mystic_jodoh_tease', { name: nick }, 2);
     showViewerFocus(uid, nick, '💕 Jodoh');
     updateLeaderboard();
     return;
   }
 
-  // Check for question — voice tease + notify
-  if (comment.endsWith('?') || lower.startsWith('tanya') || lower.startsWith('soalan')) {
+  // Check for question — store pending request + voice tease
+  if (comment.endsWith('?') || lower.startsWith('tanya') || lower.startsWith('soalan')
+    || lower.includes('gimana') || lower.includes('kapan') || lower.includes('apakah')) {
     viewer.score += 1;
-    addNotification(`<strong>${nick}</strong> punya pertanyaan...`, 'zodiac');
+    viewer.pendingRequest = { type: 'question', comment, time: Date.now() };
+    addNotification(`<strong>${nick}</strong> punya pertanyaan... Kirim gift ya!`, 'zodiac');
     queueVoiceEvent('mystic_question_tease', { name: nick, question: comment }, 2);
     showViewerFocus(uid, nick, '❓ Pertanyaan');
+    updateLeaderboard();
+    return;
+  }
+
+  // Check for karir/career/rezeki — store pending request
+  if (lower.includes('karir') || lower.includes('career') || lower.includes('kerja') || lower.includes('rezeki') || lower.includes('bisnis') || lower.includes('usaha')) {
+    viewer.score += 1;
+    viewer.pendingRequest = { type: 'career', comment, time: Date.now() };
+    addNotification(`<strong>${nick}</strong> mau tahu soal karir? Kirim gift ya!`, 'zodiac');
+    queueVoiceEvent('mystic_question_tease', { name: nick, question: comment }, 2);
+    showViewerFocus(uid, nick, '💼 Karir');
     updateLeaderboard();
     return;
   }
@@ -1787,13 +1801,61 @@ function handleGift(data) {
   }
   readingCooldowns.set(uid, Date.now());
 
-  // Determine reading type and include viewer zodiac if known
+  // Check if viewer has a pending request (jodoh, question, career) from chat
+  const pending = viewer.pendingRequest;
+  const hasPending = pending && (Date.now() - pending.time < 300000); // valid for 5 minutes
   const readingData = { diamonds, zodiac: viewer.zodiac || null };
+
+  // Include pending request data
+  if (hasPending) {
+    readingData.pendingType = pending.type;
+    readingData.pendingComment = pending.comment;
+    viewer.pendingRequest = null; // consume it
+  }
 
   if (diamonds >= 500) {
     viewer.score += 250;
     addNotification(`<strong>${nick}</strong> membuka VIP PROPHECY! (${diamonds} diamonds)`, 'gift');
     queueReading('vip_vision', uid, nick, readingData, 5);
+  } else if (hasPending && pending.type === 'jodoh') {
+    // Jodoh request — pair with a random viewer
+    const allV = Array.from(viewers.values()).filter(v => v.uniqueId !== uid);
+    const partner = allV.length > 0 ? allV[Math.floor(Math.random() * allV.length)] : null;
+    viewer.score += Math.max(30, diamonds);
+    const label = diamonds >= 100 ? 'VISI JODOH SPESIAL' : 'Cek Jodoh';
+    addNotification(`<strong>${nick}</strong> ${label}! (${diamonds} 💎)`, 'gift');
+    if (diamonds >= 100) triggerGiftEffect('big');
+    else if (diamonds >= 11) triggerGiftEffect('medium');
+    else triggerGiftEffect('small');
+    queueReading('jodoh', uid, nick, {
+      ...readingData,
+      zodiac1: viewer.zodiac || 'unknown',
+      partner: partner ? partner.nickname : 'seseorang misterius',
+      zodiac2: partner?.zodiac || 'unknown',
+    }, diamonds >= 100 ? 4 : 3);
+  } else if (hasPending && pending.type === 'question') {
+    // Question request — answer their specific question
+    viewer.score += Math.max(30, diamonds);
+    addNotification(`<strong>${nick}</strong> Eyang jawab pertanyaanmu! (${diamonds} 💎)`, 'gift');
+    if (diamonds >= 100) triggerGiftEffect('big');
+    else if (diamonds >= 11) triggerGiftEffect('medium');
+    else triggerGiftEffect('small');
+    queueReading('question', uid, nick, {
+      ...readingData,
+      question: pending.comment,
+    }, diamonds >= 100 ? 4 : 3);
+  } else if (hasPending && pending.type === 'career') {
+    // Career request — career-focused reading
+    viewer.score += Math.max(30, diamonds);
+    addNotification(`<strong>${nick}</strong> Ramalan karir! (${diamonds} 💎)`, 'gift');
+    if (diamonds >= 100) triggerGiftEffect('big');
+    else if (diamonds >= 11) triggerGiftEffect('medium');
+    else triggerGiftEffect('small');
+    queueReading('gift_reading', uid, nick, {
+      ...readingData,
+      focusTopic: 'karir dan rezeki',
+      question: pending.comment,
+    }, diamonds >= 100 ? 4 : 3);
   } else if (diamonds >= 100) {
     viewer.score += 80;
     addNotification(`<strong>${nick}</strong> VISI SPESIAL! (${diamonds} diamonds)`, 'gift');
