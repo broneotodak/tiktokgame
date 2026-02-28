@@ -199,17 +199,17 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
     case 'mystic_welcome':
       return `${contextStr}\n${eventData.name} baru masuk live. Kasih dia sambutan singkat — sebutkan aura atau kesan pertama kamu tentang dia. Bikin dia penasaran pengen tahu lebih. Bahasa Indonesia gaul, misterius tapi ramah. Langsung ngomong ke dia. 10-15 kata.`;
     case 'mystic_zodiac':
-      return `${contextStr}\n${eventData.name} zodiak-nya ${eventData.zodiac}${eventData.date ? ` (lahir ${eventData.date})` : ''}. Kasih personality reading yang detail — sifat positif, kelemahan, karir yang cocok, dan kehidupan cinta. Seolah kamu lihat di bola kristal. Seru tapi mendalam. Bahasa Indonesia gaul. Langsung ngomong ke ${eventData.name}. 30-50 kata.`;
+      return `${contextStr}\nKartu tarot "${eventData.tarotCard || 'The Star'}" muncul untuk ${eventData.name}! Zodiak-nya ${eventData.zodiac}${eventData.date ? ` (lahir ${eventData.date})` : ''}. Kasih personality reading yang UNIK dan personal — jangan template! Sebutkan kartu tarotnya dan hubungkan maknanya dengan zodiak dia. Kasih insight spesifik: sifat unik (bukan cuma "setia" atau "ambisius" yg generic), prediksi situasi nyata yg mungkin dia alami, saran praktis. Bahasa Indonesia gaul. Langsung ngomong ke ${eventData.name}. 35-55 kata.`;
     case 'mystic_fortune':
-      return `${contextStr}\n${eventData.name} dapat kartu tarot "${eventData.tarotCard || 'The Star'}". Kasih ramalan hari ini berdasarkan kartu itu — nasib, peringatan, peluang. Kasih angka keberuntungan dan warna keberuntungan. Sebutkan nama kartunya. Misterius tapi positif. Bahasa Indonesia gaul. Langsung ngomong ke dia. 25-35 kata.`;
+      return `${contextStr}\n${eventData.name} dapat kartu tarot "${eventData.tarotCard || 'The Star'}"${eventData.zodiac ? ` (zodiak: ${eventData.zodiac})` : ''}. Kasih ramalan yang SPESIFIK berdasarkan kartu itu — bukan generic! Hubungkan makna kartu dengan situasi nyata: peluang bisnis/cinta/karir yg mungkin datang, peringatan spesifik. Kasih angka keberuntungan (3 angka) dan warna keberuntungan. Sebutkan kartunya. Bahasa Indonesia gaul, misterius. 25-40 kata.`;
     case 'mystic_jodoh':
       return `${contextStr}\nKartu tarot "${eventData.tarotCard || 'The Lovers'}" muncul! Cek kecocokan ${eventData.name1} (${eventData.zodiac1}) sama ${eventData.name2} (${eventData.zodiac2}). Kasih persentase, kelebihan pasangan, tantangan. Sebutkan kartunya. Seru dan playful. Bahasa Indonesia gaul. 25-40 kata.`;
     case 'mystic_question':
       return `${contextStr}\nKartu tarot "${eventData.tarotCard || 'The Hermit'}" muncul untuk ${eventData.name}! Dia nanya: '${eventData.question}'. Jawab berdasarkan makna kartu itu — misterius tapi membantu. Sebutkan kartunya. Bahasa Indonesia gaul. Langsung ngomong ke dia. 20-30 kata.`;
     case 'mystic_gift_reading':
-      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds! Kartu tarot "${eventData.tarotCard || 'Wheel of Fortune'}" muncul.${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Kasih ramalan detail berdasarkan kartu dan zodiak: cinta, karir, keuangan, kesehatan. Sebutkan nama kartunya dan maknanya. Extra positif karena dia gift. Tunjukkan apresiasi. Bahasa Indonesia gaul. 35-55 kata.`;
+      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds! Kartu tarot "${eventData.tarotCard || 'Wheel of Fortune'}" muncul.${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} PENTING: Buat reading yang UNIK, bukan template! Hubungkan makna kartu tarot dengan zodiak dia. Kasih prediksi spesifik tentang: situasi cinta yg akan terjadi, peluang karir/bisnis tertentu, angka bertuah (3 angka), warna bertuah. Jangan pakai kata2 generic. Apresiasi gift-nya. Bahasa Indonesia gaul. 40-60 kata.`;
     case 'mystic_vip_vision':
-      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds — VIP VISION! Kartu tarot "${eventData.tarotCard || 'Wheel of Fortune'}" muncul.${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Kasih prophecy paling detail: sebutkan kartunya dan deep meaning, personality deep dive, prediksi jodoh, jalur karir, angka keberuntungan (4 angka), warna keberuntungan, hari keberuntungan. Extra dramatis dan mistis. Apresiasi luar biasa. Bahasa Indonesia gaul. 50-80 kata.`;
+      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds — VIP VISION! Kartu tarot "${eventData.tarotCard || 'Wheel of Fortune'}" muncul.${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} Ini reading PALING PREMIUM! Kasih prophecy yang sangat personal dan UNIK: sebutkan kartu + deep meaning-nya, personality trait yg jarang orang tahu, prediksi jodoh spesifik (tipe pasangan ideal), jalur karir/bisnis terbaik, 4 angka keberuntungan, warna + hari keberuntungan, pesan dari alam semesta. Extra dramatis, mistis, penuh detail. Apresiasi luar biasa! Bahasa Indonesia gaul. 60-90 kata.`;
     case 'mystic_viewers_welcome':
       return `${contextStr}\n${eventData.count} viewers baru masuk live! Nama: ${eventData.names}. Sambut semua, kasih tahu mereka: tulis tanggal lahir di chat buat set zodiak, lalu kirim gift biar Eyang bacain ramalannya. Ceria dan mengundang. Bahasa Indonesia gaul. 15-25 kata.`;
     case 'mystic_invite_friends':
@@ -454,11 +454,14 @@ function connectToTikTok(session) {
     const profilePic = user.profilePicture?.url?.[0]
       || user.profilePicture?.urls?.[0]
       || user.profilePictureUrl
+      || data.profilePictureUrl  // top-level fallback (some TikTok connector versions)
       || user.avatarThumb?.url?.[0]
       || user.avatarThumb?.urls?.[0]
       || user.avatarMedium?.url?.[0]
+      || data.avatarThumb?.url?.[0]  // top-level avatar fallback
       || user.avatar_thumb?.url_list?.[0]
       || user.avatarUrl
+      || data.avatarUrl
       || '';
     if (profilePic) console.log(`📷 ${user.uniqueId || user.nickname} pic: ${profilePic.slice(0, 60)}...`);
     return {

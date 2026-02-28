@@ -736,97 +736,150 @@ candlePositions.forEach(pos => {
   candles.push({ group, flame, flameMat });
 });
 
-// Tarot Card Ring - 22 Major Arcana orbiting crystal ball
-const TAROT_CARDS = [
-  { num: 0,  name: 'The Fool',          symbol: '0',    mood: 'positive' },
-  { num: 1,  name: 'The Magician',      symbol: 'I',    mood: 'positive' },
-  { num: 2,  name: 'High Priestess',    symbol: 'II',   mood: 'neutral' },
-  { num: 3,  name: 'The Empress',       symbol: 'III',  mood: 'positive' },
-  { num: 4,  name: 'The Emperor',       symbol: 'IV',   mood: 'positive' },
-  { num: 5,  name: 'Hierophant',        symbol: 'V',    mood: 'neutral' },
-  { num: 6,  name: 'The Lovers',        symbol: 'VI',   mood: 'positive' },
-  { num: 7,  name: 'The Chariot',       symbol: 'VII',  mood: 'positive' },
-  { num: 8,  name: 'Strength',          symbol: 'VIII', mood: 'positive' },
-  { num: 9,  name: 'The Hermit',        symbol: 'IX',   mood: 'neutral' },
-  { num: 10, name: 'Wheel of Fortune',  symbol: 'X',    mood: 'positive' },
-  { num: 11, name: 'Justice',           symbol: 'XI',   mood: 'neutral' },
-  { num: 12, name: 'The Hanged Man',    symbol: 'XII',  mood: 'warning' },
-  { num: 13, name: 'Death',             symbol: 'XIII', mood: 'dark' },
-  { num: 14, name: 'Temperance',        symbol: 'XIV',  mood: 'positive' },
-  { num: 15, name: 'The Devil',         symbol: 'XV',   mood: 'dark' },
-  { num: 16, name: 'The Tower',         symbol: 'XVI',  mood: 'dark' },
-  { num: 17, name: 'The Star',          symbol: 'XVII', mood: 'positive' },
-  { num: 18, name: 'The Moon',          symbol: 'XVIII',mood: 'warning' },
-  { num: 19, name: 'The Sun',           symbol: 'XIX',  mood: 'positive' },
-  { num: 20, name: 'Judgement',         symbol: 'XX',   mood: 'warning' },
-  { num: 21, name: 'The World',         symbol: 'XXI',  mood: 'positive' },
+// ===== FULL 78-CARD TAROT DECK =====
+// 22 Major Arcana (shown in ring) + 56 Minor Arcana (drawn from deck)
+const MAJOR_ARCANA = [
+  { num: 0,  name: 'The Fool',          symbol: '0',     mood: 'positive', suit: 'major' },
+  { num: 1,  name: 'The Magician',      symbol: 'I',     mood: 'positive', suit: 'major' },
+  { num: 2,  name: 'High Priestess',    symbol: 'II',    mood: 'neutral',  suit: 'major' },
+  { num: 3,  name: 'The Empress',       symbol: 'III',   mood: 'positive', suit: 'major' },
+  { num: 4,  name: 'The Emperor',       symbol: 'IV',    mood: 'positive', suit: 'major' },
+  { num: 5,  name: 'Hierophant',        symbol: 'V',     mood: 'neutral',  suit: 'major' },
+  { num: 6,  name: 'The Lovers',        symbol: 'VI',    mood: 'positive', suit: 'major' },
+  { num: 7,  name: 'The Chariot',       symbol: 'VII',   mood: 'positive', suit: 'major' },
+  { num: 8,  name: 'Strength',          symbol: 'VIII',  mood: 'positive', suit: 'major' },
+  { num: 9,  name: 'The Hermit',        symbol: 'IX',    mood: 'neutral',  suit: 'major' },
+  { num: 10, name: 'Wheel of Fortune',  symbol: 'X',     mood: 'positive', suit: 'major' },
+  { num: 11, name: 'Justice',           symbol: 'XI',    mood: 'neutral',  suit: 'major' },
+  { num: 12, name: 'The Hanged Man',    symbol: 'XII',   mood: 'warning',  suit: 'major' },
+  { num: 13, name: 'Death',             symbol: 'XIII',  mood: 'dark',     suit: 'major' },
+  { num: 14, name: 'Temperance',        symbol: 'XIV',   mood: 'positive', suit: 'major' },
+  { num: 15, name: 'The Devil',         symbol: 'XV',    mood: 'dark',     suit: 'major' },
+  { num: 16, name: 'The Tower',         symbol: 'XVI',   mood: 'dark',     suit: 'major' },
+  { num: 17, name: 'The Star',          symbol: 'XVII',  mood: 'positive', suit: 'major' },
+  { num: 18, name: 'The Moon',          symbol: 'XVIII', mood: 'warning',  suit: 'major' },
+  { num: 19, name: 'The Sun',           symbol: 'XIX',   mood: 'positive', suit: 'major' },
+  { num: 20, name: 'Judgement',         symbol: 'XX',    mood: 'warning',  suit: 'major' },
+  { num: 21, name: 'The World',         symbol: 'XXI',   mood: 'positive', suit: 'major' },
 ];
+
+// Minor Arcana: 4 suits × 14 cards
+const MINOR_SUITS = {
+  wands:     { icon: '🔥', color: '#ff6600', element: 'Api' },
+  cups:      { icon: '💧', color: '#3399ff', element: 'Air' },
+  swords:    { icon: '⚔️', color: '#ccccff', element: 'Angin' },
+  pentacles: { icon: '🪙', color: '#33cc33', element: 'Tanah' },
+};
+const MINOR_RANKS = [
+  { rank: 'Ace',    val: 1,  mood: 'positive' },
+  { rank: 'Two',    val: 2,  mood: 'positive' },
+  { rank: 'Three',  val: 3,  mood: 'positive' },
+  { rank: 'Four',   val: 4,  mood: 'neutral' },
+  { rank: 'Five',   val: 5,  mood: 'warning' },
+  { rank: 'Six',    val: 6,  mood: 'positive' },
+  { rank: 'Seven',  val: 7,  mood: 'neutral' },
+  { rank: 'Eight',  val: 8,  mood: 'neutral' },
+  { rank: 'Nine',   val: 9,  mood: 'positive' },
+  { rank: 'Ten',    val: 10, mood: 'neutral' },
+  { rank: 'Page',   val: 11, mood: 'positive' },
+  { rank: 'Knight', val: 12, mood: 'positive' },
+  { rank: 'Queen',  val: 13, mood: 'positive' },
+  { rank: 'King',   val: 14, mood: 'positive' },
+];
+// Override moods for specific tricky cards
+const MINOR_MOOD_OVERRIDES = {
+  'Five of Swords': 'dark', 'Three of Swords': 'dark', 'Ten of Swords': 'dark',
+  'Eight of Swords': 'warning', 'Nine of Swords': 'dark', 'Seven of Swords': 'warning',
+  'Five of Cups': 'warning', 'Five of Wands': 'warning', 'Five of Pentacles': 'warning',
+  'Seven of Cups': 'warning', 'Eight of Cups': 'warning',
+};
+const MINOR_ARCANA = [];
+for (const [suitName, suitData] of Object.entries(MINOR_SUITS)) {
+  for (const r of MINOR_RANKS) {
+    const name = `${r.rank} of ${suitName.charAt(0).toUpperCase() + suitName.slice(1)}`;
+    MINOR_ARCANA.push({
+      num: 22 + MINOR_ARCANA.length,
+      name,
+      symbol: `${r.rank === 'Ace' ? 'A' : r.val <= 10 ? r.val : r.rank[0]}`,
+      mood: MINOR_MOOD_OVERRIDES[name] || r.mood,
+      suit: suitName,
+      suitIcon: suitData.icon,
+      suitColor: suitData.color,
+    });
+  }
+}
+
+// Full 78-card deck
+const TAROT_CARDS = [...MAJOR_ARCANA, ...MINOR_ARCANA];
 
 const tarotSprites = [];
 let drawnCard = null; // { sprite, targetPos, startPos, animProgress, card }
 let drawnCardTimer = 0;
 
-// Pick tarot card based on reading context
-function pickTarotForReading(readingType, zodiac) {
-  // Map reading types to thematically appropriate cards
-  const cardPools = {
-    zodiac: [1, 2, 4, 8, 17, 19], // Magician, Priestess, Emperor, Strength, Star, Sun
-    fortune: null, // truly random for general fortune
-    jodoh: [6], // The Lovers — always
-    question: [2, 5, 9, 11, 18], // Priestess, Hierophant, Hermit, Justice, Moon (mystery)
-    gift_reading: [1, 3, 7, 8, 10, 14, 17, 19], // positive cards for paying viewers
-    vip_vision: [10], // Wheel of Fortune — always for VIP
-    welcome: [0, 17, 19], // Fool (new beginning), Star, Sun
-  };
-  const pool = cardPools[readingType];
-  if (pool && pool.length > 0) {
-    // 70% chance to pick from themed pool, 30% still random for variety
-    if (Math.random() < 0.7) {
-      return pool[Math.floor(Math.random() * pool.length)];
-    }
+// Hash viewer ID to get a consistent "destiny card" per viewer
+function getViewerDestinyCard(viewerId) {
+  let hash = 0;
+  for (let i = 0; i < viewerId.length; i++) {
+    hash = ((hash << 5) - hash) + viewerId.charCodeAt(i);
+    hash |= 0;
   }
-  // Random fallback — but weighted: 60% positive/neutral, 40% warning/dark
-  const weighted = TAROT_CARDS.map((c, i) => ({ idx: i, mood: c.mood }));
-  const goodCards = weighted.filter(c => c.mood === 'positive' || c.mood === 'neutral');
-  const darkCards = weighted.filter(c => c.mood === 'warning' || c.mood === 'dark');
-  if (Math.random() < 0.6 && goodCards.length) return goodCards[Math.floor(Math.random() * goodCards.length)].idx;
-  return darkCards.length ? darkCards[Math.floor(Math.random() * darkCards.length)].idx : Math.floor(Math.random() * TAROT_CARDS.length);
+  return Math.abs(hash) % TAROT_CARDS.length;
 }
 
-function createTarotSprite(card, index) {
+// Pick tarot card — consistent per viewer, with overrides for special readings
+function pickTarotForReading(readingType, zodiac, viewerId) {
+  // Special overrides — always use these specific cards
+  if (readingType === 'jodoh') return 6; // The Lovers
+  if (readingType === 'vip_vision') return 10; // Wheel of Fortune
+
+  // For readings with a viewer, use their destiny card (consistent per person)
+  if (viewerId) {
+    return getViewerDestinyCard(viewerId);
+  }
+
+  // Fallback: random from Major Arcana
+  return Math.floor(Math.random() * 22);
+}
+
+function createTarotSprite(card, index, totalInRing) {
   const w = 80, h = 120;
   const cvs = document.createElement('canvas');
   cvs.width = w; cvs.height = h;
   const ctx = cvs.getContext('2d');
 
+  const isMinor = card.suit !== 'major';
+  const suitColor = isMinor ? card.suitColor : null;
+
   // Card background
   const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, '#1a0a3a');
+  grad.addColorStop(0, isMinor ? '#0a1a2a' : '#1a0a3a');
   grad.addColorStop(1, '#0a0020');
   ctx.fillStyle = grad;
   ctx.roundRect(2, 2, w - 4, h - 4, 6);
   ctx.fill();
 
-  // Border
-  ctx.strokeStyle = card.mood === 'dark' ? '#aa3333' : card.mood === 'warning' ? '#cc8800' : '#f1c40f';
+  // Border — suit color for minor, mood color for major
+  const borderColor = isMinor ? suitColor :
+    card.mood === 'dark' ? '#aa3333' : card.mood === 'warning' ? '#cc8800' : '#f1c40f';
+  ctx.strokeStyle = borderColor;
   ctx.lineWidth = 2;
   ctx.roundRect(2, 2, w - 4, h - 4, 6);
   ctx.stroke();
 
-  // Roman numeral
+  // Symbol / numeral
   ctx.font = 'bold 18px serif';
   ctx.textAlign = 'center';
-  ctx.fillStyle = card.mood === 'dark' ? '#ff4444' : '#f1c40f';
+  ctx.fillStyle = isMinor ? suitColor : (card.mood === 'dark' ? '#ff4444' : '#f1c40f');
   ctx.fillText(card.symbol, w / 2, 28);
 
   // Decorative line
-  ctx.strokeStyle = 'rgba(241,196,15,0.3)';
+  ctx.strokeStyle = isMinor ? suitColor + '55' : 'rgba(241,196,15,0.3)';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(12, 38); ctx.lineTo(w - 12, 38); ctx.stroke();
 
   // Card name (wrapped)
   ctx.font = '10px sans-serif';
-  ctx.fillStyle = '#d4a0ff';
+  ctx.fillStyle = isMinor ? '#aaccee' : '#d4a0ff';
   const words = card.name.split(' ');
   let line = '', lineY = 58;
   for (const word of words) {
@@ -838,43 +891,64 @@ function createTarotSprite(card, index) {
   }
   if (line) ctx.fillText(line, w / 2, lineY);
 
-  // Mood icon at bottom
+  // Mood/suit icon at bottom
   ctx.font = '20px serif';
-  const icons = { positive: '\u2728', neutral: '\uD83D\uDD2E', warning: '\uD83C\uDF19', dark: '\uD83D\uDC80' };
-  ctx.fillText(icons[card.mood] || '\u2728', w / 2, h - 14);
+  if (isMinor) {
+    ctx.fillText(card.suitIcon, w / 2, h - 14);
+  } else {
+    const icons = { positive: '\u2728', neutral: '\uD83D\uDD2E', warning: '\uD83C\uDF19', dark: '\uD83D\uDC80' };
+    ctx.fillText(icons[card.mood] || '\u2728', w / 2, h - 14);
+  }
 
   const tex = new THREE.CanvasTexture(cvs);
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.5 });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(0.35, 0.52, 1);
-  const angle = (index / TAROT_CARDS.length) * Math.PI * 2;
+  const angle = (index / (totalInRing || 22)) * Math.PI * 2;
   sprite.userData = { baseAngle: angle, index, card, originalOpacity: 0.5 };
   scene.add(sprite);
   return sprite;
 }
 
-TAROT_CARDS.forEach((card, i) => {
-  tarotSprites.push(createTarotSprite(card, i));
+// Only Major Arcana (22) in the visual ring
+MAJOR_ARCANA.forEach((card, i) => {
+  tarotSprites.push(createTarotSprite(card, i, 22));
+});
+// Pre-create Minor Arcana sprites (hidden off-screen until drawn)
+MINOR_ARCANA.forEach((card, i) => {
+  const sprite = createTarotSprite(card, i, 56);
+  sprite.visible = false; // hidden until drawn
+  sprite.position.set(0, -5, 0); // below scene
+  tarotSprites.push(sprite);
 });
 
-// Draw a tarot card — flies from ring to center
+// Draw a tarot card — flies from ring/deck to center
 function drawTarotCard(cardIndex) {
   if (cardIndex === undefined || cardIndex === null) {
     cardIndex = Math.floor(Math.random() * TAROT_CARDS.length);
   }
   const sprite = tarotSprites[cardIndex];
   const card = TAROT_CARDS[cardIndex];
+  const isMinor = card.suit !== 'major';
+
+  // Minor Arcana: make visible and start from below
+  if (isMinor) {
+    sprite.visible = true;
+    sprite.position.set(0, -2, 2);
+    sprite.scale.set(0.35, 0.52, 1);
+  }
 
   drawnCard = {
     sprite,
     card,
     startPos: sprite.position.clone(),
-    targetPos: new THREE.Vector3(0, 2.0, 2.0), // in front of crystal ball, facing camera
+    targetPos: new THREE.Vector3(0, 2.0, 2.0),
     animProgress: 0,
     startScale: sprite.scale.clone(),
-    targetScale: new THREE.Vector3(0.7, 1.05, 1), // bigger when drawn
+    targetScale: new THREE.Vector3(0.7, 1.05, 1),
+    isMinor,
   };
-  drawnCardTimer = 6; // show for 6 seconds
+  drawnCardTimer = 6;
 
   // Highlight the card
   sprite.material.opacity = 1.0;
@@ -886,6 +960,11 @@ function dismissDrawnCard() {
   if (!drawnCard) return;
   drawnCard.sprite.material.opacity = drawnCard.sprite.userData.originalOpacity;
   drawnCard.sprite.scale.copy(drawnCard.startScale);
+  // Hide Minor Arcana cards back off-screen
+  if (drawnCard.isMinor) {
+    drawnCard.sprite.visible = false;
+    drawnCard.sprite.position.set(0, -5, 0);
+  }
   drawnCard = null;
 }
 
@@ -1133,16 +1212,19 @@ function processReadingQueue() {
       eventType = 'mystic_welcome';
       eventData = { name: reading.nickname };
       break;
-    case 'zodiac':
+    case 'zodiac': {
+      const zCard = drawTarotCard(pickTarotForReading('zodiac', reading.data.zodiac, reading.viewerId));
       eventType = 'mystic_zodiac';
-      eventData = { name: reading.nickname, zodiac: reading.data.zodiac, date: reading.data.date || '' };
+      eventData = { name: reading.nickname, zodiac: reading.data.zodiac, date: reading.data.date || '', tarotCard: zCard.name };
       showZodiacBadge(reading.data.zodiac);
       // Dramatic effect based on zodiac element
       const elem = getElementForZodiac(reading.data.zodiac);
       if (elem) setTimeout(() => triggerDramaticEffect(elem, 3000), 1500);
+      if (zCard.mood === 'dark') setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
       break;
+    }
     case 'fortune': {
-      const fCard = drawTarotCard(pickTarotForReading('fortune', viewerZodiac));
+      const fCard = drawTarotCard(pickTarotForReading('fortune', viewerZodiac, reading.viewerId));
       eventType = 'mystic_fortune';
       eventData = { name: reading.nickname, zodiac: viewerZodiac, tarotCard: fCard.name };
       if (fCard.mood === 'dark') setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
@@ -1153,20 +1235,20 @@ function processReadingQueue() {
       break;
     }
     case 'jodoh': {
-      const jCard = drawTarotCard(pickTarotForReading('jodoh'));
+      const jCard = drawTarotCard(pickTarotForReading('jodoh', null, reading.viewerId));
       eventType = 'mystic_jodoh';
       eventData = { name1: reading.nickname, zodiac1: reading.data.zodiac1 || 'unknown', name2: reading.data.partner, zodiac2: reading.data.zodiac2 || 'unknown', tarotCard: jCard.name };
       break;
     }
     case 'question': {
-      const qCard = drawTarotCard(pickTarotForReading('question'));
+      const qCard = drawTarotCard(pickTarotForReading('question', null, reading.viewerId));
       eventType = 'mystic_question';
       eventData = { name: reading.nickname, question: reading.data.question || '', tarotCard: qCard.name };
       if (qCard.mood === 'dark') setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
       break;
     }
     case 'gift_reading': {
-      const gCard = drawTarotCard(pickTarotForReading('gift_reading', viewerZodiac));
+      const gCard = drawTarotCard(pickTarotForReading('gift_reading', viewerZodiac, reading.viewerId));
       eventType = 'mystic_gift_reading';
       eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac, tarotCard: gCard.name };
       if (gCard.mood === 'dark') {
@@ -1181,7 +1263,7 @@ function processReadingQueue() {
       break;
     }
     case 'vip_vision': {
-      const vCard = drawTarotCard(pickTarotForReading('vip_vision'));
+      const vCard = drawTarotCard(pickTarotForReading('vip_vision', null, reading.viewerId));
       eventType = 'mystic_vip_vision';
       eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac, tarotCard: vCard.name };
       triggerVIPEffect();
@@ -1262,15 +1344,7 @@ function showZodiacBadge(zodiac) {
   document.getElementById('zodiacSymbol').textContent = z.symbol;
   document.getElementById('zodiacName').textContent = zodiac.toUpperCase() + ' ' + z.emoji;
   badge.classList.add('show');
-
-  // Draw a contextual tarot card for zodiac reading
-  const drawnIdx = pickTarotForReading('zodiac', zodiac);
-  const card = drawTarotCard(drawnIdx);
-
-  // If card mood is dark, trigger skull
-  if (card.mood === 'dark') {
-    setTimeout(() => triggerDramaticEffect('skull', 4000), 1000);
-  }
+  // Card is drawn in processReadingQueue, not here
 }
 
 function hideZodiacBadge() {
@@ -1890,14 +1964,14 @@ function animate() {
     crystalInner.scale.setScalar(0.9 + Math.sin(elapsedTotal * 1.5) * 0.05);
   }
 
-  // Tarot card ring rotation
-  tarotSprites.forEach(s => {
-    // Skip the drawn card — it animates separately
-    if (drawnCard && drawnCard.sprite === s) return;
+  // Tarot card ring rotation — only Major Arcana (first 22) orbit
+  for (let i = 0; i < 22; i++) {
+    const s = tarotSprites[i];
+    if (drawnCard && drawnCard.sprite === s) continue;
     const angle = s.userData.baseAngle + elapsedTotal * 0.08;
     const r = 3.0;
-    s.position.set(Math.cos(angle) * r, 2.2 + Math.sin(elapsedTotal * 0.4 + s.userData.index * 0.5) * 0.08, Math.sin(angle) * r);
-  });
+    s.position.set(Math.cos(angle) * r, 2.2 + Math.sin(elapsedTotal * 0.4 + i * 0.5) * 0.08, Math.sin(angle) * r);
+  }
 
   // Drawn card animation — fly to center
   if (drawnCard) {
