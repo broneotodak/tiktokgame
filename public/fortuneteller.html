@@ -1393,12 +1393,12 @@ function showViewerFocus(viewerId, nickname, readingType) {
     img.onerror = () => {
       photoEl.innerHTML = '';
       photoEl.textContent = nickname.charAt(0).toUpperCase();
-      photoEl.style.background = `hsl(${(nickname.charCodeAt(0) * 37) % 360}, 60%, 25%)`;
+      photoEl.style.background = 'rgba(100, 50, 150, 0.6)';
     };
     photoEl.appendChild(img);
   } else {
     photoEl.textContent = nickname.charAt(0).toUpperCase();
-    photoEl.style.background = `hsl(${(nickname.charCodeAt(0) * 37) % 360}, 60%, 25%)`;
+    photoEl.style.background = 'rgba(100, 50, 150, 0.6)';
   }
 
   nameEl.textContent = nickname;
