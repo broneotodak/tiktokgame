@@ -226,9 +226,17 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
     case 'mystic_invite_friends':
       return `${contextStr}\nAda ${eventData.viewerCount} viewers sekarang. Ajak mereka invite teman buat cek nasib bareng-bareng. Bahasa Indonesia gaul. Seru dan persuasif. 15-25 kata.`;
     case 'mystic_ask_engage':
-      return `${contextStr}\nAda ${eventData.viewerCount} viewers di live. ${eventData.queueLength > 0 ? `Lagi bacain ${eventData.queueLength} ramalan.` : 'Belum ada yang minta ramalan.'} Ajak viewers kirim gift biar Eyang baca nasib mereka. Bilang makin besar gift, makin detail ramalannya. Juga ajak tulis tanggal lahir di chat buat set zodiak dulu. Playful dan bikin penasaran. Bahasa Indonesia gaul. 20-30 kata.`;
+      return `${contextStr}\nAda ${eventData.viewerCount} viewers.${eventData.viewerNames ? ` Nama: ${eventData.viewerNames}.` : ''} ${eventData.queueLength > 0 ? `Lagi bacain ${eventData.queueLength} ramalan.` : 'Belum ada yang minta ramalan.'} Ajak viewers kirim gift biar Eyang baca nasib. Makin besar gift = makin detail. Juga ajak tulis tanggal lahir di chat. Playful, bikin penasaran. 20-30 kata.`;
+    case 'mystic_idle_explain':
+      return `${contextStr}\nAda ${eventData.viewerCount} viewers. Jelaskan CARA KERJA reading ini ke viewers — langkah2nya: 1) tulis tanggal lahir di chat biar Eyang tahu zodiak, 2) kirim gift untuk dapat reading dari kartu tarot, 3) makin besar gift = makin detail ramalannya (bisa dapat zodiak, jodoh, karir, angka bertuah). Juga jelaskan Eyang baca lewat bola kristal dan kartu tarot. Buat menarik dan bikin penasaran. 25-40 kata.`;
+    case 'mystic_idle_atmosphere':
+      return `${contextStr}\nAda ${eventData.viewerCount} viewers. Bola kristal sedang bersinar${eventData.crystalEnergy > 5 ? ' terang — energi hampir penuh!' : ' pelan...'}. Comment soal suasana mistis — apa yang kamu rasakan dari alam gaib, aura viewers, atau tanda dari bola kristal. Buat viewers merasa ada energi supernatural di live ini. Dramatis tapi hangat. 15-25 kata.`;
+    case 'mystic_idle_wisdom':
+      return `${contextStr}\nAda ${eventData.viewerCount} viewers. Bagikan satu wisdom/nasihat hidup yang bijak — tentang cinta, rezeki, kesabaran, atau takdir. Kayak kakek bijak ngasih nasihat ke cucunya. Hubungkan dengan bola kristal atau kartu tarot. Buat mendalam tapi singkat. 15-25 kata.`;
+    case 'mystic_idle_tease':
+      return `${contextStr}\n${eventData.targetName ? `Kamu merasakan aura dari viewer bernama "${eventData.targetName}"${eventData.targetZodiac ? ` (zodiak ${eventData.targetZodiac})` : ''}. Panggil nama dia dan bilang kamu melihat sesuatu tentang dia di bola kristal — tapi belum jelas. Ajak dia kirim gift biar bisa dibaca lebih detail.` : `Kamu merasakan aura kuat dari salah satu viewer di live ini. Bilang ada nasib menarik yang mau kamu ungkap.`} Bikin penasaran! 15-20 kata.`;
     case 'mystic_flood_acknowledge':
-      return `${contextStr}\nLive lagi ramai banget — ${eventData.viewerCount} viewers dan ${eventData.queueLength} orang antri reading! Kamu excited tapi kasih tahu sabar ya, Eyang bacain satu-satu. Yang mau didahuluin, kirim gift lebih besar! Bahasa Indonesia gaul. 15-25 kata.`;
+      return `${contextStr}\nLive lagi ramai — ${eventData.viewerCount} viewers dan ${eventData.queueLength} orang antri reading! Excited tapi kasih tahu sabar, Eyang bacain satu-satu. Mau didahuluin? Kirim gift lebih besar! 15-25 kata.`;
     case 'mystic_zodiac_tease':
       return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Zodiak: ${eventData.zodiac} ${eventData.symbol}, elemen ${eventData.element}. Sebutkan satu sifat khas zodiak itu, bikin penasaran. Ajak kirim gift untuk reading detail. 15-20 kata.`;
     case 'mystic_jodoh_tease':

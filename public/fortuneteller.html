@@ -574,10 +574,11 @@ let floodMode = false;
 let readingCooldowns = new Map(); // uid → timestamp, prevent spam per user
 const PER_USER_COOLDOWN = 30000; // 30s between readings for same person
 
-// Engagement prompts
-let engageTimer = 45; // first prompt after 45s
+// Engagement prompts + idle chatter
+let engageTimer = 30; // first prompt after 30s
 let lastEngageTime = 0;
-const ENGAGE_COOLDOWN = 60000; // prompt every 60s
+const ENGAGE_COOLDOWN = 40000; // 40s between voice prompts
+let idleChatType = 0; // rotate through different idle chat types
 
 // Free random readings — keep viewers engaged
 let freeReadingTimer = 60; // first free reading after 60s
@@ -1939,7 +1940,7 @@ const joinBatch = [];
 let joinBatchTimer = null;
 let lastJoinGreetTime = 0;
 const JOIN_GREET_COOLDOWN = 45000; // 45s between welcome batches
-let inviteTimer = 120;
+// inviteTimer removed — now part of idle chatter rotation
 
 function flushJoinBatch() {
   if (joinBatch.length === 0) return;
@@ -2092,29 +2093,46 @@ function animate() {
     }
   }
 
-  // Engagement prompt — ask viewers to send gifts (only when idle)
+  // Idle chatter — Eyang talks when room is quiet, rotates through different topics
   if (voiceEnabled) {
     engageTimer -= dt;
     if (engageTimer <= 0 && Date.now() - lastEngageTime > ENGAGE_COOLDOWN) {
-      engageTimer = 60 + Math.random() * 30;
-      lastEngageTime = Date.now();
-      // Only prompt when not busy with readings
-      if (viewers.size > 0 && readingQueue.length === 0 && readingState === 'IDLE' && !voiceIsGenerating && !voiceIsPlaying) {
-        queueVoiceEvent('mystic_ask_engage', {
-          viewerCount: viewers.size,
-          queueLength: readingQueue.length
-        }, 1);
-      }
-    }
+      engageTimer = 35 + Math.random() * 20; // 35-55s between idle chats
+      if (readingQueue.length === 0 && readingState === 'IDLE' && !voiceIsGenerating && !voiceIsPlaying) {
+        lastEngageTime = Date.now();
+        const viewerNames = Array.from(viewers.values()).slice(0, 5).map(v => v.nickname);
+        const hasGifters = Array.from(viewers.values()).some(v => (v.totalGifted || 0) > 0);
 
-    // Invite timer (only when idle)
-    inviteTimer -= dt;
-    if (inviteTimer <= 0) {
-      inviteTimer = 120;
-      if (viewers.size > 0 && readingState === 'IDLE' && !voiceIsGenerating && !voiceIsPlaying) {
-        queueVoiceEvent('mystic_invite_friends', {
+        // Rotate through different idle chat types
+        const chatTypes = [
+          'mystic_idle_explain',    // explain how readings work
+          'mystic_idle_atmosphere', // comment on crystal ball / mystical atmosphere
+          'mystic_ask_engage',      // ask viewers to send gifts
+          'mystic_idle_wisdom',     // share mystic wisdom / life advice
+          'mystic_idle_tease',      // tease a random viewer
+          'mystic_invite_friends',  // invite friends
+        ];
+        const type = chatTypes[idleChatType % chatTypes.length];
+        idleChatType++;
+
+        const eventData = {
           viewerCount: viewers.size,
-        }, 1);
+          queueLength: readingQueue.length,
+          viewerNames: viewerNames.join(', '),
+          hasGifters,
+          totalReadings,
+          crystalEnergy,
+        };
+
+        // For tease, pick a random viewer
+        if (type === 'mystic_idle_tease' && viewers.size > 0) {
+          const allV = Array.from(viewers.values());
+          const v = allV[Math.floor(Math.random() * allV.length)];
+          eventData.targetName = v.nickname;
+          eventData.targetZodiac = v.zodiac || null;
+        }
+
+        queueVoiceEvent(type, eventData, 1);
       }
     }
   }
