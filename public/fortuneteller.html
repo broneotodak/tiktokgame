@@ -486,47 +486,69 @@ function getZodiacFromDate(month, day) {
 }
 
 function detectBirthday(msg) {
-  const lower = msg.toLowerCase().trim();
+  const lower = msg.toLowerCase().trim().replace(/[,\.!]/g, '');
 
-  // Direct zodiac name
+  // Direct zodiac name (anywhere in message)
   for (const z of Object.keys(ZODIAC_DATA)) {
-    if (lower === z || lower.startsWith(z + ' ')) return { zodiac: z, date: '' };
+    if (lower === z || lower.includes(z)) return { zodiac: z, date: '' };
   }
 
-  // "15 mac", "mac 15", "15/3", "3-15", "15 march"
   let m, match;
-  // day month
-  match = lower.match(/(\d{1,2})\s+([a-z]+)/);
+
+  // "15 maret", "15 mac", "15 march", "15 maret 2000", "15maret"
+  match = lower.match(/(\d{1,2})\s*([a-z]{3,})/);
   if (match) {
     const day = parseInt(match[1]);
     const monthStr = match[2];
     m = MONTH_MAP[monthStr];
     if (m && day >= 1 && day <= 31) {
-      const z = getZodiacFromDate(m, day);
-      return { zodiac: z, date: `${day} ${match[2]}` };
+      return { zodiac: getZodiacFromDate(m, day), date: `${day} ${match[2]}` };
     }
   }
-  // month day
-  match = lower.match(/([a-z]+)\s+(\d{1,2})/);
+
+  // "maret 15", "march 15"
+  match = lower.match(/([a-z]{3,})\s+(\d{1,2})/);
   if (match) {
     const monthStr = match[1];
     const day = parseInt(match[2]);
     m = MONTH_MAP[monthStr];
     if (m && day >= 1 && day <= 31) {
-      const z = getZodiacFromDate(m, day);
-      return { zodiac: z, date: `${day} ${match[1]}` };
+      return { zodiac: getZodiacFromDate(m, day), date: `${day} ${match[1]}` };
     }
   }
-  // dd/mm or dd-mm
-  match = lower.match(/(\d{1,2})[\/\-](\d{1,2})/);
+
+  // dd/mm, dd-mm, dd.mm (with optional year: dd/mm/yyyy)
+  match = lower.match(/(\d{1,2})[\/\-\.](\d{1,2})(?:[\/\-\.](\d{2,4}))?/);
   if (match) {
     const day = parseInt(match[1]);
     const month = parseInt(match[2]);
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      const z = getZodiacFromDate(month, day);
-      return { zodiac: z, date: `${day}/${month}` };
+      return { zodiac: getZodiacFromDate(month, day), date: `${day}/${month}` };
+    }
+    // Maybe mm/dd format? Try swapped if first didn't work
+    if (day >= 1 && day <= 12 && month >= 1 && month <= 31) {
+      return { zodiac: getZodiacFromDate(day, month), date: `${month}/${day}` };
     }
   }
+
+  // Just two numbers like "15 3" or "3 15"
+  match = lower.match(/^(\d{1,2})\s+(\d{1,2})$/);
+  if (match) {
+    let a = parseInt(match[1]), b = parseInt(match[2]);
+    // Assume dd mm
+    if (b >= 1 && b <= 12 && a >= 1 && a <= 31) {
+      return { zodiac: getZodiacFromDate(b, a), date: `${a}/${b}` };
+    }
+    // Try mm dd
+    if (a >= 1 && a <= 12 && b >= 1 && b <= 31) {
+      return { zodiac: getZodiacFromDate(a, b), date: `${b}/${a}` };
+    }
+  }
+
+  // "lahir 15 maret" or "ultah 15/3" — strip prefix words
+  const stripped = lower.replace(/^(lahir|ultah|birthday|born|tanggal|tgl|dob)\s*/i, '');
+  if (stripped !== lower) return detectBirthday(stripped);
+
   return null;
 }
 
@@ -1437,7 +1459,7 @@ function triggerDramaticEffect(element, duration = 3000) {
 function handleViewerJoin(data) {
   const uid = data.uniqueId || data.id || 'anon_' + Date.now();
   const nick = data.nickname || uid;
-  const pic = data.profilePictureUrl || data.profilePicUrl || '';
+  const pic = data.profilePic || data.profilePictureUrl || '';
   if (!viewers.has(uid)) {
     viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
     document.getElementById('viewerCount').textContent = viewers.size;
@@ -1480,7 +1502,7 @@ function handleLike(data) {
 function handleChat(data) {
   const uid = data.uniqueId || data.id || '';
   const nick = data.nickname || uid;
-  const pic = data.profilePictureUrl || data.profilePicUrl || '';
+  const pic = data.profilePic || data.profilePictureUrl || '';
   const comment = (data.comment || '').trim();
   if (!comment) return;
 
@@ -1531,7 +1553,7 @@ function handleChat(data) {
 function handleGift(data) {
   const uid = data.uniqueId || data.id || '';
   const nick = data.nickname || uid;
-  const pic = data.profilePictureUrl || data.profilePicUrl || '';
+  const pic = data.profilePic || data.profilePictureUrl || '';
   const diamonds = data.diamondCount || 0;
 
   if (!viewers.has(uid)) {
@@ -1581,7 +1603,7 @@ function handleGift(data) {
 function handleFollow(data) {
   const uid = data.uniqueId || data.id || '';
   const nick = data.nickname || uid;
-  const pic = data.profilePictureUrl || data.profilePicUrl || '';
+  const pic = data.profilePic || data.profilePictureUrl || '';
   if (!viewers.has(uid)) {
     viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
   }
@@ -1597,7 +1619,7 @@ function handleFollow(data) {
 function handleShare(data) {
   const uid = data.uniqueId || data.id || '';
   const nick = data.nickname || uid;
-  const pic = data.profilePictureUrl || data.profilePicUrl || '';
+  const pic = data.profilePic || data.profilePictureUrl || '';
   if (!viewers.has(uid)) {
     viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
   }
@@ -1760,13 +1782,17 @@ function playNextVoice() {
 const joinBatch = [];
 let joinBatchTimer = null;
 let lastJoinGreetTime = 0;
-const JOIN_GREET_COOLDOWN = 15000;
+const JOIN_GREET_COOLDOWN = 45000; // 45s between welcome batches
 let inviteTimer = 120;
 
 function flushJoinBatch() {
   if (joinBatch.length === 0) return;
   if (!voiceEnabled) { joinBatch.length = 0; return; }
   if (Date.now() - lastJoinGreetTime < JOIN_GREET_COOLDOWN) { joinBatch.length = 0; return; }
+  // Skip welcome if there's an active reading or queue — prioritize readings
+  if (readingState !== 'IDLE' || readingQueue.length > 0) { joinBatch.length = 0; return; }
+  // Skip if voice is busy generating/playing
+  if (voiceIsGenerating || voiceIsPlaying) { joinBatch.length = 0; return; }
 
   const batch = joinBatch.splice(0);
   lastJoinGreetTime = Date.now();
@@ -1774,7 +1800,7 @@ function flushJoinBatch() {
   const names = batch.map(v => v.nickname);
   const nameStr = names.length <= 4 ? names.join(', ') : names.slice(0, 3).join(', ') + ` dan ${names.length - 3} lagi`;
 
-  queueVoiceEvent('mystic_viewers_welcome', { count: batch.length, names: nameStr, queueLength: readingQueue.length }, 2);
+  queueVoiceEvent('mystic_viewers_welcome', { count: batch.length, names: nameStr, queueLength: readingQueue.length }, 1);
 }
 
 // ===== ANIMATION LOOP =====
@@ -1908,13 +1934,14 @@ function animate() {
     }
   }
 
-  // Engagement prompt — ask viewers to send gifts
+  // Engagement prompt — ask viewers to send gifts (only when idle)
   if (voiceEnabled) {
     engageTimer -= dt;
     if (engageTimer <= 0 && Date.now() - lastEngageTime > ENGAGE_COOLDOWN) {
-      engageTimer = 60 + Math.random() * 30; // 60-90s between prompts
+      engageTimer = 60 + Math.random() * 30;
       lastEngageTime = Date.now();
-      if (viewers.size > 0 && readingQueue.length < 2) {
+      // Only prompt when not busy with readings
+      if (viewers.size > 0 && readingQueue.length === 0 && readingState === 'IDLE' && !voiceIsGenerating && !voiceIsPlaying) {
         queueVoiceEvent('mystic_ask_engage', {
           viewerCount: viewers.size,
           queueLength: readingQueue.length
@@ -1922,11 +1949,11 @@ function animate() {
       }
     }
 
-    // Invite timer
+    // Invite timer (only when idle)
     inviteTimer -= dt;
     if (inviteTimer <= 0) {
       inviteTimer = 120;
-      if (viewers.size > 0) {
+      if (viewers.size > 0 && readingState === 'IDLE' && !voiceIsGenerating && !voiceIsPlaying) {
         queueVoiceEvent('mystic_invite_friends', {
           viewerCount: viewers.size,
         }, 1);
