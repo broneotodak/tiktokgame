@@ -560,6 +560,7 @@ let crystalEnergy = 0;
 let readingState = 'IDLE'; // IDLE, READING, REVEAL
 let currentReading = null;
 let fortuneDisplayTimer = null;
+let readingWaitingForVoice = false;
 let totalReadings = 0;
 let autoPlay = false;
 let autoPlayTimer = 0;
@@ -1206,19 +1207,13 @@ function processReadingQueue() {
     // Fortune display shows placeholder until voice text arrives
     showFortuneDisplay(reading);
 
-    // Return to IDLE — keep text visible long enough to read
+    // Keep text visible until voice finishes — use fallback timer as safety net
     if (fortuneDisplayTimer) clearTimeout(fortuneDisplayTimer);
-    const revealTime = reading.priority >= 5 ? 20000 : reading.priority >= 4 ? 16000 : reading.priority >= 3 ? 14000 : 12000;
+    readingWaitingForVoice = true;
+    const maxRevealTime = reading.priority >= 5 ? 60000 : reading.priority >= 4 ? 45000 : 35000;
     fortuneDisplayTimer = setTimeout(() => {
-      hideFortuneDisplay();
-      hideViewerFocus();
-      readingState = 'IDLE';
-      currentReading = null;
-      crystalInnerMat.opacity = 0.15;
-      crystalLight.intensity = 2;
-      hideZodiacBadge();
-      processReadingQueue();
-    }, revealTime);
+      finishReading();
+    }, maxRevealTime);
   }, 2000);
 }
 
@@ -1240,6 +1235,23 @@ function showFortuneDisplay(reading) {
 
 function hideFortuneDisplay() {
   document.getElementById('fortuneDisplay').classList.remove('show');
+}
+
+function finishReading() {
+  if (readingState !== 'REVEAL') return;
+  if (fortuneDisplayTimer) clearTimeout(fortuneDisplayTimer);
+  readingWaitingForVoice = false;
+  // Keep text visible 5s after voice ends so viewers can read it
+  setTimeout(() => {
+    hideFortuneDisplay();
+    hideViewerFocus();
+    readingState = 'IDLE';
+    currentReading = null;
+    crystalInnerMat.opacity = 0.15;
+    crystalLight.intensity = 2;
+    hideZodiacBadge();
+    processReadingQueue();
+  }, 5000);
 }
 
 function showZodiacBadge(zodiac) {
@@ -1813,6 +1825,10 @@ function playNextVoice() {
     document.getElementById('voiceSpeakerIcon').textContent = '\uD83C\uDFA4';
     clearTimeout(voiceSubtitleTimer);
     voiceSubtitleTimer = setTimeout(() => subtitleEl.style.display = 'none', 1000);
+    // If no more audio queued and reading is waiting, finish it
+    if (voiceAudioQueue.length === 0 && readingWaitingForVoice) {
+      finishReading();
+    }
     playNextVoice();
   };
   audio.onerror = () => { URL.revokeObjectURL(item.url); playNextVoice(); };
