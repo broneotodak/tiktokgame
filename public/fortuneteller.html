@@ -1179,17 +1179,79 @@ function createNameSprite(name, color) {
   return sprite;
 }
 
+function createPhotoOrb(nickname, profilePic, color) {
+  // Create circular photo sprite or colored fallback
+  const size = 128;
+  const cvs = document.createElement('canvas');
+  cvs.width = size; cvs.height = size;
+  const ctx = cvs.getContext('2d');
+
+  // Draw circular border glow
+  ctx.beginPath();
+  ctx.arc(size/2, size/2, size/2 - 2, 0, Math.PI * 2);
+  ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+  ctx.fill();
+
+  // Inner circle (dark bg)
+  ctx.beginPath();
+  ctx.arc(size/2, size/2, size/2 - 6, 0, Math.PI * 2);
+  ctx.fillStyle = '#1a0a3a';
+  ctx.fill();
+
+  // Initial letter as fallback
+  ctx.font = 'bold 48px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+  ctx.fillText(nickname.charAt(0).toUpperCase(), size/2, size/2);
+
+  const tex = new THREE.CanvasTexture(cvs);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.9 });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(0.35, 0.35, 1);
+
+  // Try loading profile photo
+  if (profilePic) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      // Redraw canvas with photo in circle
+      ctx.clearRect(0, 0, size, size);
+      // Border glow
+      ctx.beginPath();
+      ctx.arc(size/2, size/2, size/2 - 2, 0, Math.PI * 2);
+      ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+      ctx.fill();
+      // Clip circle for photo
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(size/2, size/2, size/2 - 6, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, 4, 4, size - 8, size - 8);
+      ctx.restore();
+      tex.needsUpdate = true;
+    };
+    img.onerror = () => {}; // keep letter fallback
+    img.src = profilePic;
+  }
+
+  return { sprite, mat, tex };
+}
+
 function addViewerOrb(uniqueId, nickname) {
   if (viewerOrbs.has(uniqueId)) return;
   if (viewerOrbs.size >= MAX_ORBS) return;
 
+  const viewer = viewers.get(uniqueId);
+  const profilePic = viewer?.profilePic || '';
   const color = hashColor(uniqueId);
-  const orbGeo = new THREE.SphereGeometry(0.12, 8, 8);
-  const orbMat = new THREE.MeshStandardMaterial({
-    color, emissive: color, emissiveIntensity: 0.3,
-    metalness: 0.5, roughness: 0.3,
-  });
-  const mesh = new THREE.Mesh(orbGeo, orbMat);
+
+  // Photo orb (circular sprite with profile pic)
+  const { sprite: photoSprite, mat: orbMat } = createPhotoOrb(nickname, profilePic, color);
+
+  // Container group
+  const mesh = new THREE.Group();
+  mesh.add(photoSprite);
 
   const nameSprite = createNameSprite(nickname, color);
   nameSprite.position.y = -0.25;
@@ -1200,7 +1262,7 @@ function addViewerOrb(uniqueId, nickname) {
   mesh.position.set(Math.cos(angle) * radius, 1.6, Math.sin(angle) * radius);
   scene.add(mesh);
 
-  viewerOrbs.set(uniqueId, { mesh, nameSprite, orbMat, angle, bobOffset: Math.random() * Math.PI * 2 });
+  viewerOrbs.set(uniqueId, { mesh, nameSprite, orbMat, angle, bobOffset: Math.random() * Math.PI * 2, photoSprite });
 }
 
 function removeViewerOrb(uniqueId) {
@@ -1666,8 +1728,9 @@ function handleLike(data) {
   // Glow the viewer's orb
   const orb = viewerOrbs.get(uid);
   if (orb) {
-    orb.orbMat.emissiveIntensity = 1.0;
-    setTimeout(() => orb.orbMat.emissiveIntensity = 0.3, 500);
+    orb.orbMat.opacity = 1.0;
+    orb.photoSprite.scale.set(0.42, 0.42, 1);
+    setTimeout(() => { orb.orbMat.opacity = 0.9; orb.photoSprite.scale.set(0.35, 0.35, 1); }, 500);
   }
 }
 
