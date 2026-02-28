@@ -164,10 +164,49 @@ ATURAN:
 - Bahasa Indonesia hangat — seperti kakek bijak bercerita ke cucunya
 - Tenang, dalam, penuh keyakinan. Kadang dramatis dan bikin penasaran
 - Jangan pakai emoji. Tulis persis seperti yang harus DIUCAPKAN
-- Variasikan kalimatmu — jangan ulangi pola yang sama`;
+- Variasikan kalimatmu — jangan ulangi pola yang sama
 
-function buildCommentaryPrompt(eventType, eventData, recentContext) {
-  const contextStr = recentContext?.length ? `Recent context: ${recentContext.join('; ')}` : '';
+ATURAN KONTEKS:
+- Kalau RETURNING viewer — WAJIB reference: "kamu kembali lagi..." atau "Eyang masih ingat kamu..."
+- Kalau ada reading terakhir — hubungkan yang baru dengan yang lama secara natural
+- Gunakan info [LIVE] secara ALAMI: "sudah 45 menit kita bersama..." atau "malam ini ramai sekali..."
+- Kalau viewer tadi nanya X, sekarang gift — hubungkan: "tadi kamu tanya soal jodoh kan?"
+- Top gifter = apresiasi extra tapi mystical, bukan transactional. Bilang "energi kuat" bukan "50 diamonds"
+- JANGAN sebut angka mentah diamonds. Bungkus mistis: "energi besar" atau "aura dermawan"
+- Kalau ada [PERCAKAPAN], gunakan untuk membangun alur natural — jangan abaikan konteks sebelumnya`;
+
+function buildCommentaryPrompt(eventType, eventData, recentContext, liveContext, viewerProfile, conversationLog) {
+  // Build rich context prefix if available (fortuneteller sends these)
+  let contextStr = '';
+  if (liveContext || conversationLog) {
+    const sections = [];
+    // [LIVE] section
+    if (liveContext) {
+      const topStr = liveContext.topGifters?.length ? ` Top: ${liveContext.topGifters.join(', ')}` : '';
+      sections.push(`[LIVE] Live ${liveContext.uptimeMinutes || 0} menit. ${liveContext.viewerCount || 0} viewers. ${liveContext.totalReadings || 0} readings done.${topStr}`);
+    }
+    // [VIEWER] section
+    if (viewerProfile) {
+      const status = viewerProfile.isReturning ? 'RETURNING' : 'NEW';
+      let viewerLine = `[VIEWER ${viewerProfile.name}] ${status}`;
+      if (viewerProfile.readingsCount > 0) viewerLine += ` — ${viewerProfile.readingsCount} reading sebelumnya.`;
+      if (viewerProfile.totalGifted > 0) viewerLine += ` Gift: ${viewerProfile.totalGifted}💎.`;
+      if (viewerProfile.zodiac) viewerLine += ` Zodiak: ${viewerProfile.zodiac}.`;
+      if (viewerProfile.isFollower) viewerLine += ` Follower.`;
+      if (viewerProfile.lastReading) {
+        viewerLine += `\nReading terakhir (${viewerProfile.lastReading.minutesAgo}m lalu): "${viewerProfile.lastReading.text}"`;
+      }
+      sections.push(viewerLine);
+    }
+    // [PERCAKAPAN] section
+    if (conversationLog?.length) {
+      sections.push(`[PERCAKAPAN]\n${conversationLog.join('\n')}`);
+    }
+    contextStr = sections.join('\n\n');
+  } else if (recentContext?.length) {
+    // Fallback for non-fortuneteller pages (sumo, voice, etc.)
+    contextStr = `Recent context: ${recentContext.join('; ')}`;
+  }
   switch (eventType) {
     case 'gift':
       return `${contextStr}\n${eventData.nickname} sent ${eventData.repeatCount}x ${eventData.giftName} (${eventData.diamondCount} diamonds). Thank them YOUR way — genuine, not over-the-top.`;
@@ -356,8 +395,8 @@ app.post('/api/voice/generate', async (req, res) => {
   }
 
   try {
-    const { eventType, eventData, recentContext, room, voiceId } = req.body;
-    const userPrompt = buildCommentaryPrompt(eventType, eventData, recentContext || []);
+    const { eventType, eventData, recentContext, liveContext, viewerProfile, conversationLog, room, voiceId } = req.body;
+    const userPrompt = buildCommentaryPrompt(eventType, eventData, recentContext || [], liveContext, viewerProfile, conversationLog);
 
     // Use Nurin Mystic personality for mystic events, Neo for everything else
     const isMystic = eventType?.startsWith('mystic_');
@@ -440,6 +479,21 @@ app.post('/api/voice/generate', async (req, res) => {
   }
 });
 
+// POST /api/chat/send — Post a message to TikTok chat via connected session
+app.post('/api/chat/send', async (req, res) => {
+  const { message, room } = req.body;
+  if (!message) return res.status(400).json({ error: 'Message required' });
+  const session = getSession(room);
+  if (!session?.connection) return res.status(400).json({ error: 'No TikTok connection' });
+  try {
+    await session.connection.sendMessage(message);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Chat send error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ===== TikTok Connection (scoped to session) =====
 function connectToTikTok(session) {
   // Set EulerStream API key if available (required for signing)
@@ -448,9 +502,11 @@ function connectToTikTok(session) {
   }
 
   const username = session.username;
-  const connection = new TikTokLiveConnection(username, {
-    enableExtendedGiftInfo: true,
-  });
+  const connectionOpts = { enableExtendedGiftInfo: true };
+  // Add session credentials for sendMessage support (if available)
+  if (process.env.TIKTOK_SESSION_ID) connectionOpts.sessionId = process.env.TIKTOK_SESSION_ID;
+  if (process.env.TIKTOK_TARGET_IDC) connectionOpts.ttTargetIdc = process.env.TIKTOK_TARGET_IDC;
+  const connection = new TikTokLiveConnection(username, connectionOpts);
 
   // Grace period: ignore historical replay events for 3 seconds after connect
   let connectionReadyAt = Infinity;

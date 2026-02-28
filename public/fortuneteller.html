@@ -566,6 +566,11 @@ let autoPlay = false;
 let autoPlayTimer = 0;
 let autoCamEnabled = true;
 
+// Rich context — stream-level stats
+const streamStartTime = Date.now();
+let totalGiftsReceived = 0;
+let totalVoiceCalls = 0;
+
 // Flood control
 let eventsPerMinute = 0;
 let eventCounterTimer = 0;
@@ -1396,6 +1401,9 @@ function processReadingQueue() {
       eventData = { name: reading.nickname };
   }
 
+  // Attach viewerId for rich context lookup
+  eventData.viewerId = reading.viewerId;
+
   // Queue voice
   queueVoiceEvent(eventType, eventData, reading.priority);
 
@@ -1442,6 +1450,22 @@ function finishReading() {
   if (readingState !== 'REVEAL') return;
   if (fortuneDisplayTimer) clearTimeout(fortuneDisplayTimer);
   readingWaitingForVoice = false;
+
+  // Track reading completion in viewer profile
+  if (currentReading) {
+    const v = viewers.get(currentReading.viewerId);
+    if (v) {
+      v.readingsCount = (v.readingsCount || 0) + 1;
+      const fortuneText = document.getElementById('fortuneText')?.textContent || '';
+      v.lastReading = { type: currentReading.type, text: fortuneText, timestamp: Date.now() };
+      v.readingHistory = v.readingHistory || [];
+      v.readingHistory.push({ type: currentReading.type, tarotCard: currentReading.data?.tarotCard || '', timestamp: Date.now() });
+      if (v.readingHistory.length > 5) v.readingHistory.shift();
+    }
+    conversationLog.push({ type: 'reading_done', name: currentReading.nickname, summary: `${currentReading.type} untuk ${currentReading.nickname}`, timestamp: Date.now() });
+    if (conversationLog.length > MAX_CONVERSATION_LOG) conversationLog.shift();
+  }
+
   // Keep text visible 5s after voice ends so viewers can read it
   setTimeout(() => {
     hideFortuneDisplay();
@@ -1695,7 +1719,7 @@ function handleViewerJoin(data) {
   const nick = data.nickname || uid;
   const pic = data.profilePic || data.profilePictureUrl || '';
   if (!viewers.has(uid)) {
-    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
+    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic, firstSeen: Date.now(), readingHistory: [], chatCount: 0, lastReading: null, giftHistory: [], isFollower: data.isFollower || false, totalGifted: 0 });
     document.getElementById('viewerCount').textContent = viewers.size;
     addNotification(`<strong>${nick}</strong> memasuki dunia mistis`);
     viewers.get(uid).score += 1;
@@ -1743,13 +1767,18 @@ function handleChat(data) {
 
   // Ensure viewer exists
   if (!viewers.has(uid)) {
-    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
+    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic, firstSeen: Date.now(), readingHistory: [], chatCount: 0, lastReading: null, giftHistory: [], isFollower: false, totalGifted: 0 });
     document.getElementById('viewerCount').textContent = viewers.size;
   }
   const viewer = viewers.get(uid);
   viewer.lastActive = Date.now();
+  viewer.chatCount = (viewer.chatCount || 0) + 1;
   if (!viewer.profilePic && pic) viewer.profilePic = pic;
   trackEvent();
+
+  // Log chat to conversation log
+  conversationLog.push({ type: 'viewer_chat', name: nick, summary: comment.slice(0, 80), timestamp: Date.now() });
+  if (conversationLog.length > MAX_CONVERSATION_LOG) conversationLog.shift();
 
   // Check for birthday/zodiac — store zodiac + Eyang gives short reading
   const bday = detectBirthday(comment);
@@ -1759,9 +1788,12 @@ function handleChat(data) {
     viewer.pendingRequest = { type: 'zodiac', comment, time: Date.now() };
     const zData = ZODIAC_DATA[bday.zodiac];
     addNotification(`<strong>${nick}</strong> zodiak ${zData?.symbol || ''} ${bday.zodiac.toUpperCase()}! Eyang melihat aura mu...`, 'zodiac');
+    // Log zodiac set
+    conversationLog.push({ type: 'viewer_zodiac', name: nick, summary: bday.zodiac, timestamp: Date.now() });
+    if (conversationLog.length > MAX_CONVERSATION_LOG) conversationLog.shift();
     // Eyang gives short zodiac reading (free)
     queueVoiceEvent('mystic_zodiac_reply', {
-      name: nick,
+      name: nick, viewerId: uid,
       zodiac: bday.zodiac,
       symbol: zData?.symbol || '',
       element: zData?.element || '',
@@ -1779,7 +1811,7 @@ function handleChat(data) {
     viewer.score += 2;
     viewer.pendingRequest = { type: 'jodoh', comment, time: Date.now() };
     addNotification(`<strong>${nick}</strong> mau cek jodoh! Eyang lihat...`, 'zodiac');
-    queueVoiceEvent('mystic_jodoh_reply', { name: nick, zodiac: viewer.zodiac || null, comment }, 2);
+    queueVoiceEvent('mystic_jodoh_reply', { name: nick, viewerId: uid, zodiac: viewer.zodiac || null, comment }, 2);
     showViewerFocus(uid, nick, '💕 Jodoh');
     updateLeaderboard();
     return;
@@ -1791,7 +1823,7 @@ function handleChat(data) {
     viewer.score += 1;
     viewer.pendingRequest = { type: 'question', comment, time: Date.now() };
     addNotification(`<strong>${nick}</strong> punya pertanyaan... Eyang jawab!`, 'zodiac');
-    queueVoiceEvent('mystic_question_reply', { name: nick, question: comment }, 2);
+    queueVoiceEvent('mystic_question_reply', { name: nick, viewerId: uid, question: comment }, 2);
     showViewerFocus(uid, nick, '❓ Pertanyaan');
     updateLeaderboard();
     return;
@@ -1802,7 +1834,7 @@ function handleChat(data) {
     viewer.score += 1;
     viewer.pendingRequest = { type: 'career', comment, time: Date.now() };
     addNotification(`<strong>${nick}</strong> mau tahu soal karir! Eyang lihat...`, 'zodiac');
-    queueVoiceEvent('mystic_career_reply', { name: nick, question: comment }, 2);
+    queueVoiceEvent('mystic_career_reply', { name: nick, viewerId: uid, question: comment }, 2);
     showViewerFocus(uid, nick, '💼 Karir');
     updateLeaderboard();
     return;
@@ -1820,7 +1852,7 @@ function handleChat(data) {
   if (isGifter) {
     // Gift givers ALWAYS get a voice reply to their comments
     queueVoiceEvent('mystic_chat_reply', {
-      name: nick,
+      name: nick, viewerId: uid,
       comment,
       diamonds: viewer.totalGifted,
       zodiac: viewer.zodiac || null,
@@ -1830,7 +1862,7 @@ function handleChat(data) {
   } else if (hasQuestion) {
     // Anyone with a question gets a reply (when host can fit it in)
     queueVoiceEvent('mystic_chat_reply', {
-      name: nick,
+      name: nick, viewerId: uid,
       comment,
       diamonds: 0,
       zodiac: viewer.zodiac || null,
@@ -1849,13 +1881,22 @@ function handleGift(data) {
   const diamonds = data.diamondCount || 0;
 
   if (!viewers.has(uid)) {
-    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
+    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic, firstSeen: Date.now(), readingHistory: [], chatCount: 0, lastReading: null, giftHistory: [], isFollower: false, totalGifted: 0 });
   }
   const viewer = viewers.get(uid);
   viewer.lastActive = Date.now();
   if (!viewer.profilePic && pic) viewer.profilePic = pic;
   viewer.totalGifted = (viewer.totalGifted || 0) + diamonds;
+  totalGiftsReceived += diamonds;
+  // Track gift history (last 3)
+  viewer.giftHistory = viewer.giftHistory || [];
+  viewer.giftHistory.push({ diamonds, timestamp: Date.now() });
+  if (viewer.giftHistory.length > 3) viewer.giftHistory.shift();
   trackEvent();
+
+  // Log gift to conversation log
+  conversationLog.push({ type: 'viewer_gift', name: nick, summary: `gift ${diamonds}💎`, timestamp: Date.now() });
+  if (conversationLog.length > MAX_CONVERSATION_LOG) conversationLog.shift();
 
   // Check per-user cooldown (VIP bypasses)
   if (diamonds < 500 && readingCooldowns.has(uid) && Date.now() - readingCooldowns.get(uid) < PER_USER_COOLDOWN) {
@@ -1946,10 +1987,11 @@ function handleFollow(data) {
   const nick = data.nickname || uid;
   const pic = data.profilePic || data.profilePictureUrl || '';
   if (!viewers.has(uid)) {
-    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
+    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic, firstSeen: Date.now(), readingHistory: [], chatCount: 0, lastReading: null, giftHistory: [], isFollower: true, totalGifted: 0 });
   }
   const v = viewers.get(uid);
   if (!v.profilePic && pic) v.profilePic = pic;
+  v.isFollower = true;
   v.score += 10;
   addNotification(`<strong>${nick}</strong> follow! Berkah mistis aktif!`, 'follow');
   updateLeaderboard();
@@ -1962,7 +2004,7 @@ function handleShare(data) {
   const nick = data.nickname || uid;
   const pic = data.profilePic || data.profilePictureUrl || '';
   if (!viewers.has(uid)) {
-    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
+    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic, firstSeen: Date.now(), readingHistory: [], chatCount: 0, lastReading: null, giftHistory: [], isFollower: false, totalGifted: 0 });
   }
   const v = viewers.get(uid);
   if (!v.profilePic && pic) v.profilePic = pic;
@@ -1978,8 +2020,8 @@ let voiceIsGenerating = false;
 let voiceIsPlaying = false;
 const voiceQueue = [];
 const voiceAudioQueue = [];
-const voiceRecentContext = [];
-const MAX_VOICE_CONTEXT = 5;
+const conversationLog = [];
+const MAX_CONVERSATION_LOG = 20;
 const MAX_VOICE_QUEUE = 4;
 const VOICE_COOLDOWN = 3000;
 let lastVoiceTime = 0;
@@ -1997,6 +2039,64 @@ function toggleVoiceCommentary() {
     unlockAudio();
     document.getElementById('voiceStatusText').textContent = 'Voice Ready';
   }
+}
+
+// ===== RICH CONTEXT HELPERS =====
+function buildLiveContext() {
+  const uptimeMinutes = Math.round((Date.now() - streamStartTime) / 60000);
+  // Top 3 gifters
+  const topGifters = Array.from(viewers.values())
+    .filter(v => (v.totalGifted || 0) > 0)
+    .sort((a, b) => (b.totalGifted || 0) - (a.totalGifted || 0))
+    .slice(0, 3)
+    .map(v => `${v.nickname}(${v.totalGifted}💎)`);
+  return {
+    uptimeMinutes,
+    viewerCount: viewers.size,
+    totalReadings,
+    totalGiftsReceived,
+    crystalEnergy,
+    readingQueueLength: readingQueue.length,
+    readingState,
+    topGifters,
+  };
+}
+
+function buildViewerProfile(uid) {
+  if (!uid) return null;
+  const v = viewers.get(uid);
+  if (!v) return null;
+  const minutesInStream = Math.round((Date.now() - (v.firstSeen || Date.now())) / 60000);
+  const profile = {
+    name: v.nickname,
+    zodiac: v.zodiac || null,
+    totalGifted: v.totalGifted || 0,
+    readingsCount: v.readingsCount || 0,
+    chatCount: v.chatCount || 0,
+    isFollower: v.isFollower || false,
+    minutesInStream,
+    isReturning: (v.readingsCount || 0) > 0,
+  };
+  if (v.lastReading) {
+    profile.lastReading = {
+      type: v.lastReading.type,
+      text: (v.lastReading.text || '').slice(0, 60),
+      minutesAgo: Math.round((Date.now() - v.lastReading.timestamp) / 60000),
+    };
+  }
+  return profile;
+}
+
+function buildConversationSummary(n) {
+  const entries = conversationLog.slice(-n);
+  return entries.map(e => {
+    if (e.type === 'eyang_said') return `Eyang[${e.name}]: ${e.summary}`;
+    if (e.type === 'viewer_chat') return `${e.name}: "${e.summary}"`;
+    if (e.type === 'viewer_zodiac') return `${e.name} set zodiak ${e.summary}`;
+    if (e.type === 'viewer_gift') return `${e.name} ${e.summary}`;
+    if (e.type === 'reading_done') return `Reading selesai: ${e.summary}`;
+    return `${e.name}: ${e.summary}`;
+  });
 }
 
 function queueVoiceEvent(eventType, eventData, priority = 1) {
@@ -2033,7 +2133,10 @@ async function processVoiceQueue() {
       body: JSON.stringify({
         eventType: event.eventType,
         eventData: event.eventData,
-        recentContext: voiceRecentContext,
+        liveContext: buildLiveContext(),
+        viewerProfile: buildViewerProfile(event.eventData?.viewerId),
+        conversationLog: buildConversationSummary(15),
+        recentContext: buildConversationSummary(5),
         room: ROOM,
         voiceId: MYSTIC_VOICE_ID
       }),
@@ -2048,8 +2151,23 @@ async function processVoiceQueue() {
     const text = decodeURIComponent(res.headers.get('X-Commentary-Text') || '');
     const blob = await res.blob();
 
-    voiceRecentContext.push(`${event.eventType}: ${text}`);
-    if (voiceRecentContext.length > MAX_VOICE_CONTEXT) voiceRecentContext.shift();
+    // Log Eyang's response to conversation log
+    conversationLog.push({ type: 'eyang_said', name: event.eventType.replace('mystic_', ''), summary: text.slice(0, 80), timestamp: Date.now() });
+    if (conversationLog.length > MAX_CONVERSATION_LOG) conversationLog.shift();
+    totalVoiceCalls++;
+
+    // Auto-reply in TikTok chat (priority 2+ only, rate-limited)
+    if (text && text.length <= 150 && event.priority >= 2) {
+      const now = Date.now();
+      if (!window._lastChatReplyTime || now - window._lastChatReplyTime > 15000) {
+        window._lastChatReplyTime = now;
+        fetch('/api/chat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: `🔮 ${text.slice(0, 145)}`, room: ROOM })
+        }).catch(() => {}); // fire-and-forget
+      }
+    }
 
     lastVoiceTime = Date.now();
     enqueueVoiceAudio(blob, text);
