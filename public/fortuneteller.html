@@ -382,6 +382,11 @@
     <button class="dbtn" onclick="window._debug('question')">Question (Q)</button>
     <button class="dbtn" onclick="window._debug('autocam')">AutoCam (V)</button>
     <button class="dbtn" onclick="window._debug('auto')">Auto (A)</button>
+    <div class="debug-title" style="margin-top:6px;">EFFECTS</div>
+    <button class="dbtn" onclick="window._debug('skull')">Skull (S)</button>
+    <button class="dbtn" onclick="window._debug('fire')">Fire (F)</button>
+    <button class="dbtn" onclick="window._debug('water')">Water (W)</button>
+    <button class="dbtn" onclick="window._debug('lightning')">Bolt (E)</button>
     <div class="debug-title" style="margin-top:6px;">VOICE</div>
     <button class="dbtn" id="voiceToggleBtn" onclick="window._toggleVoice()" style="border-left:3px solid #9b59b6;">Voice: OFF</button>
   </div>
@@ -413,6 +418,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ===== CONFIG =====
 const MAX_ORBS = 20;
@@ -703,34 +709,131 @@ candlePositions.forEach(pos => {
   candles.push({ group, flame, flameMat });
 });
 
-// Zodiac ring - 12 sprites orbiting crystal ball
-const zodiacSprites = [];
-const zodiacSymbols = Object.values(ZODIAC_DATA).map(z => z.symbol);
-const zodiacNames = Object.keys(ZODIAC_DATA);
+// Tarot Card Ring - 22 Major Arcana orbiting crystal ball
+const TAROT_CARDS = [
+  { num: 0,  name: 'The Fool',          symbol: '0',    mood: 'positive' },
+  { num: 1,  name: 'The Magician',      symbol: 'I',    mood: 'positive' },
+  { num: 2,  name: 'High Priestess',    symbol: 'II',   mood: 'neutral' },
+  { num: 3,  name: 'The Empress',       symbol: 'III',  mood: 'positive' },
+  { num: 4,  name: 'The Emperor',       symbol: 'IV',   mood: 'positive' },
+  { num: 5,  name: 'Hierophant',        symbol: 'V',    mood: 'neutral' },
+  { num: 6,  name: 'The Lovers',        symbol: 'VI',   mood: 'positive' },
+  { num: 7,  name: 'The Chariot',       symbol: 'VII',  mood: 'positive' },
+  { num: 8,  name: 'Strength',          symbol: 'VIII', mood: 'positive' },
+  { num: 9,  name: 'The Hermit',        symbol: 'IX',   mood: 'neutral' },
+  { num: 10, name: 'Wheel of Fortune',  symbol: 'X',    mood: 'positive' },
+  { num: 11, name: 'Justice',           symbol: 'XI',   mood: 'neutral' },
+  { num: 12, name: 'The Hanged Man',    symbol: 'XII',  mood: 'warning' },
+  { num: 13, name: 'Death',             symbol: 'XIII', mood: 'dark' },
+  { num: 14, name: 'Temperance',        symbol: 'XIV',  mood: 'positive' },
+  { num: 15, name: 'The Devil',         symbol: 'XV',   mood: 'dark' },
+  { num: 16, name: 'The Tower',         symbol: 'XVI',  mood: 'dark' },
+  { num: 17, name: 'The Star',          symbol: 'XVII', mood: 'positive' },
+  { num: 18, name: 'The Moon',          symbol: 'XVIII',mood: 'warning' },
+  { num: 19, name: 'The Sun',           symbol: 'XIX',  mood: 'positive' },
+  { num: 20, name: 'Judgement',         symbol: 'XX',   mood: 'warning' },
+  { num: 21, name: 'The World',         symbol: 'XXI',  mood: 'positive' },
+];
 
-function createZodiacSprite(symbol, index) {
-  const size = 64;
+const tarotSprites = [];
+let drawnCard = null; // { sprite, targetPos, startPos, animProgress, card }
+let drawnCardTimer = 0;
+
+function createTarotSprite(card, index) {
+  const w = 80, h = 120;
   const cvs = document.createElement('canvas');
-  cvs.width = size; cvs.height = size;
+  cvs.width = w; cvs.height = h;
   const ctx = cvs.getContext('2d');
-  ctx.font = '40px serif';
+
+  // Card background
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, '#1a0a3a');
+  grad.addColorStop(1, '#0a0020');
+  ctx.fillStyle = grad;
+  ctx.roundRect(2, 2, w - 4, h - 4, 6);
+  ctx.fill();
+
+  // Border
+  ctx.strokeStyle = card.mood === 'dark' ? '#aa3333' : card.mood === 'warning' ? '#cc8800' : '#f1c40f';
+  ctx.lineWidth = 2;
+  ctx.roundRect(2, 2, w - 4, h - 4, 6);
+  ctx.stroke();
+
+  // Roman numeral
+  ctx.font = 'bold 18px serif';
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#f1c40f';
-  ctx.fillText(symbol, size / 2, size / 2);
+  ctx.fillStyle = card.mood === 'dark' ? '#ff4444' : '#f1c40f';
+  ctx.fillText(card.symbol, w / 2, 28);
+
+  // Decorative line
+  ctx.strokeStyle = 'rgba(241,196,15,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(12, 38); ctx.lineTo(w - 12, 38); ctx.stroke();
+
+  // Card name (wrapped)
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = '#d4a0ff';
+  const words = card.name.split(' ');
+  let line = '', lineY = 58;
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (ctx.measureText(test).width > w - 16) {
+      ctx.fillText(line, w / 2, lineY);
+      line = word; lineY += 13;
+    } else { line = test; }
+  }
+  if (line) ctx.fillText(line, w / 2, lineY);
+
+  // Mood icon at bottom
+  ctx.font = '20px serif';
+  const icons = { positive: '\u2728', neutral: '\uD83D\uDD2E', warning: '\uD83C\uDF19', dark: '\uD83D\uDC80' };
+  ctx.fillText(icons[card.mood] || '\u2728', w / 2, h - 14);
+
   const tex = new THREE.CanvasTexture(cvs);
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.6 });
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.5 });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(0.4, 0.4, 1);
-  const angle = (index / 12) * Math.PI * 2;
-  sprite.userData = { baseAngle: angle, index, symbol, zodiacName: zodiacNames[index] };
+  sprite.scale.set(0.35, 0.52, 1);
+  const angle = (index / TAROT_CARDS.length) * Math.PI * 2;
+  sprite.userData = { baseAngle: angle, index, card, originalOpacity: 0.5 };
   scene.add(sprite);
   return sprite;
 }
 
-zodiacSymbols.forEach((s, i) => {
-  zodiacSprites.push(createZodiacSprite(s, i));
+TAROT_CARDS.forEach((card, i) => {
+  tarotSprites.push(createTarotSprite(card, i));
 });
+
+// Draw a tarot card — flies from ring to center
+function drawTarotCard(cardIndex) {
+  if (cardIndex === undefined || cardIndex === null) {
+    cardIndex = Math.floor(Math.random() * TAROT_CARDS.length);
+  }
+  const sprite = tarotSprites[cardIndex];
+  const card = TAROT_CARDS[cardIndex];
+
+  drawnCard = {
+    sprite,
+    card,
+    startPos: sprite.position.clone(),
+    targetPos: new THREE.Vector3(0, 2.0, 2.0), // in front of crystal ball, facing camera
+    animProgress: 0,
+    startScale: sprite.scale.clone(),
+    targetScale: new THREE.Vector3(0.7, 1.05, 1), // bigger when drawn
+  };
+  drawnCardTimer = 6; // show for 6 seconds
+
+  // Highlight the card
+  sprite.material.opacity = 1.0;
+
+  return card;
+}
+
+function dismissDrawnCard() {
+  if (!drawnCard) return;
+  drawnCard.sprite.material.opacity = drawnCard.sprite.userData.originalOpacity;
+  drawnCard.sprite.scale.copy(drawnCard.startScale);
+  drawnCard = null;
+}
 
 // Stars / galaxy background
 const starCount = 500;
@@ -779,6 +882,89 @@ particleGeo.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
 const particleMat = new THREE.PointsMaterial({ size: 0.04, vertexColors: true, transparent: true, opacity: 0.5, sizeAttenuation: true });
 const particles = new THREE.Points(particleGeo, particleMat);
 scene.add(particles);
+
+// ===== 3D SKULL MODEL =====
+let skullModel = null;
+let skullMixer = null;
+let skullAnimations = {};
+let skullVisible = false;
+let skullFadeTimer = 0;
+
+const gltfLoader = new GLTFLoader();
+gltfLoader.load('/fortuneteller-assets/skull.glb', (gltf) => {
+  skullModel = gltf.scene;
+  // Meshy model has armature at 0.01 scale, mesh bounds ~1.7 units tall
+  // At scale 1.0 model is ~1.7 units. We want it ~2 units tall above crystal ball
+  skullModel.scale.set(1.2, 1.2, 1.2);
+  skullModel.position.set(0, 1.5, 0); // feet on table level, head above crystal ball
+  skullModel.visible = false;
+
+  // Dark purple emissive tint
+  skullModel.traverse(child => {
+    if (child.isMesh) {
+      child.material = child.material.clone();
+      child.material.emissive = new THREE.Color(0x6622aa);
+      child.material.emissiveIntensity = 0.5;
+      child.material.transparent = true;
+      child.material.opacity = 0.9;
+    }
+  });
+
+  scene.add(skullModel);
+
+  // Setup animations
+  skullMixer = new THREE.AnimationMixer(skullModel);
+  gltf.animations.forEach(clip => {
+    skullAnimations[clip.name] = skullMixer.clipAction(clip);
+    skullAnimations[clip.name].setLoop(THREE.LoopRepeat);
+  });
+
+  console.log('Skull loaded:', Object.keys(skullAnimations).join(', '));
+}, undefined, (err) => console.warn('Skull load failed:', err));
+
+let skullElapsed = 0;
+let skullDuration = 4;
+
+function showSkull(duration = 4000) {
+  if (!skullModel) { console.warn('Skull not loaded yet'); return; }
+  skullModel.visible = true;
+  skullVisible = true;
+  skullElapsed = 0;
+  skullDuration = duration / 1000;
+  skullModel.position.set(0, 0.3, 0); // center on table
+  skullModel.rotation.set(0, -Math.PI / 2, 0); // face camera (adjust from left-facing)
+  skullModel.scale.set(0.01, 0.01, 0.01); // start tiny, scale up to 1.2
+
+  // Hide crystal ball
+  crystalOuter.visible = false;
+  crystalInner.visible = false;
+  base.visible = false;
+
+  // Play Hip_Hop_Dance_3 if available, else first animation
+  const anim = skullAnimations['Hip_Hop_Dance_3'] || Object.values(skullAnimations)[0];
+  if (anim) {
+    anim.reset().play();
+  }
+
+  // Purple skull light
+  crystalLight.color.set(0xaa00ff);
+  crystalLight.intensity = 5;
+}
+
+function hideSkull() {
+  if (!skullModel) return;
+  skullModel.visible = false;
+  skullVisible = false;
+  // Stop all animations
+  Object.values(skullAnimations).forEach(a => a.stop());
+  // Restore crystal ball
+  crystalOuter.visible = true;
+  crystalInner.visible = true;
+  base.visible = true;
+  // Restore crystal light
+  crystalLight.color.set(0x9b59b6);
+  crystalLight.intensity = 2;
+}
 
 // ===== VIEWER ORB SYSTEM =====
 function hashColor(id) {
@@ -901,45 +1087,60 @@ function processReadingQueue() {
       const elem = getElementForZodiac(reading.data.zodiac);
       if (elem) setTimeout(() => triggerDramaticEffect(elem, 3000), 1500);
       break;
-    case 'fortune':
+    case 'fortune': {
       eventType = 'mystic_fortune';
       eventData = { name: reading.nickname, zodiac: viewerZodiac };
-      // Random dramatic effect for fortune
-      if (viewerZodiac) {
+      // Draw random tarot card
+      const fCard = drawTarotCard();
+      if (fCard.mood === 'dark') setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
+      else if (viewerZodiac) {
         const e = getElementForZodiac(viewerZodiac);
         if (e) setTimeout(() => triggerDramaticEffect(e, 2500), 1500);
       }
       break;
-    case 'jodoh':
+    }
+    case 'jodoh': {
       eventType = 'mystic_jodoh';
       eventData = { name1: reading.nickname, zodiac1: reading.data.zodiac1 || 'unknown', name2: reading.data.partner, zodiac2: reading.data.zodiac2 || 'unknown' };
+      // Draw The Lovers card for jodoh
+      drawTarotCard(6); // VI - The Lovers
       break;
-    case 'question':
+    }
+    case 'question': {
       eventType = 'mystic_question';
       eventData = { name: reading.nickname, question: reading.data.question || '' };
+      // Draw random card
+      const qCard = drawTarotCard();
+      if (qCard.mood === 'dark') setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
       break;
-    case 'gift_reading':
+    }
+    case 'gift_reading': {
       eventType = 'mystic_gift_reading';
       eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac };
-      // Dramatic effect for gift readings
-      if (viewerZodiac) {
+      // Draw tarot card + element effect
+      const gCard = drawTarotCard();
+      if (gCard.mood === 'dark') {
+        setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
+      } else if (viewerZodiac) {
         const e = getElementForZodiac(viewerZodiac);
         if (e) setTimeout(() => triggerDramaticEffect(e, 3000), 1000);
       } else {
-        // Random element if no zodiac known
         const randomElements = ['fire', 'water', 'lightning'];
         setTimeout(() => triggerDramaticEffect(randomElements[Math.floor(Math.random() * randomElements.length)], 2500), 1000);
       }
       break;
-    case 'vip_vision':
+    }
+    case 'vip_vision': {
       eventType = 'mystic_vip_vision';
       eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac };
       triggerVIPEffect();
-      // Epic multi-element sequence for VIP
+      // Draw a special card + epic sequence
+      drawTarotCard(10); // X - Wheel of Fortune for VIP
       setTimeout(() => triggerDramaticEffect('fire', 2000), 500);
       setTimeout(() => triggerDramaticEffect('lightning', 2000), 3000);
-      setTimeout(() => triggerDramaticEffect('water', 2000), 5500);
+      setTimeout(() => triggerDramaticEffect('skull', 3000), 5500);
       break;
+    }
     default:
       eventType = 'mystic_fortune';
       eventData = { name: reading.nickname };
@@ -1001,21 +1202,19 @@ function showZodiacBadge(zodiac) {
   document.getElementById('zodiacName').textContent = zodiac.toUpperCase() + ' ' + z.emoji;
   badge.classList.add('show');
 
-  // Highlight matching zodiac sprite
-  zodiacSprites.forEach(s => {
-    if (s.userData.zodiacName === zodiac) {
-      s.material.opacity = 1.0;
-      s.scale.set(0.7, 0.7, 1);
-    }
-  });
+  // Draw a random tarot card for this reading
+  const drawnIdx = Math.floor(Math.random() * TAROT_CARDS.length);
+  const card = drawTarotCard(drawnIdx);
+
+  // If card mood is dark, trigger skull
+  if (card.mood === 'dark') {
+    setTimeout(() => triggerDramaticEffect('skull', 4000), 1000);
+  }
 }
 
 function hideZodiacBadge() {
   document.getElementById('zodiacBadge').classList.remove('show');
-  zodiacSprites.forEach(s => {
-    s.material.opacity = 0.6;
-    s.scale.set(0.4, 0.4, 1);
-  });
+  dismissDrawnCard();
 }
 
 // ===== VISUAL EFFECTS =====
@@ -1190,10 +1389,8 @@ function triggerDramaticEffect(element, duration = 3000) {
     case 'skull':
     case 'dark': {
       overlay.classList.add('skull-effect');
-      const skull = document.createElement('div');
-      skull.className = 'skull-icon';
-      skull.textContent = '\uD83D\uDC80';
-      overlay.appendChild(skull);
+      // Show 3D skull model instead of emoji
+      showSkull(duration);
       break;
     }
     case 'Angin':
@@ -1494,6 +1691,22 @@ async function processVoiceQueue() {
     // Update fortune display text if currently showing
     if (readingState === 'REVEAL' && text) {
       document.getElementById('fortuneText').textContent = text;
+
+      // Detect bad/warning reading from AI response and trigger skull
+      const lowerText = text.toLowerCase();
+      const badKeywords = ['hati-hati', 'waspada', 'bahaya', 'peringatan', 'ancaman', 'jangan', 'hindari',
+        'kelemahan', 'masalah', 'konflik', 'musuh', 'gelap', 'sial', 'buruk', 'gagal', 'kehilangan',
+        'warning', 'danger', 'careful', 'avoid', 'enemy', 'dark', 'bad luck'];
+      const isBadReading = badKeywords.some(kw => lowerText.includes(kw));
+      if (isBadReading && !skullVisible) {
+        triggerDramaticEffect('skull', 3500);
+        // Also draw a dark tarot card if none drawn yet
+        if (!drawnCard) {
+          const darkCards = TAROT_CARDS.map((c, i) => ({ ...c, idx: i })).filter(c => c.mood === 'dark' || c.mood === 'warning');
+          const pick = darkCards[Math.floor(Math.random() * darkCards.length)];
+          drawTarotCard(pick.idx);
+        }
+      }
     }
   } catch (err) {
     console.error('Voice error:', err);
@@ -1598,12 +1811,33 @@ function animate() {
     crystalInner.scale.setScalar(0.9 + Math.sin(elapsedTotal * 1.5) * 0.05);
   }
 
-  // Zodiac ring rotation
-  zodiacSprites.forEach(s => {
-    const angle = s.userData.baseAngle + elapsedTotal * 0.1;
-    const r = 2.8;
-    s.position.set(Math.cos(angle) * r, 2.2 + Math.sin(elapsedTotal * 0.5 + s.userData.index) * 0.1, Math.sin(angle) * r);
+  // Tarot card ring rotation
+  tarotSprites.forEach(s => {
+    // Skip the drawn card — it animates separately
+    if (drawnCard && drawnCard.sprite === s) return;
+    const angle = s.userData.baseAngle + elapsedTotal * 0.08;
+    const r = 3.0;
+    s.position.set(Math.cos(angle) * r, 2.2 + Math.sin(elapsedTotal * 0.4 + s.userData.index * 0.5) * 0.08, Math.sin(angle) * r);
   });
+
+  // Drawn card animation — fly to center
+  if (drawnCard) {
+    drawnCard.animProgress = Math.min(1, drawnCard.animProgress + dt * 1.5);
+    const t = drawnCard.animProgress;
+    // Ease out cubic
+    const ease = 1 - Math.pow(1 - t, 3);
+    drawnCard.sprite.position.lerpVectors(drawnCard.startPos, drawnCard.targetPos, ease);
+    drawnCard.sprite.scale.lerpVectors(drawnCard.startScale, drawnCard.targetScale, ease);
+    // Gentle float when arrived
+    if (t >= 1) {
+      drawnCard.sprite.position.y = 2.0 + Math.sin(elapsedTotal * 2) * 0.05;
+    }
+    // Auto dismiss
+    drawnCardTimer -= dt;
+    if (drawnCardTimer <= 0) {
+      dismissDrawnCard();
+    }
+  }
 
   // Stars rotation
   stars.rotation.y += dt * 0.005;
@@ -1635,6 +1869,33 @@ function animate() {
     orb.mesh.position.z = Math.sin(orb.angle + elapsedTotal * 0.08) * r;
     orb.mesh.position.y = 1.6 + Math.sin(elapsedTotal * 2 + orb.bobOffset) * 0.1;
   });
+
+  // 3D Skull animation
+  if (skullMixer) skullMixer.update(dt);
+  if (skullVisible && skullModel) {
+    skullElapsed += dt;
+    // Scale up in first 0.6s
+    if (skullElapsed < 0.6) {
+      const s = (skullElapsed / 0.6) * 1.2;
+      skullModel.scale.setScalar(s);
+    } else {
+      skullModel.scale.setScalar(1.2);
+    }
+    // Slow rotation
+    skullModel.rotation.y += dt * 0.8;
+    // Gentle bob
+    skullModel.position.y = 0.3 + Math.sin(elapsedTotal * 2) * 0.1;
+    // Emissive pulse
+    skullModel.traverse(child => {
+      if (child.isMesh) {
+        child.material.emissiveIntensity = 0.3 + Math.sin(elapsedTotal * 4) * 0.2;
+      }
+    });
+    // Hide after duration
+    if (skullElapsed >= skullDuration) {
+      hideSkull();
+    }
+  }
 
   // Flood counter reset (every 60s, reset counter)
   eventCounterTimer += dt;
@@ -1744,6 +2005,10 @@ document.addEventListener('keydown', (e) => {
     case 'Q': window._debug('question'); break;
     case 'V': window._debug('autocam'); break;
     case 'A': window._debug('auto'); break;
+    case 'S': window._debug('skull'); break;
+    case 'F': window._debug('fire'); break;
+    case 'W': window._debug('water'); break;
+    case 'E': window._debug('lightning'); break;
   }
 });
 
@@ -1818,6 +2083,26 @@ window._debug = function(action) {
       autoPlay = !autoPlay;
       autoPlayTimer = 0;
       addNotification(autoPlay ? 'Auto-play ON' : 'Auto-play OFF');
+      break;
+    }
+    case 'skull': {
+      triggerDramaticEffect('skull', 4000);
+      addNotification('[DEBUG] Skull effect!');
+      break;
+    }
+    case 'fire': {
+      triggerDramaticEffect('fire', 3000);
+      addNotification('[DEBUG] Fire effect!');
+      break;
+    }
+    case 'water': {
+      triggerDramaticEffect('water', 3000);
+      addNotification('[DEBUG] Water effect!');
+      break;
+    }
+    case 'lightning': {
+      triggerDramaticEffect('lightning', 3000);
+      addNotification('[DEBUG] Lightning effect!');
       break;
     }
   }
