@@ -1751,19 +1751,21 @@ function handleChat(data) {
   if (!viewer.profilePic && pic) viewer.profilePic = pic;
   trackEvent();
 
-  // Check for birthday/zodiac — store zodiac + voice acknowledgement
+  // Check for birthday/zodiac — store zodiac + Eyang gives short reading
   const bday = detectBirthday(comment);
   if (bday) {
     viewer.zodiac = bday.zodiac;
     viewer.score += 3;
+    viewer.pendingRequest = { type: 'zodiac', comment, time: Date.now() };
     const zData = ZODIAC_DATA[bday.zodiac];
     addNotification(`<strong>${nick}</strong> zodiak ${zData?.symbol || ''} ${bday.zodiac.toUpperCase()}! Eyang melihat aura mu...`, 'zodiac');
-    // Short voice acknowledgement — tease them to gift for full reading
-    queueVoiceEvent('mystic_zodiac_tease', {
+    // Eyang gives short zodiac reading (free)
+    queueVoiceEvent('mystic_zodiac_reply', {
       name: nick,
       zodiac: bday.zodiac,
       symbol: zData?.symbol || '',
-      element: zData?.element || ''
+      element: zData?.element || '',
+      comment
     }, 2);
     showViewerFocus(uid, nick, `${zData?.symbol || ''} ${bday.zodiac.toUpperCase()}`);
     updateLeaderboard();
@@ -1771,42 +1773,42 @@ function handleChat(data) {
     return;
   }
 
-  // Check for jodoh/love — store pending request + voice tease
+  // Check for jodoh/love — Eyang replies + store pending for in-depth tarot if gift
   const lower = comment.toLowerCase();
   if (lower.includes('jodoh') || lower.includes('love') || lower.includes('match') || lower.includes('cinta') || lower.includes('pasangan')) {
     viewer.score += 2;
     viewer.pendingRequest = { type: 'jodoh', comment, time: Date.now() };
-    addNotification(`<strong>${nick}</strong> mau cek jodoh? Kirim gift ya!`, 'zodiac');
-    queueVoiceEvent('mystic_jodoh_tease', { name: nick }, 2);
+    addNotification(`<strong>${nick}</strong> mau cek jodoh! Eyang lihat...`, 'zodiac');
+    queueVoiceEvent('mystic_jodoh_reply', { name: nick, zodiac: viewer.zodiac || null, comment }, 2);
     showViewerFocus(uid, nick, '💕 Jodoh');
     updateLeaderboard();
     return;
   }
 
-  // Check for question — store pending request + voice tease
+  // Check for question — Eyang answers + store pending for in-depth if gift
   if (comment.endsWith('?') || lower.startsWith('tanya') || lower.startsWith('soalan')
     || lower.includes('gimana') || lower.includes('kapan') || lower.includes('apakah')) {
     viewer.score += 1;
     viewer.pendingRequest = { type: 'question', comment, time: Date.now() };
-    addNotification(`<strong>${nick}</strong> punya pertanyaan... Kirim gift ya!`, 'zodiac');
-    queueVoiceEvent('mystic_question_tease', { name: nick, question: comment }, 2);
+    addNotification(`<strong>${nick}</strong> punya pertanyaan... Eyang jawab!`, 'zodiac');
+    queueVoiceEvent('mystic_question_reply', { name: nick, question: comment }, 2);
     showViewerFocus(uid, nick, '❓ Pertanyaan');
     updateLeaderboard();
     return;
   }
 
-  // Check for karir/career/rezeki — store pending request
+  // Check for karir/career/rezeki — Eyang replies + store pending for in-depth if gift
   if (lower.includes('karir') || lower.includes('career') || lower.includes('kerja') || lower.includes('rezeki') || lower.includes('bisnis') || lower.includes('usaha')) {
     viewer.score += 1;
     viewer.pendingRequest = { type: 'career', comment, time: Date.now() };
-    addNotification(`<strong>${nick}</strong> mau tahu soal karir? Kirim gift ya!`, 'zodiac');
-    queueVoiceEvent('mystic_question_tease', { name: nick, question: comment }, 2);
+    addNotification(`<strong>${nick}</strong> mau tahu soal karir! Eyang lihat...`, 'zodiac');
+    queueVoiceEvent('mystic_career_reply', { name: nick, question: comment }, 2);
     showViewerFocus(uid, nick, '💼 Karir');
     updateLeaderboard();
     return;
   }
 
-  // Regular chat — gifters get voice reply, others get occasional response
+  // Regular chat — gifters always get reply, others when host is free
   viewer.score += 1;
   addNotification(`<strong>${nick}</strong>: ${comment}`);
 
@@ -1823,10 +1825,10 @@ function handleChat(data) {
       diamonds: viewer.totalGifted,
       zodiac: viewer.zodiac || null,
       isGifter: true
-    }, 3); // priority 3 — higher than teases
+    }, 3);
     showViewerFocus(uid, nick, '💎 VIP Chat');
-  } else if (hasQuestion && !voiceIsGenerating && !voiceIsPlaying && readingQueue.length === 0) {
-    // Non-gifters with questions get reply when host is free
+  } else if (hasQuestion) {
+    // Anyone with a question gets a reply (when host can fit it in)
     queueVoiceEvent('mystic_chat_reply', {
       name: nick,
       comment,
@@ -1999,6 +2001,9 @@ function toggleVoiceCommentary() {
 
 function queueVoiceEvent(eventType, eventData, priority = 1) {
   if (!voiceEnabled) return;
+  // During active reading (READING/REVEAL), only allow priority 3+ (gift/VIP)
+  // This prevents chat replies from cutting off tarot readings
+  if (readingState !== 'IDLE' && priority < 3) return;
   if (voiceQueue.length >= MAX_VOICE_QUEUE) {
     const lowIdx = voiceQueue.findIndex(q => q.priority < priority);
     if (lowIdx !== -1) voiceQueue.splice(lowIdx, 1);

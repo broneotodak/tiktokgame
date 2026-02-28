@@ -234,20 +234,22 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
     case 'mystic_idle_wisdom':
       return `${contextStr}\nAda ${eventData.viewerCount} viewers. Bagikan satu wisdom/nasihat hidup yang bijak — tentang cinta, rezeki, kesabaran, atau takdir. Kayak kakek bijak ngasih nasihat ke cucunya. Hubungkan dengan bola kristal atau kartu tarot. Buat mendalam tapi singkat. 15-25 kata.`;
     case 'mystic_idle_tease':
-      return `${contextStr}\n${eventData.targetName ? `Kamu merasakan aura dari viewer bernama "${eventData.targetName}"${eventData.targetZodiac ? ` (zodiak ${eventData.targetZodiac})` : ''}. Panggil nama dia dan bilang kamu melihat sesuatu tentang dia di bola kristal — tapi belum jelas. Ajak dia kirim gift biar bisa dibaca lebih detail.` : `Kamu merasakan aura kuat dari salah satu viewer di live ini. Bilang ada nasib menarik yang mau kamu ungkap.`} Bikin penasaran! 15-20 kata.`;
+      return `${contextStr}\n${eventData.targetName ? `Kamu merasakan aura dari viewer bernama "${eventData.targetName}"${eventData.targetZodiac ? ` (zodiak ${eventData.targetZodiac})` : ''}. Panggil nama dia dan bilang kamu melihat sesuatu menarik tentang dia di bola kristal. Kasih satu clue singkat tentang nasib dia. Ajak dia comment tanggal lahir biar bisa dibaca lebih lanjut.` : `Kamu merasakan aura kuat dari salah satu viewer di live ini. Bilang ada nasib menarik yang mau kamu ungkap. Ajak viewers comment tanggal lahir.`} Bikin penasaran! 15-20 kata.`;
     case 'mystic_flood_acknowledge':
       return `${contextStr}\nLive lagi ramai — ${eventData.viewerCount} viewers dan ${eventData.queueLength} orang antri reading! Excited tapi kasih tahu sabar, Eyang bacain satu-satu. Mau didahuluin? Kirim gift lebih besar! 15-25 kata.`;
-    case 'mystic_zodiac_tease':
-      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Zodiak: ${eventData.zodiac} ${eventData.symbol}, elemen ${eventData.element}. Sebutkan satu sifat khas zodiak itu, bikin penasaran. Ajak kirim gift untuk reading detail. 15-20 kata.`;
-    case 'mystic_jodoh_tease':
-      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Mau cek jodoh! Bilang kamu lihat sesuatu di bola kristal tapi belum jelas. Ajak gift untuk baca detail. Playful. 10-15 kata.`;
-    case 'mystic_question_tease':
-      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Nanya: "${eventData.question}". Bilang pertanyaan menarik, mulai lihat jawaban di bola kristal. Ajak gift untuk jawaban penuh. 10-15 kata.`;
+    case 'mystic_zodiac_reply':
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Dia bilang: "${eventData.comment || eventData.zodiac}". Zodiak: ${eventData.zodiac} ${eventData.symbol}, elemen ${eventData.element}. Bagi pembacaan singkat: 2-3 sifat utama zodiak itu, satu keunikan, dan satu nasihat hari ini. Buat personal dan hangat. JANGAN suruh kirim gift. 20-30 kata.`;
+    case 'mystic_jodoh_reply':
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Dia bilang: "${eventData.comment}".${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Dia mau cek jodoh! Baca bola kristal — kasih gambaran singkat soal jodoh dia: tipe pasangan cocok, satu warning dalam cinta, dan satu harapan. Playful dan positif. JANGAN suruh kirim gift. 20-30 kata.`;
+    case 'mystic_question_reply':
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Nanya: "${eventData.question}". Jawab pertanyaannya pakai intuisi peramal — lihat di bola kristal, kasih jawaban yang helpful dan mysterious. JANGAN suruh kirim gift. 15-25 kata.`;
+    case 'mystic_career_reply':
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Mau tahu soal karir/rezeki: "${eventData.question}". Baca bola kristal — kasih gambaran potensi karir, rezeki minggu ini, dan satu nasihat bijak. JANGAN suruh kirim gift. 20-30 kata.`;
     case 'mystic_chat_reply':
       if (eventData.isGifter) {
         return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Dia sudah gift ${eventData.diamonds} diamonds (VIP!). Dia bilang: "${eventData.comment}".${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} Balas dengan hangat dan personal. Kalau nanya, jawab pakai intuisi peramal. Apresiasi sebagai supporter. 15-25 kata.`;
       }
-      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Dia bilang: "${eventData.comment}".${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} Bales singkat dan misterius. Kalau nanya, kasih hint tapi ajak gift. 10-15 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Dia bilang: "${eventData.comment}".${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} Bales singkat, friendly dan misterius. Kalau nanya, jawab pakai intuisi. JANGAN suruh kirim gift. 10-20 kata.`;
 
     default:
       return `${contextStr}\nSomething happened on stream. Give a casual comment.`;
