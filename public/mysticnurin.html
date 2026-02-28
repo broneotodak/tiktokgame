@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🔮</text></svg>">
+  <title>Mystic Nurin - AI Fortune Reader</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; width: 100vw; height: 100vh; }
+
+    .game-frame {
+      position: relative;
+      width: min(100vw, calc(100vh * 9 / 16));
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+    }
+    #gameCanvas { display: block; width: 100%; height: 100%; }
+
+    /* Loading screen */
+    #loadingScreen {
+      position: absolute; inset: 0; z-index: 1000;
+      background: linear-gradient(135deg, #0a0015 0%, #1a0030 50%, #2c0a3e 100%);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #fff; transition: opacity 0.8s;
+    }
+    #loadingScreen.hidden { opacity: 0; pointer-events: none; }
+    #loadingScreen h1 { font-size: 2.4em; margin-bottom: 4px; text-shadow: 0 0 30px rgba(155,89,182,0.8); color: #d4a0ff; letter-spacing: 2px; }
+    #loadingScreen .subtitle { font-size: 1em; color: #f1c40f; margin-bottom: 25px; font-weight: 600; }
+    .progress-bar { width: 260px; height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #9b59b6, #f1c40f); width: 0%; transition: width 0.3s; border-radius: 3px; }
+    #loadingText { margin-top: 12px; font-size: 0.85em; color: #888; }
+
+    /* Top bar */
+    #topBar {
+      position: absolute; top: 10px; left: 12px; right: 12px; z-index: 100;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none;
+    }
+    .top-pill {
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(10px);
+      border-radius: 16px; padding: 5px 14px; border: 1px solid rgba(155,89,182,0.3);
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: #fff; font-weight: 600;
+    }
+    .top-pill .label { color: #888; font-weight: 400; font-size: 10px; }
+    .top-pill.live { border-color: rgba(155,89,182,0.6); }
+    .live-dot { width: 7px; height: 7px; background: #9b59b6; border-radius: 50%; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* Fortune display */
+    #fortuneDisplay {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 120; pointer-events: none; text-align: center;
+      max-width: 85%; opacity: 0; transition: opacity 0.5s;
+    }
+    #fortuneDisplay.show { opacity: 1; }
+    #fortuneDisplay .fortune-box {
+      background: rgba(10,0,20,0.85); border: 2px solid rgba(241,196,15,0.5);
+      border-radius: 16px; padding: 16px 20px;
+      box-shadow: 0 0 30px rgba(155,89,182,0.3), inset 0 0 20px rgba(155,89,182,0.1);
+    }
+    #fortuneDisplay .fortune-zodiac { font-size: 2em; margin-bottom: 4px; }
+    #fortuneDisplay .fortune-name { font-size: 12px; color: #f1c40f; font-weight: 700; margin-bottom: 6px; letter-spacing: 1px; }
+    #fortuneDisplay .fortune-text { font-size: 14px; color: #e0d0ff; line-height: 1.5; }
+
+    /* Leaderboard */
+    #leaderboard {
+      position: absolute; top: 44px; right: 8px; z-index: 100;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
+      border-radius: 12px; padding: 6px 8px; border: 1px solid rgba(155,89,182,0.2);
+      width: 130px; max-height: 35%; overflow-y: auto; pointer-events: none;
+    }
+    #leaderboard::-webkit-scrollbar { width: 0; }
+    .lb-title { font-size: 9px; color: #f1c40f; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; text-align: center; }
+    .lb-row { display: flex; align-items: center; gap: 4px; padding: 2px 0; font-size: 11px; color: #fff; }
+    .lb-rank { width: 18px; text-align: center; font-weight: 700; color: #f1c40f; }
+    .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-score { color: #d4a0ff; font-weight: 700; }
+
+    /* Notifications */
+    #notifications {
+      position: absolute; bottom: 180px; left: 8px; z-index: 100;
+      display: flex; flex-direction: column; gap: 3px;
+      pointer-events: none; max-width: 65%;
+    }
+    .notif {
+      padding: 4px 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      border-radius: 10px; border: 1px solid rgba(155,89,182,0.3);
+      animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in 4.5s forwards;
+      font-size: 11px; color: #fff; line-height: 1.3;
+    }
+    .notif strong { color: #f1c40f; }
+    .notif.gift { border-color: rgba(241,196,15,0.5); background: rgba(241,196,15,0.1); }
+    .notif.zodiac { border-color: rgba(155,89,182,0.5); background: rgba(155,89,182,0.1); }
+    .notif.follow { border-color: rgba(100,200,255,0.5); background: rgba(100,200,255,0.1); }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
+
+    /* Guide panel */
+    #guidePanel {
+      position: absolute; left: 8px; top: 44px;
+      z-index: 100; pointer-events: none;
+      display: flex; flex-direction: column; gap: 3px; width: 115px;
+    }
+    .guide-item {
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(8px);
+      border-radius: 8px; padding: 4px 6px;
+      border: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .guide-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
+    .guide-label { font-size: 9px; color: #f1c40f; font-weight: 700; line-height: 1; }
+    .guide-desc { font-size: 8px; color: #999; line-height: 1.1; }
+    .guide-divider { height: 1px; background: rgba(155,89,182,0.15); margin: 1px 0; }
+    .guide-gift {
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(8px);
+      border-radius: 8px; padding: 3px 6px;
+      border: 1px solid rgba(155,89,182,0.12);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .guide-gift .g-tier { font-size: 8px; color: #f1c40f; font-weight: 700; white-space: nowrap; }
+    .guide-gift .g-name { font-size: 8px; color: #ccc; }
+
+    /* Crystal energy bar */
+    #crystalEnergy {
+      position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%);
+      z-index: 100; pointer-events: none; text-align: center;
+    }
+    .energy-bar { width: 120px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin: 0 auto; }
+    .energy-fill { height: 100%; background: linear-gradient(90deg, #9b59b6, #f1c40f); width: 0%; transition: width 0.3s; border-radius: 3px; }
+    .energy-label { font-size: 9px; color: #d4a0ff; margin-top: 3px; }
+
+    /* Zodiac badge */
+    #zodiacBadge {
+      position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+      z-index: 100; pointer-events: none; text-align: center;
+      opacity: 0; transition: opacity 0.5s;
+    }
+    #zodiacBadge.show { opacity: 1; }
+    .zodiac-symbol { font-size: 2.5em; filter: drop-shadow(0 0 10px rgba(241,196,15,0.8)); }
+    .zodiac-name { font-size: 11px; color: #f1c40f; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+
+    /* Voice */
+    #voiceIndicator {
+      display: none; position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+      z-index: 50; background: rgba(0,0,0,0.7); border: 1px solid #9b59b6; border-radius: 20px;
+      padding: 6px 14px; font-size: 12px; color: #d4a0ff; pointer-events: none; white-space: nowrap;
+    }
+    #voiceSubtitle {
+      display: none; position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%);
+      z-index: 50; background: rgba(10,0,20,0.9); border: 1px solid rgba(155,89,182,0.3);
+      border-radius: 12px; padding: 8px 16px; font-size: 13px; color: #e0d0ff;
+      max-width: 85%; text-align: center; pointer-events: none; line-height: 1.4;
+    }
+
+    /* Power flash */
+    #powerFlash {
+      position: absolute; inset: 0; z-index: 150; pointer-events: none;
+      background: radial-gradient(circle, rgba(155,89,182,0.4), transparent 70%);
+      opacity: 0; transition: opacity 0.15s;
+    }
+    #powerFlash.show { opacity: 1; }
+
+    /* Viewer Focus — profile photo + name during reading */
+    #viewerFocus {
+      position: absolute; top: 82px; left: 50%; transform: translateX(-50%);
+      z-index: 110; pointer-events: none; text-align: center;
+      opacity: 0; transition: opacity 0.5s; display: flex; flex-direction: column; align-items: center;
+    }
+    #viewerFocus.show { opacity: 1; }
+    .focus-photo {
+      width: 72px; height: 72px; border-radius: 50%; border: 3px solid #f1c40f;
+      box-shadow: 0 0 20px rgba(241,196,15,0.5), 0 0 40px rgba(155,89,182,0.3);
+      object-fit: cover; background: #2c0a3e;
+    }
+    .focus-photo.placeholder {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; color: #d4a0ff;
+    }
+    .focus-name {
+      margin-top: 4px; font-size: 13px; font-weight: 700; color: #f1c40f;
+      text-shadow: 0 0 10px rgba(241,196,15,0.5); letter-spacing: 0.5px;
+    }
+    .focus-reading-type {
+      font-size: 10px; color: #d4a0ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+    }
+
+    /* Dramatic Element Animations */
+    .dramatic-overlay {
+      position: absolute; inset: 0; z-index: 140; pointer-events: none;
+      opacity: 0; transition: opacity 0.5s;
+    }
+    .dramatic-overlay.show { opacity: 1; }
+
+    /* Fire */
+    .fire-effect { background: radial-gradient(ellipse at bottom, rgba(255,100,0,0.3), rgba(255,50,0,0.1) 60%, transparent 80%); }
+    .fire-effect::before, .fire-effect::after {
+      content: ''; position: absolute; bottom: 0; width: 100%; height: 50%;
+      background: linear-gradient(to top, rgba(255,80,0,0.4), rgba(255,150,0,0.1), transparent);
+      animation: fireFlicker 0.8s ease-in-out infinite alternate;
+    }
+    .fire-effect::after { animation-delay: 0.4s; animation-duration: 1.2s; height: 40%; }
+    @keyframes fireFlicker { 0% { opacity: 0.6; transform: scaleY(0.95); } 100% { opacity: 1; transform: scaleY(1.05); } }
+
+    /* Water */
+    .water-effect { background: radial-gradient(ellipse at top, rgba(0,100,255,0.25), rgba(0,50,200,0.1) 60%, transparent 80%); }
+    .water-effect::before {
+      content: ''; position: absolute; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 20%, rgba(0,150,255,0.08) 20%, rgba(0,150,255,0.08) 21%);
+      animation: waterWave 3s ease-in-out infinite;
+    }
+    @keyframes waterWave { 0%,100% { transform: translateY(0); } 50% { transform: translateY(10px); } }
+
+    /* Skull / Dark */
+    .skull-effect {
+      background: radial-gradient(circle, rgba(100,0,100,0.3), rgba(50,0,50,0.15) 50%, transparent 80%);
+    }
+    .skull-icon {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 80px; opacity: 0; animation: skullAppear 2s ease-out forwards;
+      filter: drop-shadow(0 0 20px rgba(200,0,200,0.8));
+    }
+    @keyframes skullAppear { 0% { opacity: 0; transform: translate(-50%,-50%) scale(0.3); } 30% { opacity: 0.7; transform: translate(-50%,-50%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.5); } }
+
+    /* Lightning */
+    .lightning-effect { background: transparent; }
+    .lightning-flash {
+      position: absolute; inset: 0;
+      animation: lightningBolt 0.15s ease-out;
+      background: rgba(200,200,255,0.6);
+    }
+    @keyframes lightningBolt { 0% { opacity: 1; } 100% { opacity: 0; } }
+    .lightning-bolt {
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      font-size: 100px; opacity: 0; animation: boltStrike 1.5s ease-out forwards;
+      filter: drop-shadow(0 0 30px rgba(200,200,255,0.9));
+    }
+    @keyframes boltStrike { 0% { opacity: 0; transform: translateX(-50%) translateY(-20px); } 10% { opacity: 1; transform: translateX(-50%) translateY(0); } 50% { opacity: 0.8; } 100% { opacity: 0; transform: translateX(-50%) translateY(20px); } }
+
+    /* Flood status bar */
+    #floodStatus {
+      position: absolute; top: 36px; left: 50%; transform: translateX(-50%);
+      z-index: 100; pointer-events: none; text-align: center;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    #floodStatus.show { opacity: 1; }
+    .flood-pill {
+      background: rgba(255,60,60,0.8); backdrop-filter: blur(8px);
+      border-radius: 10px; padding: 3px 12px;
+      font-size: 10px; color: #fff; font-weight: 600;
+      animation: pulse 1.5s infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-frame">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen">
+      <h1>MYSTIC NURIN</h1>
+      <div class="subtitle">AI Fortune Reader</div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div id="loadingText">Membangunkan bola kristal...</div>
+    </div>
+
+    <!-- HUD -->
+    <div id="topBar">
+      <div class="top-pill live">
+        <div class="live-dot"></div>
+        <span id="viewerCount">0</span>
+        <span class="label">viewers</span>
+      </div>
+      <div style="font-size:14px; color:#d4a0ff; font-weight:700; text-shadow:0 0 15px rgba(155,89,182,0.5);">MYSTIC NURIN</div>
+      <div class="top-pill">
+        <span class="label">readings</span>
+        <span id="readingCount">0</span>
+      </div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div id="leaderboard">
+      <div class="lb-title">Mystic Points</div>
+      <div id="lbRows"></div>
+    </div>
+
+    <!-- Fortune Display -->
+    <div id="fortuneDisplay">
+      <div class="fortune-box">
+        <div class="fortune-zodiac" id="fortuneZodiac"></div>
+        <div class="fortune-name" id="fortuneName"></div>
+        <div class="fortune-text" id="fortuneText"></div>
+      </div>
+    </div>
+
+    <!-- Zodiac Badge -->
+    <div id="zodiacBadge">
+      <div class="zodiac-symbol" id="zodiacSymbol"></div>
+      <div class="zodiac-name" id="zodiacName"></div>
+    </div>
+
+    <!-- Notifications -->
+    <div id="notifications"></div>
+
+    <!-- Guide Panel -->
+    <div id="guidePanel">
+      <div class="guide-item" style="border-color:rgba(241,196,15,0.4); background:rgba(241,196,15,0.1);">
+        <div class="guide-icon">🎁</div>
+        <div><div class="guide-label" style="color:#f1c40f;">GIFT = READING</div><div class="guide-desc">Kirim gift, dibacain!</div></div>
+      </div>
+      <div class="guide-item">
+        <div class="guide-icon">💬</div>
+        <div><div class="guide-label">ULTAH</div><div class="guide-desc">"15 maret" set zodiak</div></div>
+      </div>
+      <div class="guide-item">
+        <div class="guide-icon">❤️</div>
+        <div><div class="guide-label">LIKE</div><div class="guide-desc">Energi kristal!</div></div>
+      </div>
+      <div class="guide-divider"></div>
+      <div class="guide-gift">
+        <div class="g-tier">🎁 1-10</div>
+        <div class="g-name">Ramalan singkat</div>
+      </div>
+      <div class="guide-gift">
+        <div class="g-tier">🎁 11-99</div>
+        <div class="g-name">Ramalan detail</div>
+      </div>
+      <div class="guide-gift">
+        <div class="g-tier">🎁 100+</div>
+        <div class="g-name">Visi Spesial</div>
+      </div>
+      <div class="guide-gift">
+        <div class="g-tier">🎁 500+</div>
+        <div class="g-name">VIP Prophecy!</div>
+      </div>
+    </div>
+
+    <!-- Crystal Energy -->
+    <div id="crystalEnergy">
+      <div class="energy-bar"><div class="energy-fill" id="energyFill"></div></div>
+      <div class="energy-label">Energi Kristal: <span id="energyValue">0</span>/10</div>
+    </div>
+
+    <!-- Viewer Focus -->
+    <div id="viewerFocus">
+      <div class="focus-photo placeholder" id="focusPhoto">🔮</div>
+      <div class="focus-name" id="focusName"></div>
+      <div class="focus-reading-type" id="focusType"></div>
+    </div>
+
+    <!-- Flood Status -->
+    <div id="floodStatus">
+      <div class="flood-pill" id="floodPill">Ramai! Antri reading...</div>
+    </div>
+
+    <!-- Dramatic Effects Overlay -->
+    <div class="dramatic-overlay" id="dramaticOverlay"></div>
+
+    <!-- Voice -->
+    <div id="voiceIndicator">
+      <span id="voiceSpeakerIcon" style="margin-right:4px;">🎙️</span>
+      <span id="voiceStatusText">Voice Ready</span>
+    </div>
+    <div id="voiceSubtitle"></div>
+
+    <!-- Power Flash -->
+    <div id="powerFlash"></div>
+  </div>
+
+  <!-- Debug Panel -->
+  <div id="debugPanel">
+    <div class="debug-title">VIEWERS</div>
+    <button class="dbtn" onclick="window._debug('addViewer')">Add (T)</button>
+    <button class="dbtn" onclick="window._debug('add10')">Add 10 (D)</button>
+    <div class="debug-title" style="margin-top:6px;">ACTIONS</div>
+    <button class="dbtn" onclick="window._debug('like')">Like (L)</button>
+    <button class="dbtn" onclick="window._debug('gift')">Gift (B)</button>
+    <button class="dbtn" onclick="window._debug('zodiac')">Zodiac (Z)</button>
+    <button class="dbtn" onclick="window._debug('jodoh')">Jodoh (J)</button>
+    <button class="dbtn" onclick="window._debug('question')">Question (Q)</button>
+    <button class="dbtn" onclick="window._debug('autocam')">AutoCam (V)</button>
+    <button class="dbtn" onclick="window._debug('auto')">Auto (A)</button>
+    <div class="debug-title" style="margin-top:6px;">VOICE</div>
+    <button class="dbtn" id="voiceToggleBtn" onclick="window._toggleVoice()" style="border-left:3px solid #9b59b6;">Voice: OFF</button>
+  </div>
+  <style>
+    #debugPanel {
+      position: fixed; right: 10px; top: 50%; transform: translateY(-50%);
+      z-index: 9999; display: flex; flex-direction: column; gap: 4px;
+      background: rgba(20,20,20,0.95); border: 1px solid #333; border-radius: 10px;
+      padding: 10px; width: 100px; max-height: 80vh; overflow-y: auto;
+    }
+    .debug-title { font-size: 10px; color: #9b59b6; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; text-align: center; margin-bottom: 2px; }
+    .dbtn {
+      background: #222; color: #ccc; border: 1px solid #444; border-radius: 6px;
+      padding: 6px 8px; font-size: 11px; cursor: pointer; text-align: left;
+      transition: background 0.15s;
+    }
+    .dbtn:hover { background: #333; color: #fff; border-color: #9b59b6; }
+    @media (max-aspect-ratio: 10/16) { #debugPanel { display: none; } }
+  </style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ===== CONFIG =====
+const MAX_ORBS = 20;
+const ENERGY_THRESHOLD = 10;
+const MYSTIC_VOICE_ID = 'tX4zpyB6s34no1FgD0Mm'; // Eyang — deep, calm, mysterious Indonesian male
+const CHAR_COLORS = [
+  0xff6b9d, 0xc44dff, 0x6bff6b, 0xff9b4d, 0x4dc4ff,
+  0xffd700, 0xff4d6b, 0x4dff9b, 0x9b4dff, 0xff4dc4,
+  0x6b9bff, 0xc4ff4d, 0xff6b4d, 0x4dffc4, 0x9bff4d,
+  0xff4d9b, 0x4d6bff, 0xffc44d, 0x6bffc4, 0xc46bff,
+];
+
+// ===== ZODIAC DATA =====
+const ZODIAC_DATA = {
+  aries:       { symbol: '\u2648', element: 'Api',   dates: 'Mac 21 - Apr 19',   emoji: '\uD83D\uDD25' },
+  taurus:      { symbol: '\u2649', element: 'Tanah', dates: 'Apr 20 - Mei 20',   emoji: '\uD83C\uDF0D' },
+  gemini:      { symbol: '\u264A', element: 'Angin', dates: 'Mei 21 - Jun 20',   emoji: '\uD83D\uDCA8' },
+  cancer:      { symbol: '\u264B', element: 'Air',   dates: 'Jun 21 - Jul 22',   emoji: '\uD83D\uDCA7' },
+  leo:         { symbol: '\u264C', element: 'Api',   dates: 'Jul 23 - Ogos 22',  emoji: '\uD83D\uDD25' },
+  virgo:       { symbol: '\u264D', element: 'Tanah', dates: 'Ogos 23 - Sep 22',  emoji: '\uD83C\uDF0D' },
+  libra:       { symbol: '\u264E', element: 'Angin', dates: 'Sep 23 - Okt 22',   emoji: '\uD83D\uDCA8' },
+  scorpio:     { symbol: '\u264F', element: 'Air',   dates: 'Okt 23 - Nov 21',   emoji: '\uD83D\uDCA7' },
+  sagittarius: { symbol: '\u2650', element: 'Api',   dates: 'Nov 22 - Dis 21',   emoji: '\uD83D\uDD25' },
+  capricorn:   { symbol: '\u2651', element: 'Tanah', dates: 'Dis 22 - Jan 19',   emoji: '\uD83C\uDF0D' },
+  aquarius:    { symbol: '\u2652', element: 'Angin', dates: 'Jan 20 - Feb 18',   emoji: '\uD83D\uDCA8' },
+  pisces:      { symbol: '\u2653', element: 'Air',   dates: 'Feb 19 - Mac 20',   emoji: '\uD83D\uDCA7' },
+};
+
+const ZODIAC_RANGES = [
+  { month: 1, day: 20, sign: 'aquarius' },
+  { month: 2, day: 19, sign: 'pisces' },
+  { month: 3, day: 21, sign: 'aries' },
+  { month: 4, day: 20, sign: 'taurus' },
+  { month: 5, day: 21, sign: 'gemini' },
+  { month: 6, day: 21, sign: 'cancer' },
+  { month: 7, day: 23, sign: 'leo' },
+  { month: 8, day: 23, sign: 'virgo' },
+  { month: 9, day: 23, sign: 'libra' },
+  { month: 10, day: 23, sign: 'scorpio' },
+  { month: 11, day: 22, sign: 'sagittarius' },
+  { month: 12, day: 22, sign: 'capricorn' },
+];
+
+const MONTH_MAP = {
+  'jan': 1, 'januari': 1, 'january': 1,
+  'feb': 2, 'februari': 2, 'february': 2,
+  'mac': 3, 'mar': 3, 'march': 3, 'maret': 3,
+  'apr': 4, 'april': 4,
+  'mei': 5, 'may': 5,
+  'jun': 6, 'june': 6, 'juni': 6,
+  'jul': 7, 'july': 7, 'julai': 7, 'juli': 7,
+  'ogos': 8, 'aug': 8, 'august': 8, 'agustus': 8, 'agu': 8,
+  'sep': 9, 'sept': 9, 'september': 9,
+  'okt': 10, 'oct': 10, 'october': 10, 'oktober': 10,
+  'nov': 11, 'november': 11, 'nop': 11, 'nopember': 11,
+  'dis': 12, 'dec': 12, 'december': 12, 'disember': 12, 'desember': 12, 'des': 12,
+};
+
+function getZodiacFromDate(month, day) {
+  for (let i = ZODIAC_RANGES.length - 1; i >= 0; i--) {
+    const r = ZODIAC_RANGES[i];
+    if (month > r.month || (month === r.month && day >= r.day)) return r.sign;
+  }
+  return 'capricorn'; // Dec 22 - Jan 19 wraps
+}
+
+function detectBirthday(msg) {
+  const lower = msg.toLowerCase().trim();
+
+  // Direct zodiac name
+  for (const z of Object.keys(ZODIAC_DATA)) {
+    if (lower === z || lower.startsWith(z + ' ')) return { zodiac: z, date: '' };
+  }
+
+  // "15 mac", "mac 15", "15/3", "3-15", "15 march"
+  let m, match;
+  // day month
+  match = lower.match(/(\d{1,2})\s+([a-z]+)/);
+  if (match) {
+    const day = parseInt(match[1]);
+    const monthStr = match[2];
+    m = MONTH_MAP[monthStr];
+    if (m && day >= 1 && day <= 31) {
+      const z = getZodiacFromDate(m, day);
+      return { zodiac: z, date: `${day} ${match[2]}` };
+    }
+  }
+  // month day
+  match = lower.match(/([a-z]+)\s+(\d{1,2})/);
+  if (match) {
+    const monthStr = match[1];
+    const day = parseInt(match[2]);
+    m = MONTH_MAP[monthStr];
+    if (m && day >= 1 && day <= 31) {
+      const z = getZodiacFromDate(m, day);
+      return { zodiac: z, date: `${day} ${match[1]}` };
+    }
+  }
+  // dd/mm or dd-mm
+  match = lower.match(/(\d{1,2})[\/\-](\d{1,2})/);
+  if (match) {
+    const day = parseInt(match[1]);
+    const month = parseInt(match[2]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const z = getZodiacFromDate(month, day);
+      return { zodiac: z, date: `${day}/${month}` };
+    }
+  }
+  return null;
+}
+
+// ===== STATE =====
+const viewers = new Map();
+const viewerOrbs = new Map();
+const readingQueue = [];
+let crystalEnergy = 0;
+let readingState = 'IDLE'; // IDLE, READING, REVEAL
+let currentReading = null;
+let fortuneDisplayTimer = null;
+let totalReadings = 0;
+let autoPlay = false;
+let autoPlayTimer = 0;
+let autoCamEnabled = true;
+
+// Flood control
+let eventsPerMinute = 0;
+let eventCounterTimer = 0;
+const FLOOD_THRESHOLD = 30; // events/min before flood mode
+let floodMode = false;
+let readingCooldowns = new Map(); // uid → timestamp, prevent spam per user
+const PER_USER_COOLDOWN = 30000; // 30s between readings for same person
+
+// Engagement prompts
+let engageTimer = 45; // first prompt after 45s
+let lastEngageTime = 0;
+const ENGAGE_COOLDOWN = 60000; // prompt every 60s
+
+// ===== THREE.JS SETUP =====
+const canvas = document.getElementById('gameCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0015);
+scene.fog = new THREE.FogExp2(0x1a0030, 0.025);
+
+const camera = new THREE.PerspectiveCamera(50, 9 / 16, 0.1, 200);
+camera.position.set(0, 3.5, 5);
+camera.lookAt(0, 1, 0);
+
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(0, 1, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.enabled = false; // auto cam by default
+let manualCamera = false;
+canvas.addEventListener('pointerdown', () => { manualCamera = true; controls.enabled = true; });
+
+// Unlock AudioContext on first user gesture (Chrome autoplay policy)
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.connect(ctx.destination); src.start();
+  } catch(e) {}
+}
+document.addEventListener('click', unlockAudio, { once: true });
+document.addEventListener('touchstart', unlockAudio, { once: true });
+document.addEventListener('keydown', unlockAudio, { once: true });
+
+function resize() {
+  const frame = canvas.parentElement;
+  renderer.setSize(frame.clientWidth, frame.clientHeight);
+  camera.aspect = frame.clientWidth / frame.clientHeight;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ===== LIGHTING =====
+const ambientLight = new THREE.AmbientLight(0x4422aa, 0.3);
+scene.add(ambientLight);
+
+const crystalLight = new THREE.PointLight(0x9b59b6, 2, 15);
+crystalLight.position.set(0, 1.5, 0);
+crystalLight.castShadow = true;
+scene.add(crystalLight);
+
+const spotLight = new THREE.SpotLight(0x6633cc, 3, 20, Math.PI / 6, 0.5);
+spotLight.position.set(0, 8, 0);
+spotLight.target.position.set(0, 1, 0);
+scene.add(spotLight);
+scene.add(spotLight.target);
+
+// Candle lights (4)
+const candlePositions = [
+  new THREE.Vector3(-0.8, 0.45, -0.8),
+  new THREE.Vector3(0.8, 0.45, -0.8),
+  new THREE.Vector3(-0.8, 0.45, 0.8),
+  new THREE.Vector3(0.8, 0.45, 0.8),
+];
+const candleLights = [];
+candlePositions.forEach(pos => {
+  const light = new THREE.PointLight(0xffaa33, 0.5, 3);
+  light.position.copy(pos);
+  scene.add(light);
+  candleLights.push(light);
+});
+
+// ===== SCENE OBJECTS =====
+
+// Floor
+const floorGeo = new THREE.CircleGeometry(8, 32);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x0a0020, metalness: 0.8, roughness: 0.2 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -0.5;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// Table
+const tableGeo = new THREE.CylinderGeometry(1.8, 1.8, 0.15, 16);
+const tableMat = new THREE.MeshStandardMaterial({ color: 0x1a0a2a, roughness: 0.3, metalness: 0.2 });
+const table = new THREE.Mesh(tableGeo, tableMat);
+table.position.y = 0.15;
+table.receiveShadow = true;
+scene.add(table);
+
+// Table cloth
+const clothGeo = new THREE.CylinderGeometry(2.0, 2.2, 0.6, 16, 1, true);
+const clothMat = new THREE.MeshStandardMaterial({ color: 0x2c0a3e, roughness: 0.7, side: THREE.DoubleSide });
+const cloth = new THREE.Mesh(clothGeo, clothMat);
+cloth.position.y = -0.08;
+scene.add(cloth);
+
+// Crystal ball - outer
+const crystalOuterGeo = new THREE.SphereGeometry(0.6, 32, 32);
+const crystalOuterMat = new THREE.MeshPhysicalMaterial({
+  color: 0xaabbff, transparent: true, opacity: 0.25,
+  metalness: 0.1, roughness: 0, transmission: 0.9,
+  thickness: 0.5, envMapIntensity: 1,
+});
+const crystalOuter = new THREE.Mesh(crystalOuterGeo, crystalOuterMat);
+crystalOuter.position.y = 1.0;
+scene.add(crystalOuter);
+
+// Crystal ball - inner glow
+const crystalInnerGeo = new THREE.SphereGeometry(0.45, 16, 16);
+const crystalInnerMat = new THREE.MeshBasicMaterial({ color: 0x7744cc, transparent: true, opacity: 0.15 });
+const crystalInner = new THREE.Mesh(crystalInnerGeo, crystalInnerMat);
+crystalInner.position.y = 1.0;
+scene.add(crystalInner);
+
+// Crystal ball - base pedestal
+const baseGeo = new THREE.CylinderGeometry(0.35, 0.45, 0.2, 8);
+const baseMat = new THREE.MeshStandardMaterial({ color: 0x2a1a0a, metalness: 0.8, roughness: 0.3 });
+const base = new THREE.Mesh(baseGeo, baseMat);
+base.position.y = 0.32;
+scene.add(base);
+
+// Candles (4)
+const candles = [];
+candlePositions.forEach(pos => {
+  const group = new THREE.Group();
+  // Body
+  const bodyGeo = new THREE.CylinderGeometry(0.04, 0.05, 0.25, 8);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xfff5e0 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.125;
+  group.add(body);
+  // Flame
+  const flameGeo = new THREE.SphereGeometry(0.025, 8, 6);
+  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+  const flame = new THREE.Mesh(flameGeo, flameMat);
+  flame.position.y = 0.27;
+  group.add(flame);
+  group.position.copy(pos);
+  group.position.y = 0.22;
+  scene.add(group);
+  candles.push({ group, flame, flameMat });
+});
+
+// Zodiac ring - 12 sprites orbiting crystal ball
+const zodiacSprites = [];
+const zodiacSymbols = Object.values(ZODIAC_DATA).map(z => z.symbol);
+const zodiacNames = Object.keys(ZODIAC_DATA);
+
+function createZodiacSprite(symbol, index) {
+  const size = 64;
+  const cvs = document.createElement('canvas');
+  cvs.width = size; cvs.height = size;
+  const ctx = cvs.getContext('2d');
+  ctx.font = '40px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#f1c40f';
+  ctx.fillText(symbol, size / 2, size / 2);
+  const tex = new THREE.CanvasTexture(cvs);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.6 });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(0.4, 0.4, 1);
+  const angle = (index / 12) * Math.PI * 2;
+  sprite.userData = { baseAngle: angle, index, symbol, zodiacName: zodiacNames[index] };
+  scene.add(sprite);
+  return sprite;
+}
+
+zodiacSymbols.forEach((s, i) => {
+  zodiacSprites.push(createZodiacSprite(s, i));
+});
+
+// Stars / galaxy background
+const starCount = 500;
+const starGeo = new THREE.BufferGeometry();
+const starPositions = new Float32Array(starCount * 3);
+const starSizes = new Float32Array(starCount);
+for (let i = 0; i < starCount; i++) {
+  const r = 30 + Math.random() * 40;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.random() * Math.PI;
+  starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+  starPositions[i * 3 + 1] = r * Math.cos(phi);
+  starPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  starSizes[i] = 0.05 + Math.random() * 0.15;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, sizeAttenuation: true, transparent: true, opacity: 0.6 });
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+// Particle system - mystic dust
+const particleCount = 100;
+const particleGeo = new THREE.BufferGeometry();
+const particlePos = new Float32Array(particleCount * 3);
+const particleVel = new Float32Array(particleCount * 3);
+const particleColors = new Float32Array(particleCount * 3);
+for (let i = 0; i < particleCount; i++) {
+  const angle = Math.random() * Math.PI * 2;
+  const r = 0.3 + Math.random() * 1.0;
+  particlePos[i * 3] = Math.cos(angle) * r;
+  particlePos[i * 3 + 1] = 0.5 + Math.random() * 2.0;
+  particlePos[i * 3 + 2] = Math.sin(angle) * r;
+  particleVel[i * 3] = (Math.random() - 0.5) * 0.1;
+  particleVel[i * 3 + 1] = 0.1 + Math.random() * 0.2;
+  particleVel[i * 3 + 2] = (Math.random() - 0.5) * 0.1;
+  // Purple or gold
+  if (Math.random() > 0.5) {
+    particleColors[i * 3] = 0.6; particleColors[i * 3 + 1] = 0.27; particleColors[i * 3 + 2] = 0.71;
+  } else {
+    particleColors[i * 3] = 0.95; particleColors[i * 3 + 1] = 0.77; particleColors[i * 3 + 2] = 0.06;
+  }
+}
+particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePos, 3));
+particleGeo.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+const particleMat = new THREE.PointsMaterial({ size: 0.04, vertexColors: true, transparent: true, opacity: 0.5, sizeAttenuation: true });
+const particles = new THREE.Points(particleGeo, particleMat);
+scene.add(particles);
+
+// ===== VIEWER ORB SYSTEM =====
+function hashColor(id) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) & 0xffffff;
+  return CHAR_COLORS[Math.abs(hash) % CHAR_COLORS.length];
+}
+
+function createNameSprite(name, color) {
+  const cvs = document.createElement('canvas');
+  cvs.width = 128; cvs.height = 32;
+  const ctx = cvs.getContext('2d');
+  ctx.font = 'bold 14px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(name.slice(0, 12), 64, 16);
+  const tex = new THREE.CanvasTexture(cvs);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.8 });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(0.8, 0.2, 1);
+  return sprite;
+}
+
+function addViewerOrb(uniqueId, nickname) {
+  if (viewerOrbs.has(uniqueId)) return;
+  if (viewerOrbs.size >= MAX_ORBS) return;
+
+  const color = hashColor(uniqueId);
+  const orbGeo = new THREE.SphereGeometry(0.12, 8, 8);
+  const orbMat = new THREE.MeshStandardMaterial({
+    color, emissive: color, emissiveIntensity: 0.3,
+    metalness: 0.5, roughness: 0.3,
+  });
+  const mesh = new THREE.Mesh(orbGeo, orbMat);
+
+  const nameSprite = createNameSprite(nickname, color);
+  nameSprite.position.y = -0.25;
+  mesh.add(nameSprite);
+
+  const angle = (viewerOrbs.size / MAX_ORBS) * Math.PI * 2;
+  const radius = 2.5;
+  mesh.position.set(Math.cos(angle) * radius, 1.6, Math.sin(angle) * radius);
+  scene.add(mesh);
+
+  viewerOrbs.set(uniqueId, { mesh, nameSprite, orbMat, angle, bobOffset: Math.random() * Math.PI * 2 });
+}
+
+function removeViewerOrb(uniqueId) {
+  const orb = viewerOrbs.get(uniqueId);
+  if (!orb) return;
+  scene.remove(orb.mesh);
+  viewerOrbs.delete(uniqueId);
+}
+
+function refreshOrbs() {
+  // Top 20 by score get orbs
+  const sorted = Array.from(viewers.values()).sort((a, b) => b.score - a.score).slice(0, MAX_ORBS);
+  const topIds = new Set(sorted.map(v => v.uniqueId));
+
+  // Remove orbs not in top
+  for (const [id] of viewerOrbs) {
+    if (!topIds.has(id)) removeViewerOrb(id);
+  }
+  // Add new
+  sorted.forEach(v => addViewerOrb(v.uniqueId, v.nickname));
+
+  // Reposition
+  let idx = 0;
+  for (const [, orb] of viewerOrbs) {
+    orb.angle = (idx / Math.max(viewerOrbs.size, 1)) * Math.PI * 2;
+    idx++;
+  }
+}
+
+// ===== READING QUEUE =====
+function queueReading(type, viewerId, nickname, data = {}, priority = 1) {
+  readingQueue.push({ type, viewerId, nickname, data, priority });
+  processReadingQueue();
+}
+
+function processReadingQueue() {
+  if (readingState !== 'IDLE') return;
+  if (readingQueue.length === 0) return;
+
+  // Update flood status
+  if (floodMode) {
+    document.getElementById('floodPill').textContent = `Ramai! ${readingQueue.length} antri...`;
+  }
+
+  readingQueue.sort((a, b) => b.priority - a.priority);
+  const reading = readingQueue.shift();
+  currentReading = reading;
+  readingState = 'READING';
+
+  // Visual: crystal ball brightens
+  crystalInnerMat.opacity = 0.5;
+  crystalLight.intensity = 4;
+
+  // Show viewer focus with profile photo
+  const readingLabels = {
+    welcome: 'Sambutan', zodiac: 'Zodiak Reading', fortune: 'Ramalan',
+    jodoh: 'Cek Jodoh', question: 'Pertanyaan', gift_reading: 'Gift Reading', vip_vision: 'VIP PROPHECY'
+  };
+  showViewerFocus(reading.viewerId, reading.nickname, readingLabels[reading.type] || 'Reading');
+
+  // Determine voice event
+  let eventType, eventData;
+  const viewerZodiac = reading.data.zodiac || viewers.get(reading.viewerId)?.zodiac || null;
+  switch (reading.type) {
+    case 'welcome':
+      eventType = 'mystic_welcome';
+      eventData = { name: reading.nickname };
+      break;
+    case 'zodiac':
+      eventType = 'mystic_zodiac';
+      eventData = { name: reading.nickname, zodiac: reading.data.zodiac, date: reading.data.date || '' };
+      showZodiacBadge(reading.data.zodiac);
+      // Dramatic effect based on zodiac element
+      const elem = getElementForZodiac(reading.data.zodiac);
+      if (elem) setTimeout(() => triggerDramaticEffect(elem, 3000), 1500);
+      break;
+    case 'fortune':
+      eventType = 'mystic_fortune';
+      eventData = { name: reading.nickname, zodiac: viewerZodiac };
+      // Random dramatic effect for fortune
+      if (viewerZodiac) {
+        const e = getElementForZodiac(viewerZodiac);
+        if (e) setTimeout(() => triggerDramaticEffect(e, 2500), 1500);
+      }
+      break;
+    case 'jodoh':
+      eventType = 'mystic_jodoh';
+      eventData = { name1: reading.nickname, zodiac1: reading.data.zodiac1 || 'unknown', name2: reading.data.partner, zodiac2: reading.data.zodiac2 || 'unknown' };
+      break;
+    case 'question':
+      eventType = 'mystic_question';
+      eventData = { name: reading.nickname, question: reading.data.question || '' };
+      break;
+    case 'gift_reading':
+      eventType = 'mystic_gift_reading';
+      eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac };
+      // Dramatic effect for gift readings
+      if (viewerZodiac) {
+        const e = getElementForZodiac(viewerZodiac);
+        if (e) setTimeout(() => triggerDramaticEffect(e, 3000), 1000);
+      } else {
+        // Random element if no zodiac known
+        const randomElements = ['fire', 'water', 'lightning'];
+        setTimeout(() => triggerDramaticEffect(randomElements[Math.floor(Math.random() * randomElements.length)], 2500), 1000);
+      }
+      break;
+    case 'vip_vision':
+      eventType = 'mystic_vip_vision';
+      eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac };
+      triggerVIPEffect();
+      // Epic multi-element sequence for VIP
+      setTimeout(() => triggerDramaticEffect('fire', 2000), 500);
+      setTimeout(() => triggerDramaticEffect('lightning', 2000), 3000);
+      setTimeout(() => triggerDramaticEffect('water', 2000), 5500);
+      break;
+    default:
+      eventType = 'mystic_fortune';
+      eventData = { name: reading.nickname };
+  }
+
+  // Queue voice
+  queueVoiceEvent(eventType, eventData, reading.priority);
+
+  // After brief delay, transition to REVEAL
+  setTimeout(() => {
+    readingState = 'REVEAL';
+    totalReadings++;
+    document.getElementById('readingCount').textContent = totalReadings;
+
+    // Fortune display shows placeholder until voice text arrives
+    showFortuneDisplay(reading);
+
+    // Return to IDLE after 10 seconds (longer for immersion)
+    if (fortuneDisplayTimer) clearTimeout(fortuneDisplayTimer);
+    const revealTime = reading.priority >= 4 ? 12000 : 8000; // Longer for high-tier gifts
+    fortuneDisplayTimer = setTimeout(() => {
+      hideFortuneDisplay();
+      hideViewerFocus();
+      readingState = 'IDLE';
+      currentReading = null;
+      crystalInnerMat.opacity = 0.15;
+      crystalLight.intensity = 2;
+      hideZodiacBadge();
+      processReadingQueue();
+    }, revealTime);
+  }, 2000);
+}
+
+function showFortuneDisplay(reading) {
+  const el = document.getElementById('fortuneDisplay');
+  const zodiacEl = document.getElementById('fortuneZodiac');
+  const nameEl = document.getElementById('fortuneName');
+  const textEl = document.getElementById('fortuneText');
+
+  if (reading.data.zodiac && ZODIAC_DATA[reading.data.zodiac]) {
+    zodiacEl.textContent = ZODIAC_DATA[reading.data.zodiac].symbol;
+  } else {
+    zodiacEl.textContent = '\uD83D\uDD2E';
+  }
+  nameEl.textContent = reading.nickname;
+  textEl.textContent = 'Bola kristal sedang membaca...';
+  el.classList.add('show');
+}
+
+function hideFortuneDisplay() {
+  document.getElementById('fortuneDisplay').classList.remove('show');
+}
+
+function showZodiacBadge(zodiac) {
+  const badge = document.getElementById('zodiacBadge');
+  const z = ZODIAC_DATA[zodiac];
+  if (!z) return;
+  document.getElementById('zodiacSymbol').textContent = z.symbol;
+  document.getElementById('zodiacName').textContent = zodiac.toUpperCase() + ' ' + z.emoji;
+  badge.classList.add('show');
+
+  // Highlight matching zodiac sprite
+  zodiacSprites.forEach(s => {
+    if (s.userData.zodiacName === zodiac) {
+      s.material.opacity = 1.0;
+      s.scale.set(0.7, 0.7, 1);
+    }
+  });
+}
+
+function hideZodiacBadge() {
+  document.getElementById('zodiacBadge').classList.remove('show');
+  zodiacSprites.forEach(s => {
+    s.material.opacity = 0.6;
+    s.scale.set(0.4, 0.4, 1);
+  });
+}
+
+// ===== VISUAL EFFECTS =====
+function triggerPowerFlash() {
+  const flash = document.getElementById('powerFlash');
+  flash.classList.add('show');
+  setTimeout(() => flash.classList.remove('show'), 300);
+}
+
+function triggerVIPEffect() {
+  triggerPowerFlash();
+  // Intensify everything
+  candleLights.forEach(l => l.intensity = 2.0);
+  crystalLight.intensity = 6;
+  crystalInnerMat.opacity = 0.8;
+  setTimeout(() => {
+    candleLights.forEach(l => l.intensity = 0.5);
+  }, 3000);
+}
+
+function triggerGiftEffect(tier) {
+  if (tier === 'small') {
+    // Candles flare
+    candleLights.forEach(l => l.intensity = 1.2);
+    setTimeout(() => candleLights.forEach(l => l.intensity = 0.5), 1000);
+  } else if (tier === 'medium') {
+    triggerPowerFlash();
+    candleLights.forEach(l => l.intensity = 1.5);
+    setTimeout(() => candleLights.forEach(l => l.intensity = 0.5), 1500);
+  } else if (tier === 'big') {
+    triggerPowerFlash();
+    crystalLight.intensity = 5;
+    candleLights.forEach(l => l.intensity = 2.0);
+    setTimeout(() => {
+      crystalLight.intensity = 2;
+      candleLights.forEach(l => l.intensity = 0.5);
+    }, 2000);
+  }
+}
+
+// ===== NOTIFICATIONS =====
+function addNotification(html, cls = '') {
+  const container = document.getElementById('notifications');
+  const el = document.createElement('div');
+  el.className = `notif ${cls}`;
+  el.innerHTML = html;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 5000);
+  while (container.children.length > 8) container.removeChild(container.firstChild);
+}
+
+// ===== LEADERBOARD =====
+function updateLeaderboard() {
+  const sorted = Array.from(viewers.values()).sort((a, b) => b.score - a.score).slice(0, 8);
+  const rows = document.getElementById('lbRows');
+  rows.innerHTML = '';
+  sorted.forEach((v, i) => {
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+    row.innerHTML = `<span class="lb-rank">${i + 1}</span><span class="lb-name">${v.nickname}</span><span class="lb-score">${v.score}</span>`;
+    rows.appendChild(row);
+  });
+}
+
+// ===== CRYSTAL ENERGY =====
+function addCrystalEnergy(amount) {
+  crystalEnergy = Math.min(ENERGY_THRESHOLD, crystalEnergy + amount);
+  document.getElementById('energyFill').style.width = `${(crystalEnergy / ENERGY_THRESHOLD) * 100}%`;
+  document.getElementById('energyValue').textContent = crystalEnergy;
+
+  if (crystalEnergy >= ENERGY_THRESHOLD) {
+    crystalEnergy = 0;
+    document.getElementById('energyFill').style.width = '0%';
+    document.getElementById('energyValue').textContent = '0';
+    // Bonus fortune for random viewer
+    const allViewers = Array.from(viewers.values());
+    if (allViewers.length > 0) {
+      const v = allViewers[Math.floor(Math.random() * allViewers.length)];
+      addNotification(`<strong>Energi Kristal PENUH!</strong> Ramalan bonus untuk <strong>${v.nickname}</strong>!`, 'zodiac');
+      queueReading('fortune', v.uniqueId, v.nickname, {}, 2);
+    }
+  }
+}
+
+// ===== FLOOD CONTROL =====
+let lastFloodVoiceTime = 0;
+function trackEvent() {
+  eventsPerMinute++;
+  const wasFlood = floodMode;
+  floodMode = eventsPerMinute > FLOOD_THRESHOLD;
+  const floodEl = document.getElementById('floodStatus');
+  if (floodMode && !wasFlood) {
+    floodEl.classList.add('show');
+    document.getElementById('floodPill').textContent = `Ramai! ${readingQueue.length} antri...`;
+    // Voice acknowledge flood (once per 90s)
+    if (Date.now() - lastFloodVoiceTime > 90000) {
+      lastFloodVoiceTime = Date.now();
+      queueVoiceEvent('mystic_flood_acknowledge', {
+        viewerCount: viewers.size,
+        queueLength: readingQueue.length
+      }, 2);
+    }
+  } else if (!floodMode && wasFlood) {
+    floodEl.classList.remove('show');
+  }
+}
+
+// ===== VIEWER FOCUS (profile photo during reading) =====
+function showViewerFocus(viewerId, nickname, readingType) {
+  const viewer = viewers.get(viewerId);
+  const focusEl = document.getElementById('viewerFocus');
+  const photoEl = document.getElementById('focusPhoto');
+  const nameEl = document.getElementById('focusName');
+  const typeEl = document.getElementById('focusType');
+
+  // Set photo or placeholder
+  const pic = viewer?.profilePic;
+  if (pic) {
+    // Replace placeholder div with img
+    const img = document.createElement('img');
+    img.className = 'focus-photo';
+    img.src = pic;
+    img.alt = nickname;
+    img.onerror = () => { img.style.display = 'none'; };
+    photoEl.replaceWith(img);
+  } else {
+    // Use colored placeholder with initial
+    photoEl.className = 'focus-photo placeholder';
+    photoEl.textContent = nickname.charAt(0).toUpperCase();
+    photoEl.style.background = `hsl(${(nickname.charCodeAt(0) * 37) % 360}, 60%, 25%)`;
+  }
+
+  nameEl.textContent = nickname;
+  typeEl.textContent = readingType;
+  focusEl.classList.add('show');
+}
+
+function hideViewerFocus() {
+  const focusEl = document.getElementById('viewerFocus');
+  focusEl.classList.remove('show');
+  // Restore placeholder div
+  const photoContainer = focusEl.querySelector('.focus-photo, img.focus-photo');
+  if (photoContainer && photoContainer.tagName === 'IMG') {
+    const div = document.createElement('div');
+    div.className = 'focus-photo placeholder';
+    div.id = 'focusPhoto';
+    div.textContent = '🔮';
+    photoContainer.replaceWith(div);
+  }
+}
+
+// ===== DRAMATIC ELEMENT EFFECTS =====
+function getElementForZodiac(zodiac) {
+  if (!zodiac || !ZODIAC_DATA[zodiac]) return null;
+  return ZODIAC_DATA[zodiac].element; // Api, Tanah, Angin, Air
+}
+
+function triggerDramaticEffect(element, duration = 3000) {
+  const overlay = document.getElementById('dramaticOverlay');
+  overlay.innerHTML = '';
+  overlay.className = 'dramatic-overlay';
+
+  switch (element) {
+    case 'Api':
+    case 'fire':
+      overlay.classList.add('fire-effect');
+      break;
+    case 'Air':
+    case 'water':
+      overlay.classList.add('water-effect');
+      break;
+    case 'skull':
+    case 'dark': {
+      overlay.classList.add('skull-effect');
+      const skull = document.createElement('div');
+      skull.className = 'skull-icon';
+      skull.textContent = '\uD83D\uDC80';
+      overlay.appendChild(skull);
+      break;
+    }
+    case 'Angin':
+    case 'lightning': {
+      overlay.classList.add('lightning-effect');
+      // Multiple lightning flashes
+      for (let i = 0; i < 3; i++) {
+        setTimeout(() => {
+          const flash = document.createElement('div');
+          flash.className = 'lightning-flash';
+          overlay.appendChild(flash);
+          setTimeout(() => flash.remove(), 200);
+        }, i * 400);
+      }
+      const bolt = document.createElement('div');
+      bolt.className = 'lightning-bolt';
+      bolt.textContent = '\u26A1';
+      overlay.appendChild(bolt);
+      break;
+    }
+    case 'Tanah':
+    default:
+      // Subtle earth rumble — no overlay, just camera shake
+      if (!manualCamera) {
+        const origY = camera.position.y;
+        let shakeTime = 0;
+        const shakeInterval = setInterval(() => {
+          shakeTime += 50;
+          camera.position.y = origY + (Math.random() - 0.5) * 0.1;
+          if (shakeTime > 800) { clearInterval(shakeInterval); camera.position.y = origY; }
+        }, 50);
+      }
+      return; // No overlay for earth
+  }
+
+  overlay.classList.add('show');
+  setTimeout(() => {
+    overlay.classList.remove('show');
+    setTimeout(() => { overlay.innerHTML = ''; overlay.className = 'dramatic-overlay'; }, 500);
+  }, duration);
+}
+
+// ===== TIKTOK EVENT HANDLERS =====
+function handleViewerJoin(data) {
+  const uid = data.uniqueId || data.id || 'anon_' + Date.now();
+  const nick = data.nickname || uid;
+  const pic = data.profilePictureUrl || data.profilePicUrl || '';
+  if (!viewers.has(uid)) {
+    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
+    document.getElementById('viewerCount').textContent = viewers.size;
+    addNotification(`<strong>${nick}</strong> memasuki dunia mistis`);
+    viewers.get(uid).score += 1;
+    updateLeaderboard();
+  } else {
+    // Update profile pic if we didn't have it before
+    const v = viewers.get(uid);
+    if (!v.profilePic && pic) v.profilePic = pic;
+  }
+  refreshOrbs();
+  trackEvent();
+
+  // Voice greeting batch
+  joinBatch.push({ nickname: nick, uniqueId: uid });
+  if (joinBatchTimer) clearTimeout(joinBatchTimer);
+  joinBatchTimer = setTimeout(flushJoinBatch, 8000);
+}
+
+function handleLike(data) {
+  const uid = data.uniqueId || data.id || '';
+  const count = Math.min(data.likeCount || 1, 3);
+  if (viewers.has(uid)) {
+    viewers.get(uid).score += count;
+    viewers.get(uid).lastActive = Date.now();
+  }
+  addCrystalEnergy(count);
+  updateLeaderboard();
+  trackEvent();
+
+  // Glow the viewer's orb
+  const orb = viewerOrbs.get(uid);
+  if (orb) {
+    orb.orbMat.emissiveIntensity = 1.0;
+    setTimeout(() => orb.orbMat.emissiveIntensity = 0.3, 500);
+  }
+}
+
+function handleChat(data) {
+  const uid = data.uniqueId || data.id || '';
+  const nick = data.nickname || uid;
+  const pic = data.profilePictureUrl || data.profilePicUrl || '';
+  const comment = (data.comment || '').trim();
+  if (!comment) return;
+
+  // Ensure viewer exists
+  if (!viewers.has(uid)) {
+    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
+    document.getElementById('viewerCount').textContent = viewers.size;
+  }
+  const viewer = viewers.get(uid);
+  viewer.lastActive = Date.now();
+  if (!viewer.profilePic && pic) viewer.profilePic = pic;
+  trackEvent();
+
+  // Check for birthday/zodiac — store zodiac but NO free reading
+  const bday = detectBirthday(comment);
+  if (bday) {
+    viewer.zodiac = bday.zodiac;
+    viewer.score += 3;
+    addNotification(`<strong>${nick}</strong> zodiak ${ZODIAC_DATA[bday.zodiac]?.symbol || ''} ${bday.zodiac.toUpperCase()}! Kirim gift untuk reading!`, 'zodiac');
+    updateLeaderboard();
+    refreshOrbs();
+    return;
+  }
+
+  // Check for jodoh/love — notify but NO free reading
+  const lower = comment.toLowerCase();
+  if (lower.includes('jodoh') || lower.includes('love') || lower.includes('match') || lower.includes('cinta')) {
+    viewer.score += 2;
+    addNotification(`<strong>${nick}</strong> mau cek jodoh? Kirim gift biar Eyang bacain!`, 'zodiac');
+    updateLeaderboard();
+    return;
+  }
+
+  // Check for question — notify but NO free reading
+  if (comment.endsWith('?') || lower.startsWith('tanya') || lower.startsWith('soalan')) {
+    viewer.score += 1;
+    addNotification(`<strong>${nick}</strong> punya pertanyaan... Kirim gift untuk jawaban!`, 'zodiac');
+    updateLeaderboard();
+    return;
+  }
+
+  // Regular chat
+  viewer.score += 1;
+  addNotification(`<strong>${nick}</strong>: ${comment}`);
+  updateLeaderboard();
+}
+
+function handleGift(data) {
+  const uid = data.uniqueId || data.id || '';
+  const nick = data.nickname || uid;
+  const pic = data.profilePictureUrl || data.profilePicUrl || '';
+  const diamonds = data.diamondCount || 0;
+
+  if (!viewers.has(uid)) {
+    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
+  }
+  const viewer = viewers.get(uid);
+  viewer.lastActive = Date.now();
+  if (!viewer.profilePic && pic) viewer.profilePic = pic;
+  trackEvent();
+
+  // Check per-user cooldown (VIP bypasses)
+  if (diamonds < 500 && readingCooldowns.has(uid) && Date.now() - readingCooldowns.get(uid) < PER_USER_COOLDOWN) {
+    addNotification(`<strong>${nick}</strong> terima kasih! Tunggu sebentar ya...`, 'gift');
+    viewer.score += Math.min(diamonds, 10);
+    updateLeaderboard();
+    return;
+  }
+  readingCooldowns.set(uid, Date.now());
+
+  // Determine reading type and include viewer zodiac if known
+  const readingData = { diamonds, zodiac: viewer.zodiac || null };
+
+  if (diamonds >= 500) {
+    viewer.score += 250;
+    addNotification(`<strong>${nick}</strong> membuka VIP PROPHECY! (${diamonds} diamonds)`, 'gift');
+    queueReading('vip_vision', uid, nick, readingData, 5);
+  } else if (diamonds >= 100) {
+    viewer.score += 80;
+    addNotification(`<strong>${nick}</strong> VISI SPESIAL! (${diamonds} diamonds)`, 'gift');
+    triggerGiftEffect('big');
+    queueReading('gift_reading', uid, nick, readingData, 4);
+  } else if (diamonds >= 11) {
+    viewer.score += 30;
+    addNotification(`<strong>${nick}</strong> ramalan mendalam! (${diamonds} diamonds)`, 'gift');
+    triggerGiftEffect('medium');
+    queueReading('gift_reading', uid, nick, readingData, 3);
+  } else {
+    viewer.score += 10;
+    addNotification(`<strong>${nick}</strong> ramalan pribadi! (${diamonds} diamonds)`, 'gift');
+    triggerGiftEffect('small');
+    queueReading('fortune', uid, nick, readingData, 3);
+  }
+  updateLeaderboard();
+  refreshOrbs();
+}
+
+function handleFollow(data) {
+  const uid = data.uniqueId || data.id || '';
+  const nick = data.nickname || uid;
+  const pic = data.profilePictureUrl || data.profilePicUrl || '';
+  if (!viewers.has(uid)) {
+    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
+  }
+  const v = viewers.get(uid);
+  if (!v.profilePic && pic) v.profilePic = pic;
+  v.score += 10;
+  addNotification(`<strong>${nick}</strong> follow! Berkah mistis aktif!`, 'follow');
+  updateLeaderboard();
+  refreshOrbs();
+  trackEvent();
+}
+
+function handleShare(data) {
+  const uid = data.uniqueId || data.id || '';
+  const nick = data.nickname || uid;
+  const pic = data.profilePictureUrl || data.profilePicUrl || '';
+  if (!viewers.has(uid)) {
+    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic });
+  }
+  const v = viewers.get(uid);
+  if (!v.profilePic && pic) v.profilePic = pic;
+  v.score += 5;
+  addNotification(`<strong>${nick}</strong> share! Ajak teman cek nasib bareng!`, 'follow');
+  updateLeaderboard();
+  trackEvent();
+}
+
+// ===== VOICE COMMENTARY SYSTEM =====
+let voiceEnabled = true; // Auto-enabled for fortune reader
+let voiceIsGenerating = false;
+let voiceIsPlaying = false;
+const voiceQueue = [];
+const voiceAudioQueue = [];
+const voiceRecentContext = [];
+const MAX_VOICE_CONTEXT = 5;
+const MAX_VOICE_QUEUE = 4;
+const VOICE_COOLDOWN = 3000;
+let lastVoiceTime = 0;
+let voiceSubtitleTimer = null;
+
+function toggleVoiceCommentary() {
+  voiceEnabled = !voiceEnabled;
+  const btn = document.getElementById('voiceToggleBtn');
+  const indicator = document.getElementById('voiceIndicator');
+  btn.textContent = voiceEnabled ? 'Voice: ON' : 'Voice: OFF';
+  btn.style.background = voiceEnabled ? '#9b59b6' : '#222';
+  btn.style.color = voiceEnabled ? '#fff' : '#ccc';
+  indicator.style.display = voiceEnabled ? 'block' : 'none';
+  if (voiceEnabled) {
+    unlockAudio();
+    document.getElementById('voiceStatusText').textContent = 'Voice Ready';
+  }
+}
+
+function queueVoiceEvent(eventType, eventData, priority = 1) {
+  if (!voiceEnabled) return;
+  if (voiceQueue.length >= MAX_VOICE_QUEUE) {
+    const lowIdx = voiceQueue.findIndex(q => q.priority < priority);
+    if (lowIdx !== -1) voiceQueue.splice(lowIdx, 1);
+    else return;
+  }
+  voiceQueue.push({ eventType, eventData, priority });
+  processVoiceQueue();
+}
+
+async function processVoiceQueue() {
+  if (voiceIsGenerating) return;
+  if (voiceQueue.length === 0) return;
+  if (Date.now() - lastVoiceTime < VOICE_COOLDOWN) {
+    setTimeout(processVoiceQueue, VOICE_COOLDOWN - (Date.now() - lastVoiceTime));
+    return;
+  }
+
+  voiceQueue.sort((a, b) => b.priority - a.priority);
+  const event = voiceQueue.shift();
+  voiceIsGenerating = true;
+  document.getElementById('voiceStatusText').textContent = 'Generating...';
+
+  try {
+    const res = await fetch('/api/voice/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: event.eventType,
+        eventData: event.eventData,
+        recentContext: voiceRecentContext,
+        room: ROOM,
+        voiceId: MYSTIC_VOICE_ID
+      }),
+    });
+
+    if (!res.ok) {
+      console.error('Voice API error:', res.status);
+      document.getElementById('voiceStatusText').textContent = 'API Error';
+      return;
+    }
+
+    const text = decodeURIComponent(res.headers.get('X-Commentary-Text') || '');
+    const blob = await res.blob();
+
+    voiceRecentContext.push(`${event.eventType}: ${text}`);
+    if (voiceRecentContext.length > MAX_VOICE_CONTEXT) voiceRecentContext.shift();
+
+    lastVoiceTime = Date.now();
+    enqueueVoiceAudio(blob, text);
+
+    // Update fortune display text if currently showing
+    if (readingState === 'REVEAL' && text) {
+      document.getElementById('fortuneText').textContent = text;
+    }
+  } catch (err) {
+    console.error('Voice error:', err);
+    document.getElementById('voiceStatusText').textContent = 'Error';
+  } finally {
+    voiceIsGenerating = false;
+    if (voiceQueue.length > 0) setTimeout(processVoiceQueue, 500);
+  }
+}
+
+function enqueueVoiceAudio(blob, text) {
+  if (voiceAudioQueue.length >= 3) {
+    const old = voiceAudioQueue.shift();
+    URL.revokeObjectURL(old.url);
+  }
+  const url = URL.createObjectURL(blob);
+  voiceAudioQueue.push({ url, text });
+  if (!voiceIsPlaying) playNextVoice();
+}
+
+function playNextVoice() {
+  if (voiceAudioQueue.length === 0) {
+    voiceIsPlaying = false;
+    document.getElementById('voiceStatusText').textContent = 'Voice Ready';
+    document.getElementById('voiceSubtitle').style.display = 'none';
+    return;
+  }
+  voiceIsPlaying = true;
+  const item = voiceAudioQueue.shift();
+
+  const subtitleEl = document.getElementById('voiceSubtitle');
+  subtitleEl.textContent = item.text;
+  subtitleEl.style.display = 'block';
+  document.getElementById('voiceStatusText').textContent = 'Speaking...';
+  document.getElementById('voiceSpeakerIcon').textContent = '\uD83D\uDD0A';
+
+  const audio = new Audio(item.url);
+  audio.volume = 0.85;
+  audio.onended = () => {
+    URL.revokeObjectURL(item.url);
+    document.getElementById('voiceSpeakerIcon').textContent = '\uD83C\uDFA4';
+    clearTimeout(voiceSubtitleTimer);
+    voiceSubtitleTimer = setTimeout(() => subtitleEl.style.display = 'none', 1000);
+    playNextVoice();
+  };
+  audio.onerror = () => { URL.revokeObjectURL(item.url); playNextVoice(); };
+  audio.play().catch(() => playNextVoice());
+}
+
+// ===== VIEWER JOIN BATCHING =====
+const joinBatch = [];
+let joinBatchTimer = null;
+let lastJoinGreetTime = 0;
+const JOIN_GREET_COOLDOWN = 15000;
+let inviteTimer = 120;
+
+function flushJoinBatch() {
+  if (joinBatch.length === 0) return;
+  if (!voiceEnabled) { joinBatch.length = 0; return; }
+  if (Date.now() - lastJoinGreetTime < JOIN_GREET_COOLDOWN) { joinBatch.length = 0; return; }
+
+  const batch = joinBatch.splice(0);
+  lastJoinGreetTime = Date.now();
+
+  const names = batch.map(v => v.nickname);
+  const nameStr = names.length <= 4 ? names.join(', ') : names.slice(0, 3).join(', ') + ` dan ${names.length - 3} lagi`;
+
+  queueVoiceEvent('mystic_viewers_welcome', { count: batch.length, names: nameStr, queueLength: readingQueue.length }, 2);
+}
+
+// ===== ANIMATION LOOP =====
+const clock = new THREE.Clock();
+let elapsedTotal = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.1);
+  elapsedTotal += dt;
+
+  // Auto camera sway
+  if (autoCamEnabled && !manualCamera) {
+    const t = elapsedTotal * 0.05;
+    camera.position.x = Math.sin(t) * 0.5;
+    camera.position.z = 5 + Math.cos(t) * 0.3;
+    camera.lookAt(0, 1, 0);
+  }
+  controls.update();
+
+  // Candle flicker
+  candles.forEach((c, i) => {
+    const flicker = 0.4 + Math.sin(elapsedTotal * 5 + i * 1.5) * 0.15;
+    c.flame.scale.setScalar(flicker * 2);
+    candleLights[i].intensity = 0.5 + Math.sin(elapsedTotal * 4 + i * 2) * 0.2;
+  });
+
+  // Crystal ball pulse
+  if (readingState === 'READING' || readingState === 'REVEAL') {
+    const p = Math.sin(elapsedTotal * 3) * 0.5 + 0.5;
+    crystalInner.scale.setScalar(0.8 + p * 0.3);
+    crystalLight.intensity = 3 + p * 2;
+  } else {
+    crystalInner.scale.setScalar(0.9 + Math.sin(elapsedTotal * 1.5) * 0.05);
+  }
+
+  // Zodiac ring rotation
+  zodiacSprites.forEach(s => {
+    const angle = s.userData.baseAngle + elapsedTotal * 0.1;
+    const r = 2.8;
+    s.position.set(Math.cos(angle) * r, 2.2 + Math.sin(elapsedTotal * 0.5 + s.userData.index) * 0.1, Math.sin(angle) * r);
+  });
+
+  // Stars rotation
+  stars.rotation.y += dt * 0.005;
+  stars.rotation.x += dt * 0.002;
+
+  // Particles
+  const posArr = particles.geometry.attributes.position.array;
+  const speedMult = (readingState === 'READING') ? 2.0 : 1.0;
+  for (let i = 0; i < particleCount; i++) {
+    const angle = elapsedTotal * 0.3 + i * 0.5;
+    posArr[i * 3] += Math.cos(angle) * 0.002 * speedMult;
+    posArr[i * 3 + 1] += particleVel[i * 3 + 1] * dt * speedMult;
+    posArr[i * 3 + 2] += Math.sin(angle) * 0.002 * speedMult;
+    // Reset if too high
+    if (posArr[i * 3 + 1] > 3.0) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.3 + Math.random() * 1.0;
+      posArr[i * 3] = Math.cos(a) * r;
+      posArr[i * 3 + 1] = 0.5;
+      posArr[i * 3 + 2] = Math.sin(a) * r;
+    }
+  }
+  particles.geometry.attributes.position.needsUpdate = true;
+
+  // Viewer orbs bob
+  viewerOrbs.forEach((orb) => {
+    const r = 2.5;
+    orb.mesh.position.x = Math.cos(orb.angle + elapsedTotal * 0.08) * r;
+    orb.mesh.position.z = Math.sin(orb.angle + elapsedTotal * 0.08) * r;
+    orb.mesh.position.y = 1.6 + Math.sin(elapsedTotal * 2 + orb.bobOffset) * 0.1;
+  });
+
+  // Flood counter reset (every 60s, reset counter)
+  eventCounterTimer += dt;
+  if (eventCounterTimer >= 60) {
+    eventCounterTimer = 0;
+    eventsPerMinute = 0;
+    if (floodMode) {
+      floodMode = false;
+      document.getElementById('floodStatus').classList.remove('show');
+    }
+  }
+
+  // Engagement prompt — ask viewers to send gifts
+  if (voiceEnabled) {
+    engageTimer -= dt;
+    if (engageTimer <= 0 && Date.now() - lastEngageTime > ENGAGE_COOLDOWN) {
+      engageTimer = 60 + Math.random() * 30; // 60-90s between prompts
+      lastEngageTime = Date.now();
+      if (viewers.size > 0 && readingQueue.length < 2) {
+        queueVoiceEvent('mystic_ask_engage', {
+          viewerCount: viewers.size,
+          queueLength: readingQueue.length
+        }, 1);
+      }
+    }
+
+    // Invite timer
+    inviteTimer -= dt;
+    if (inviteTimer <= 0) {
+      inviteTimer = 120;
+      if (viewers.size > 0) {
+        queueVoiceEvent('mystic_invite_friends', {
+          viewerCount: viewers.size,
+        }, 1);
+      }
+    }
+  }
+
+  // Auto-play
+  if (autoPlay) {
+    autoPlayTimer -= dt;
+    if (autoPlayTimer <= 0) {
+      autoPlayTimer = 3 + Math.random() * 5;
+      simulateRandomEvent();
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ===== AUTO-PLAY SIMULATION =====
+const TEST_NAMES = ['Aisyah', 'Haziq', 'Mei Ling', 'Arjun', 'Nurul', 'Danish', 'Siti', 'Yuki', 'Amir', 'Priya'];
+const TEST_CHATS = [
+  '15 mac', 'aries', 'jodoh?', 'what is my fortune?', 'hello!',
+  'scorpio', '22 dis', 'love prediction?', 'lucky number?', '10 jul',
+  'taurus', 'soalan: kerja apa sesuai?', 'gemini', '5 mei', 'cinta?',
+];
+let testIdx = 0;
+
+function simulateRandomEvent() {
+  const roll = Math.random();
+  if (roll < 0.3) {
+    // New viewer
+    const id = 'test_' + (testIdx++);
+    const nick = TEST_NAMES[Math.floor(Math.random() * TEST_NAMES.length)];
+    handleViewerJoin({ uniqueId: id, nickname: nick + '_' + id.slice(-3) });
+  } else if (roll < 0.55) {
+    // Like
+    const v = getRandomViewer();
+    if (v) handleLike({ uniqueId: v.uniqueId, nickname: v.nickname, likeCount: 1 + Math.floor(Math.random() * 3) });
+  } else if (roll < 0.8) {
+    // Chat
+    const v = getRandomViewer();
+    if (v) {
+      const chat = TEST_CHATS[Math.floor(Math.random() * TEST_CHATS.length)];
+      handleChat({ uniqueId: v.uniqueId, nickname: v.nickname, comment: chat });
+    }
+  } else if (roll < 0.92) {
+    // Gift
+    const v = getRandomViewer();
+    if (v) {
+      const diamonds = [5, 10, 30, 50, 100, 200, 500][Math.floor(Math.random() * 7)];
+      handleGift({ uniqueId: v.uniqueId, nickname: v.nickname, diamondCount: diamonds, giftName: 'Rose', repeatCount: 1 });
+    }
+  } else {
+    // Follow
+    const v = getRandomViewer();
+    if (v) handleFollow({ uniqueId: v.uniqueId, nickname: v.nickname });
+  }
+}
+
+function getRandomViewer() {
+  const all = Array.from(viewers.values());
+  return all.length > 0 ? all[Math.floor(Math.random() * all.length)] : null;
+}
+
+// ===== KEYBOARD DEBUG =====
+document.addEventListener('keydown', (e) => {
+  const key = e.key.toUpperCase();
+  switch (key) {
+    case 'T': window._debug('addViewer'); break;
+    case 'D': window._debug('add10'); break;
+    case 'L': window._debug('like'); break;
+    case 'B': window._debug('gift'); break;
+    case 'Z': window._debug('zodiac'); break;
+    case 'J': window._debug('jodoh'); break;
+    case 'Q': window._debug('question'); break;
+    case 'V': window._debug('autocam'); break;
+    case 'A': window._debug('auto'); break;
+  }
+});
+
+window._debug = function(action) {
+  switch (action) {
+    case 'addViewer': {
+      const id = 'test_' + (testIdx++);
+      const nick = TEST_NAMES[Math.floor(Math.random() * TEST_NAMES.length)] + '_' + id.slice(-3);
+      handleViewerJoin({ uniqueId: id, nickname: nick });
+      break;
+    }
+    case 'add10': {
+      for (let i = 0; i < 10; i++) {
+        const id = 'test_' + (testIdx++);
+        const nick = TEST_NAMES[Math.floor(Math.random() * TEST_NAMES.length)] + '_' + id.slice(-3);
+        handleViewerJoin({ uniqueId: id, nickname: nick });
+      }
+      break;
+    }
+    case 'like': {
+      const v = getRandomViewer();
+      if (v) handleLike({ uniqueId: v.uniqueId, nickname: v.nickname, likeCount: 2 });
+      break;
+    }
+    case 'gift': {
+      if (!window._giftTier) window._giftTier = 0;
+      const tiers = [5, 30, 150, 500];
+      const diamonds = tiers[window._giftTier % tiers.length];
+      window._giftTier++;
+      const v = getRandomViewer();
+      if (v) handleGift({ uniqueId: v.uniqueId, nickname: v.nickname, diamondCount: diamonds, giftName: 'Gift', repeatCount: 1 });
+      break;
+    }
+    case 'zodiac': {
+      const v = getRandomViewer();
+      const signs = Object.keys(ZODIAC_DATA);
+      const sign = signs[Math.floor(Math.random() * signs.length)];
+      if (v) {
+        v.zodiac = sign;
+        queueReading('zodiac', v.uniqueId, v.nickname, { zodiac: sign, date: '15 Mac' }, 3);
+        addNotification(`[DEBUG] Zodiac reading: ${v.nickname} = ${sign}`, 'zodiac');
+      }
+      break;
+    }
+    case 'jodoh': {
+      const all = Array.from(viewers.values());
+      if (all.length >= 2) {
+        const a = all[0], b = all[1];
+        queueReading('jodoh', a.uniqueId, a.nickname, {
+          partner: b.nickname, zodiac1: a.zodiac || 'aries', zodiac2: b.zodiac || 'pisces'
+        }, 3);
+        addNotification(`[DEBUG] Jodoh: ${a.nickname} + ${b.nickname}`, 'zodiac');
+      }
+      break;
+    }
+    case 'question': {
+      const v = getRandomViewer();
+      if (v) {
+        queueReading('question', v.uniqueId, v.nickname, { question: 'Apa nasib saya hari ini?' }, 2);
+        addNotification(`[DEBUG] Question from ${v.nickname}`, 'zodiac');
+      }
+      break;
+    }
+    case 'autocam': {
+      autoCamEnabled = !autoCamEnabled;
+      manualCamera = !autoCamEnabled;
+      controls.enabled = !autoCamEnabled;
+      addNotification(autoCamEnabled ? 'Auto Camera ON' : 'Auto Camera OFF');
+      break;
+    }
+    case 'auto': {
+      autoPlay = !autoPlay;
+      autoPlayTimer = 0;
+      addNotification(autoPlay ? 'Auto-play ON' : 'Auto-play OFF');
+      break;
+    }
+  }
+};
+
+window._toggleVoice = toggleVoiceCommentary;
+
+// ===== SOCKET.IO =====
+const params = new URLSearchParams(window.location.search);
+const ROOM = params.get('room') || '';
+
+let socket = null;
+function connectSocket() {
+  const ioScript = document.createElement('script');
+  ioScript.src = '/socket.io/socket.io.js';
+  ioScript.onload = () => {
+    socket = io({ query: { room: ROOM } });
+
+    socket.on('like', (data) => handleLike(data));
+    socket.on('chat', (data) => handleChat(data));
+    socket.on('gift', (data) => handleGift(data));
+    socket.on('follow', (data) => handleFollow(data));
+    socket.on('share', (data) => handleShare(data));
+    socket.on('viewer-join', (data) => handleViewerJoin(data));
+    socket.on('room-stats', (data) => {
+      document.getElementById('viewerCount').textContent = data.viewerCount || viewers.size;
+    });
+
+    console.log('Socket connected, room:', ROOM || '(default)');
+  };
+  document.head.appendChild(ioScript);
+}
+
+// ===== INIT =====
+function init() {
+  // Loading progress
+  const progress = document.getElementById('progressFill');
+  const loadText = document.getElementById('loadingText');
+  let pct = 0;
+
+  const steps = [
+    { text: 'Membangunkan bola kristal...', pct: 20 },
+    { text: 'Menyusun simbol zodiak...', pct: 40 },
+    { text: 'Mengalirkan energi mistis...', pct: 60 },
+    { text: 'Memanggil Nurin...', pct: 80 },
+    { text: 'Siap!', pct: 100 },
+  ];
+
+  let stepIdx = 0;
+  const loadInterval = setInterval(() => {
+    if (stepIdx >= steps.length) {
+      clearInterval(loadInterval);
+      setTimeout(() => {
+        document.getElementById('loadingScreen').classList.add('hidden');
+        // Enable voice indicator
+        document.getElementById('voiceIndicator').style.display = 'block';
+        document.getElementById('voiceToggleBtn').textContent = 'Voice: ON';
+        document.getElementById('voiceToggleBtn').style.background = '#9b59b6';
+        document.getElementById('voiceToggleBtn').style.color = '#fff';
+      }, 500);
+      return;
+    }
+    const step = steps[stepIdx++];
+    loadText.textContent = step.text;
+    progress.style.width = step.pct + '%';
+  }, 400);
+
+  connectSocket();
+  animate();
+}
+
+init();
+
+</script>
+</body>
+</html>

@@ -152,6 +152,9 @@ SPEAKING RULES:
   }
 }
 
+// Nurin Mystic personality — Bahasa Indonesia fortune teller
+const NURIN_MYSTIC_PROMPT = `Kamu adalah Eyang Nurin, peramal tua yang bijaksana dan misterius di TikTok Live. Kamu membaca nasib lewat bola kristal. Kamu bicara pakai Bahasa Indonesia yang hangat — seperti kakek bijak yang bercerita ke cucunya. Nadamu tenang, dalam, dan penuh keyakinan. Kamu kadang dramatis dan suka bikin penasaran, tapi selalu positif dan mengayomi. Jangan pakai emoji. Tulis persis seperti yang harus DIUCAPKAN secara natural. Variasikan kalimatmu. Panggil viewer dengan "nak" atau nama mereka. Kamu peramal yang bijak tapi tetap hangat dan sedikit humor.`;
+
 function buildCommentaryPrompt(eventType, eventData, recentContext) {
   const contextStr = recentContext?.length ? `Recent context: ${recentContext.join('; ')}` : '';
   switch (eventType) {
@@ -192,6 +195,30 @@ function buildCommentaryPrompt(eventType, eventData, recentContext) {
     case 'sumo_invite_friends':
       return `${contextStr}\nKau Nurin, host game SUMO SMASH. Sekarang ada ${eventData.playerCount} players dan ${eventData.viewerCount} viewers. Ajak viewers invite kawan dorang join live ni. Buat dia rasa excited nak share. Cakap dalam ${eventData.language || 'BM pasar'}. Fun dan persuasive. 15-25 words.`;
 
+    // ===== MYSTIC NURIN — AI Fortune Reader (Bahasa Indonesia Gaul, Misterius & Playful) =====
+    case 'mystic_welcome':
+      return `${contextStr}\n${eventData.name} baru masuk live. Kasih dia sambutan singkat — sebutkan aura atau kesan pertama kamu tentang dia. Bikin dia penasaran pengen tahu lebih. Bahasa Indonesia gaul, misterius tapi ramah. Langsung ngomong ke dia. 10-15 kata.`;
+    case 'mystic_zodiac':
+      return `${contextStr}\n${eventData.name} zodiak-nya ${eventData.zodiac}${eventData.date ? ` (lahir ${eventData.date})` : ''}. Kasih personality reading yang detail — sifat positif, kelemahan, karir yang cocok, dan kehidupan cinta. Seolah kamu lihat di bola kristal. Seru tapi mendalam. Bahasa Indonesia gaul. Langsung ngomong ke ${eventData.name}. 30-50 kata.`;
+    case 'mystic_fortune':
+      return `${contextStr}\nKasih ${eventData.name} ramalan hari ini — nasib, peringatan, peluang. Kasih spesifik: angka keberuntungan, warna keberuntungan. Misterius tapi positif. Bahasa Indonesia gaul. Langsung ngomong ke dia. 20-30 kata.`;
+    case 'mystic_jodoh':
+      return `${contextStr}\nCek kecocokan ${eventData.name1} (${eventData.zodiac1}) sama ${eventData.name2} (${eventData.zodiac2}). Kasih persentase, kelebihan pasangan, tantangan. Seru dan playful. Bahasa Indonesia gaul. 25-40 kata.`;
+    case 'mystic_question':
+      return `${contextStr}\n${eventData.name} nanya: '${eventData.question}'. Jawab kayak peramal — misterius tapi membantu. Pakai metafora bola kristal. Bahasa Indonesia gaul. Langsung ngomong ke dia. 15-25 kata.`;
+    case 'mystic_gift_reading':
+      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds buat reading spesial!${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Kasih ramalan detail: cinta, karir, keuangan, kesehatan. Extra positif karena dia gift. Tunjukkan apresiasi. Bahasa Indonesia gaul. 30-50 kata.`;
+    case 'mystic_vip_vision':
+      return `${contextStr}\n${eventData.name} kasih ${eventData.diamonds} diamonds — VIP VISION!${eventData.zodiac ? ` Zodiak dia: ${eventData.zodiac}.` : ''} Kasih prophecy paling detail: personality deep dive, prediksi jodoh, jalur karir, angka keberuntungan (4 angka), warna keberuntungan, hari keberuntungan. Extra dramatis dan mistis. Apresiasi luar biasa. Bahasa Indonesia gaul. 50-80 kata.`;
+    case 'mystic_viewers_welcome':
+      return `${contextStr}\n${eventData.count} viewers baru masuk live! Nama: ${eventData.names}. Sambut semua, kasih tahu mereka: tulis tanggal lahir di chat buat set zodiak, lalu kirim gift biar Eyang bacain ramalannya. Ceria dan mengundang. Bahasa Indonesia gaul. 15-25 kata.`;
+    case 'mystic_invite_friends':
+      return `${contextStr}\nAda ${eventData.viewerCount} viewers sekarang. Ajak mereka invite teman buat cek nasib bareng-bareng. Bahasa Indonesia gaul. Seru dan persuasif. 15-25 kata.`;
+    case 'mystic_ask_engage':
+      return `${contextStr}\nAda ${eventData.viewerCount} viewers di live. ${eventData.queueLength > 0 ? `Lagi bacain ${eventData.queueLength} ramalan.` : 'Belum ada yang minta ramalan.'} Ajak viewers kirim gift biar Eyang baca nasib mereka. Bilang makin besar gift, makin detail ramalannya. Juga ajak tulis tanggal lahir di chat buat set zodiak dulu. Playful dan bikin penasaran. Bahasa Indonesia gaul. 20-30 kata.`;
+    case 'mystic_flood_acknowledge':
+      return `${contextStr}\nLive lagi ramai banget — ${eventData.viewerCount} viewers dan ${eventData.queueLength} orang antri reading! Kamu excited tapi kasih tahu sabar ya, Eyang bacain satu-satu. Yang mau didahuluin, kirim gift lebih besar! Bahasa Indonesia gaul. 15-25 kata.`;
+
     default:
       return `${contextStr}\nSomething happened on stream. Give a casual comment.`;
   }
@@ -210,6 +237,7 @@ app.get('/hillclimb', (req, res) => res.sendFile(join(__dirname, 'public', 'hill
 app.get('/funclass', (req, res) => res.sendFile(join(__dirname, 'public', 'funclass.html')));
 app.get('/fichy', (req, res) => res.sendFile(join(__dirname, 'public', 'fichy.html')));
 app.get('/sumo', (req, res) => res.sendFile(join(__dirname, 'public', 'sumo.html')));
+app.get('/mysticnurin', (req, res) => res.sendFile(join(__dirname, 'public', 'mysticnurin.html')));
 
 // API endpoint to get current config
 app.get('/api/config', (req, res) => {
@@ -299,6 +327,10 @@ app.post('/api/voice/generate', async (req, res) => {
     const { eventType, eventData, recentContext, room, voiceId } = req.body;
     const userPrompt = buildCommentaryPrompt(eventType, eventData, recentContext || []);
 
+    // Use Nurin Mystic personality for mystic events, Neo for everything else
+    const isMystic = eventType?.startsWith('mystic_');
+    const systemPrompt = isMystic ? NURIN_MYSTIC_PROMPT : NEO_PERSONALITY_PROMPT;
+
     // Step 1: GPT-4o-mini -> commentary text
     const chatRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -306,10 +338,10 @@ app.post('/api/voice/generate', async (req, res) => {
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: NEO_PERSONALITY_PROMPT },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        max_tokens: 120,
+        max_tokens: isMystic ? 200 : 120,
         temperature: 0.9,
       }),
     });
@@ -334,6 +366,10 @@ app.post('/api/voice/generate', async (req, res) => {
 
     // Step 2: ElevenLabs TTS -> audio/mpeg
     const selectedVoice = voiceId || ELEVENLABS_VOICE_ID;
+    // Mystic events use more expressive settings for natural Indonesian delivery
+    const voiceSettings = isMystic
+      ? { stability: 0.35, similarity_boost: 0.7, style: 0.85, use_speaker_boost: true }
+      : { stability: 0.3, similarity_boost: 0.85, style: 0.7, use_speaker_boost: true };
     const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${selectedVoice}/stream`, {
       method: 'POST',
       headers: {
@@ -343,7 +379,7 @@ app.post('/api/voice/generate', async (req, res) => {
       body: JSON.stringify({
         text: commentary,
         model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.3, similarity_boost: 0.85, style: 0.7, use_speaker_boost: true },
+        voice_settings: voiceSettings,
       }),
     });
 
