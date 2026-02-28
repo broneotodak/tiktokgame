@@ -817,29 +817,85 @@ const tarotSprites = [];
 let drawnCard = null; // { sprite, targetPos, startPos, animProgress, card }
 let drawnCardTimer = 0;
 
-// Hash viewer ID to get a consistent "destiny card" per viewer
-function getViewerDestinyCard(viewerId) {
+// ===== PROPER TAROT-ZODIAC CORRESPONDENCE =====
+// Traditional zodiac → Major Arcana mapping (real tarot astrology)
+const ZODIAC_TAROT = {
+  aries:       { major: 4,  suit: 'wands' },    // The Emperor + Wands (Fire)
+  taurus:      { major: 5,  suit: 'pentacles' }, // Hierophant + Pentacles (Earth)
+  gemini:      { major: 6,  suit: 'swords' },    // The Lovers + Swords (Air)
+  cancer:      { major: 7,  suit: 'cups' },       // The Chariot + Cups (Water)
+  leo:         { major: 8,  suit: 'wands' },      // Strength + Wands (Fire)
+  virgo:       { major: 9,  suit: 'pentacles' },  // The Hermit + Pentacles (Earth)
+  libra:       { major: 11, suit: 'swords' },     // Justice + Swords (Air)
+  scorpio:     { major: 13, suit: 'cups' },       // Death + Cups (Water)
+  sagittarius: { major: 14, suit: 'wands' },      // Temperance + Wands (Fire)
+  capricorn:   { major: 15, suit: 'pentacles' },  // The Devil + Pentacles (Earth)
+  aquarius:    { major: 17, suit: 'swords' },     // The Star + Swords (Air)
+  pisces:      { major: 18, suit: 'cups' },       // The Moon + Cups (Water)
+};
+
+// Element → Minor Arcana suit offset (each suit = 14 cards, starting at index 22)
+const SUIT_OFFSET = { wands: 22, cups: 36, swords: 50, pentacles: 64 };
+
+// Hash viewer ID for consistent secondary card within their suit
+function hashViewerId(viewerId) {
   let hash = 0;
   for (let i = 0; i < viewerId.length; i++) {
     hash = ((hash << 5) - hash) + viewerId.charCodeAt(i);
     hash |= 0;
   }
-  return Math.abs(hash) % TAROT_CARDS.length;
+  return Math.abs(hash);
 }
 
-// Pick tarot card — consistent per viewer, with overrides for special readings
+// Pick tarot card using proper astrology + reading type logic
 function pickTarotForReading(readingType, zodiac, viewerId) {
-  // Special overrides — always use these specific cards
-  if (readingType === 'jodoh') return 6; // The Lovers
-  if (readingType === 'vip_vision') return 10; // Wheel of Fortune
+  // Special overrides — traditional tarot spreads
+  if (readingType === 'jodoh') return 6;  // VI - The Lovers (always)
+  if (readingType === 'vip_vision') return 10; // X - Wheel of Fortune (always)
 
-  // For readings with a viewer, use their destiny card (consistent per person)
-  if (viewerId) {
-    return getViewerDestinyCard(viewerId);
+  const zt = zodiac ? ZODIAC_TAROT[zodiac] : null;
+  const viewerHash = viewerId ? hashViewerId(viewerId) : Math.floor(Math.random() * 100);
+
+  switch (readingType) {
+    case 'zodiac':
+      // Zodiac reading → their zodiac's ruling Major Arcana card
+      return zt ? zt.major : (viewerHash % 22);
+
+    case 'fortune':
+      // Fortune → Minor Arcana from their element's suit (consistent per viewer)
+      if (zt) {
+        const suitStart = SUIT_OFFSET[zt.suit];
+        return suitStart + (viewerHash % 14); // pick from their suit
+      }
+      return viewerHash % 22; // fallback to Major
+
+    case 'gift_reading':
+      // Gift reading → alternate between Major and Minor based on reading count
+      if (zt) {
+        const viewer = viewerId ? viewers.get(viewerId) : null;
+        const rc = viewer?.readingsCount || 0;
+        if (rc % 2 === 0) {
+          return zt.major; // even readings → zodiac's Major Arcana
+        } else {
+          // odd readings → court card from their suit (Page/Knight/Queen/King)
+          const suitStart = SUIT_OFFSET[zt.suit];
+          return suitStart + 10 + (viewerHash % 4); // court cards are index 10-13
+        }
+      }
+      return viewerHash % 22;
+
+    case 'question':
+      // Questions → wisdom cards (Priestess, Hermit, Moon, Hanged Man)
+      const wisdomCards = [2, 9, 12, 18];
+      return wisdomCards[viewerHash % wisdomCards.length];
+
+    case 'welcome':
+      // Welcome → The Fool (new journey) or The World (completion)
+      return viewerHash % 3 === 0 ? 21 : 0;
+
+    default:
+      return zt ? zt.major : (viewerHash % 22);
   }
-
-  // Fallback: random from Major Arcana
-  return Math.floor(Math.random() * 22);
 }
 
 function createTarotSprite(card, index, totalInRing) {
