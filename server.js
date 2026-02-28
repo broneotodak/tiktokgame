@@ -237,7 +237,7 @@ app.get('/hillclimb', (req, res) => res.sendFile(join(__dirname, 'public', 'hill
 app.get('/funclass', (req, res) => res.sendFile(join(__dirname, 'public', 'funclass.html')));
 app.get('/fichy', (req, res) => res.sendFile(join(__dirname, 'public', 'fichy.html')));
 app.get('/sumo', (req, res) => res.sendFile(join(__dirname, 'public', 'sumo.html')));
-app.get('/mysticnurin', (req, res) => res.sendFile(join(__dirname, 'public', 'mysticnurin.html')));
+app.get('/fortuneteller', (req, res) => res.sendFile(join(__dirname, 'public', 'fortuneteller.html')));
 
 // API endpoint to get current config
 app.get('/api/config', (req, res) => {

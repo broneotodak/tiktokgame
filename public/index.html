@@ -588,13 +588,13 @@
         <div class="game-card">
           <div class="game-card-icon">🔮</div>
           <div class="game-card-info">
-            <div class="game-card-name" style="color:#9b59b6">Mystic Nurin <span class="game-badge new">NEW</span></div>
+            <div class="game-card-name" style="color:#9b59b6">Fortune Teller <span class="game-badge new">NEW</span></div>
             <div class="game-card-desc">AI fortune reader — zodiac, jodoh, ramalan</div>
           </div>
           <div class="game-card-actions">
-            <input type="hidden" id="mysticnurinUrl">
-            <button onclick="copyUrl('mysticnurinUrl')" style="background:#9b59b6;color:#fff">Copy</button>
-            <button onclick="window.open(document.getElementById('mysticnurinUrl').value,'_blank')" style="background:#9b59b6;color:#fff">Open</button>
+            <input type="hidden" id="fortunetellerUrl">
+            <button onclick="copyUrl('fortunetellerUrl')" style="background:#9b59b6;color:#fff">Copy</button>
+            <button onclick="window.open(document.getElementById('fortunetellerUrl').value,'_blank')" style="background:#9b59b6;color:#fff">Open</button>
           </div>
         </div>
         <div class="game-card">
@@ -710,7 +710,7 @@
       document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
       document.getElementById('fichyUrl').value = `${window.location.origin}/fichy${roomParam}`;
       document.getElementById('sumoUrl').value = `${window.location.origin}/sumo${roomParam}`;
-      document.getElementById('mysticnurinUrl').value = `${window.location.origin}/mysticnurin${roomParam}`;
+      document.getElementById('fortunetellerUrl').value = `${window.location.origin}/fortuneteller${roomParam}`;
 
       // Load config
       fetch(`/api/config?room=${ROOM}`).then(r => r.json()).then(config => {
@@ -815,7 +815,7 @@
         document.getElementById('voiceUrl').value = `${window.location.origin}/voice${roomParam}`;
         document.getElementById('fichyUrl').value = `${window.location.origin}/fichy${roomParam}`;
         document.getElementById('sumoUrl').value = `${window.location.origin}/sumo${roomParam}`;
-        document.getElementById('mysticnurinUrl').value = `${window.location.origin}/mysticnurin${roomParam}`;
+        document.getElementById('fortunetellerUrl').value = `${window.location.origin}/fortuneteller${roomParam}`;
         // Update room badge
         const badge = document.getElementById('roomBadge');
         badge.style.display = 'inline-block';
