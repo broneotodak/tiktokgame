@@ -852,59 +852,147 @@ function hashViewerId(viewerId) {
   return Math.abs(hash);
 }
 
-// Pick tarot card using proper astrology + reading type logic
-function pickTarotForReading(readingType, zodiac, viewerId) {
-  // Special overrides — traditional tarot spreads
-  if (readingType === 'jodoh') return 6;  // VI - The Lovers (always)
-  if (readingType === 'vip_vision') return 10; // X - Wheel of Fortune (always)
+// ===== SMART TAROT CARD SELECTION =====
+// Contextual card picking: avoids repeats, gift-tier weighting, mood balance, zodiac affinity
 
+// Themed card pools for specific reading types
+const LOVE_CARDS = [6, 2, 3, 9, 17, 19, 21]; // Lovers, Priestess, Empress, Hermit, Star, Sun, World
+const VIP_POWER_CARDS = [1, 10, 19, 20, 21, 8, 7]; // Magician, Wheel, Sun, Judgement, World, Strength, Chariot
+const WISDOM_CARDS = [2, 9, 12, 18, 5, 11, 14]; // Priestess, Hermit, Hanged Man, Moon, Hierophant, Justice, Temperance
+const DRAMATIC_MAJOR = [13, 15, 16, 18, 20]; // Death, Devil, Tower, Moon, Judgement — intense readings
+const POSITIVE_MAJOR = [0, 1, 3, 6, 8, 17, 19, 21]; // Fool, Magician, Empress, Lovers, Strength, Star, Sun, World
+
+function pickTarotForReading(readingType, zodiac, viewerId, diamonds) {
+  const viewer = viewerId ? viewers.get(viewerId) : null;
   const zt = zodiac ? ZODIAC_TAROT[zodiac] : null;
-  const viewerHash = viewerId ? hashViewerId(viewerId) : Math.floor(Math.random() * 100);
+  const history = viewer?.readingHistory || [];
+  const drawnBefore = new Set(history.map(h => h.tarotCardIndex).filter(x => x !== undefined));
+  const lastMood = history.length > 0 ? (TAROT_CARDS[history[history.length - 1]?.tarotCardIndex] || {}).mood : null;
+  const readingsCount = viewer?.readingsCount || 0;
+  diamonds = diamonds || 0;
+
+  // Helper: pick from a card pool, avoiding repeats & balancing mood
+  function pickFromPool(pool) {
+    let available = pool.filter(i => !drawnBefore.has(i));
+    if (available.length === 0) available = [...pool]; // all drawn before, allow repeats
+    // Mood balance: if last reading was dark/warning, favor positive cards
+    if ((lastMood === 'dark' || lastMood === 'warning') && available.length > 2) {
+      const positive = available.filter(i => TAROT_CARDS[i]?.mood === 'positive');
+      if (positive.length > 0) available = positive;
+    }
+    // Time + viewer seeded pick for variety
+    const timeSeed = Math.floor(Date.now() / 1000) % 997; // changes every second
+    const viewerSeed = viewerId ? hashViewerId(viewerId + readingsCount) : 0;
+    return available[(timeSeed + viewerSeed) % available.length];
+  }
 
   switch (readingType) {
+    case 'jodoh': {
+      // Love reading — rotate through love-themed cards, not always The Lovers
+      const lovePool = [...LOVE_CARDS];
+      // Add their zodiac's major if available (personal touch)
+      if (zt && !lovePool.includes(zt.major)) lovePool.push(zt.major);
+      // Add cups court cards (Page/Queen of Cups = romance)
+      lovePool.push(SUIT_OFFSET.cups + 10, SUIT_OFFSET.cups + 12); // Page & Queen of Cups
+      return pickFromPool(lovePool);
+    }
+
+    case 'vip_vision': {
+      // VIP — cycle through the most powerful & dramatic cards
+      const vipPool = [...VIP_POWER_CARDS, ...DRAMATIC_MAJOR];
+      // Deduplicate
+      const uniqueVip = [...new Set(vipPool)];
+      return pickFromPool(uniqueVip);
+    }
+
     case 'zodiac':
-      // Zodiac reading → their zodiac's ruling Major Arcana card
-      return zt ? zt.major : (viewerHash % 22);
+      // Zodiac reading — their zodiac's Major Arcana + related cards
+      if (zt) {
+        const pool = [zt.major];
+        // Add Minor Arcana ace from their suit (new energy)
+        pool.push(SUIT_OFFSET[zt.suit]); // Ace
+        // Add a court card from their suit
+        pool.push(SUIT_OFFSET[zt.suit] + 10 + (readingsCount % 4)); // rotate Page→King
+        return pickFromPool(pool);
+      }
+      return pickFromPool(POSITIVE_MAJOR);
 
     case 'fortune':
-      // Fortune → Minor Arcana from their element's suit (consistent per viewer)
+      // Fortune — varies by gift tier
+      if (diamonds >= 100 && zt) {
+        // Big gift fortune: Major Arcana from their zodiac + powerful majors
+        const pool = [zt.major, ...POSITIVE_MAJOR.filter(c => c !== zt.major)];
+        return pickFromPool(pool);
+      }
+      if (zt) {
+        // Standard fortune: Minor Arcana from their element's suit
+        const suitStart = SUIT_OFFSET[zt.suit];
+        const pool = [];
+        for (let i = 0; i < 14; i++) pool.push(suitStart + i);
+        return pickFromPool(pool);
+      }
+      return pickFromPool(POSITIVE_MAJOR);
+
+    case 'gift_reading': {
+      // Gift reading — card power scales with diamond value
+      if (diamonds >= 100) {
+        // Big gift: powerful Major Arcana (never minor)
+        const pool = zt ? [zt.major, ...VIP_POWER_CARDS] : [...VIP_POWER_CARDS];
+        return pickFromPool([...new Set(pool)]);
+      }
+      if (diamonds >= 11) {
+        // Medium gift: Major Arcana or court cards from their suit
+        if (zt) {
+          const pool = [zt.major];
+          // Court cards (Page, Knight, Queen, King) from their suit
+          for (let i = 10; i < 14; i++) pool.push(SUIT_OFFSET[zt.suit] + i);
+          // Add a couple of positive majors
+          pool.push(...POSITIVE_MAJOR.slice(0, 3));
+          return pickFromPool([...new Set(pool)]);
+        }
+        return pickFromPool(POSITIVE_MAJOR);
+      }
+      // Small gift: Minor Arcana from their suit (personal touch)
       if (zt) {
         const suitStart = SUIT_OFFSET[zt.suit];
-        return suitStart + (viewerHash % 14); // pick from their suit
+        const pool = [];
+        for (let i = 0; i < 10; i++) pool.push(suitStart + i); // Ace through 10
+        return pickFromPool(pool);
       }
-      return viewerHash % 22; // fallback to Major
-
-    case 'gift_reading':
-      // Gift reading → alternate between Major and Minor based on reading count
-      if (zt) {
-        const viewer = viewerId ? viewers.get(viewerId) : null;
-        const rc = viewer?.readingsCount || 0;
-        if (rc % 2 === 0) {
-          return zt.major; // even readings → zodiac's Major Arcana
-        } else {
-          // odd readings → court card from their suit (Page/Knight/Queen/King)
-          const suitStart = SUIT_OFFSET[zt.suit];
-          return suitStart + 10 + (viewerHash % 4); // court cards are index 10-13
-        }
-      }
-      return viewerHash % 22;
+      return pickFromPool(POSITIVE_MAJOR);
+    }
 
     case 'question':
-      // Questions → wisdom cards (Priestess, Hermit, Moon, Hanged Man)
-      const wisdomCards = [2, 9, 12, 18];
-      return wisdomCards[viewerHash % wisdomCards.length];
+      // Questions → expanded wisdom card pool
+      return pickFromPool(WISDOM_CARDS);
 
     case 'welcome':
-      // Welcome → The Fool (new journey) or The World (completion)
-      return viewerHash % 3 === 0 ? 21 : 0;
+      // Welcome — The Fool (beginning) weighted heavily, but can vary
+      if (readingsCount > 0) {
+        // Returning viewer gets The World or positive card
+        return pickFromPool([21, 19, 17, 8]); // World, Sun, Star, Strength
+      }
+      return pickFromPool([0, 0, 0, 21]); // 75% Fool, 25% World
 
     default:
-      return zt ? zt.major : (viewerHash % 22);
+      return zt ? pickFromPool([zt.major]) : pickFromPool(POSITIVE_MAJOR);
   }
 }
 
+// Map card to its real image path
+function getTarotImagePath(card) {
+  if (card.suit === 'major') {
+    return `/fortuneteller-assets/tarot/major_${String(card.num).padStart(2, '0')}.jpg`;
+  }
+  const suitNum = card.num - 22; // minor arcana start at 22
+  const suitNames = { wands: 0, cups: 14, swords: 28, pentacles: 42 };
+  const suitOffset = suitNames[card.suit] || 0;
+  const cardInSuit = suitNum - suitOffset + 1;
+  return `/fortuneteller-assets/tarot/${card.suit}_${String(cardInSuit).padStart(2, '0')}.jpg`;
+}
+
 function createTarotSprite(card, index, totalInRing) {
-  const w = 80, h = 120;
+  const w = 120, h = 200;
   const cvs = document.createElement('canvas');
   cvs.width = w; cvs.height = h;
   const ctx = cvs.getContext('2d');
@@ -912,7 +1000,7 @@ function createTarotSprite(card, index, totalInRing) {
   const isMinor = card.suit !== 'major';
   const suitColor = isMinor ? card.suitColor : null;
 
-  // Card background
+  // Draw placeholder card back (will be replaced by real image when loaded)
   const grad = ctx.createLinearGradient(0, 0, 0, h);
   grad.addColorStop(0, isMinor ? '#0a1a2a' : '#1a0a3a');
   grad.addColorStop(1, '#0a0020');
@@ -920,7 +1008,7 @@ function createTarotSprite(card, index, totalInRing) {
   ctx.roundRect(2, 2, w - 4, h - 4, 6);
   ctx.fill();
 
-  // Border — suit color for minor, mood color for major
+  // Border
   const borderColor = isMinor ? suitColor :
     card.mood === 'dark' ? '#aa3333' : card.mood === 'warning' ? '#cc8800' : '#f1c40f';
   ctx.strokeStyle = borderColor;
@@ -928,47 +1016,42 @@ function createTarotSprite(card, index, totalInRing) {
   ctx.roundRect(2, 2, w - 4, h - 4, 6);
   ctx.stroke();
 
-  // Symbol / numeral
-  ctx.font = 'bold 18px serif';
+  // Symbol placeholder
+  ctx.font = 'bold 22px serif';
   ctx.textAlign = 'center';
-  ctx.fillStyle = isMinor ? suitColor : (card.mood === 'dark' ? '#ff4444' : '#f1c40f');
-  ctx.fillText(card.symbol, w / 2, 28);
-
-  // Decorative line
-  ctx.strokeStyle = isMinor ? suitColor + '55' : 'rgba(241,196,15,0.3)';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(12, 38); ctx.lineTo(w - 12, 38); ctx.stroke();
-
-  // Card name (wrapped)
-  ctx.font = '10px sans-serif';
-  ctx.fillStyle = isMinor ? '#aaccee' : '#d4a0ff';
-  const words = card.name.split(' ');
-  let line = '', lineY = 58;
-  for (const word of words) {
-    const test = line ? line + ' ' + word : word;
-    if (ctx.measureText(test).width > w - 16) {
-      ctx.fillText(line, w / 2, lineY);
-      line = word; lineY += 13;
-    } else { line = test; }
-  }
-  if (line) ctx.fillText(line, w / 2, lineY);
-
-  // Mood/suit icon at bottom
-  ctx.font = '20px serif';
-  if (isMinor) {
-    ctx.fillText(card.suitIcon, w / 2, h - 14);
-  } else {
-    const icons = { positive: '\u2728', neutral: '\uD83D\uDD2E', warning: '\uD83C\uDF19', dark: '\uD83D\uDC80' };
-    ctx.fillText(icons[card.mood] || '\u2728', w / 2, h - 14);
-  }
+  ctx.fillStyle = isMinor ? suitColor : '#f1c40f';
+  ctx.fillText(card.symbol, w / 2, h / 2);
 
   const tex = new THREE.CanvasTexture(cvs);
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.5 });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(0.35, 0.52, 1);
+  sprite.scale.set(0.4, 0.66, 1);
   const angle = (index / (totalInRing || 22)) * Math.PI * 2;
   sprite.userData = { baseAngle: angle, index, card, originalOpacity: 0.5 };
   scene.add(sprite);
+
+  // Load real tarot card image
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    const c2 = document.createElement('canvas');
+    c2.width = w; c2.height = h;
+    const g2 = c2.getContext('2d');
+    // Draw image with rounded corners
+    g2.roundRect(2, 2, w - 4, h - 4, 6);
+    g2.clip();
+    g2.drawImage(img, 2, 2, w - 4, h - 4);
+    // Mystical border glow
+    g2.strokeStyle = borderColor;
+    g2.lineWidth = 2;
+    g2.roundRect(2, 2, w - 4, h - 4, 6);
+    g2.stroke();
+    // Update texture
+    sprite.material.map = new THREE.CanvasTexture(c2);
+    sprite.material.needsUpdate = true;
+  };
+  img.src = getTarotImagePath(card);
+
   return sprite;
 }
 
@@ -1339,7 +1422,7 @@ function processReadingQueue() {
     case 'zodiac': {
       const zCard = drawTarotCard(pickTarotForReading('zodiac', reading.data.zodiac, reading.viewerId));
       eventType = 'mystic_zodiac';
-      eventData = { name: reading.nickname, zodiac: reading.data.zodiac, date: reading.data.date || '', tarotCard: zCard.name };
+      eventData = { name: reading.nickname, zodiac: reading.data.zodiac, date: reading.data.date || '', tarotCard: zCard.name, tarotCardIndex: zCard.num };
       showZodiacBadge(reading.data.zodiac);
       // Dramatic effect based on zodiac element
       const elem = getElementForZodiac(reading.data.zodiac);
@@ -1348,9 +1431,9 @@ function processReadingQueue() {
       break;
     }
     case 'fortune': {
-      const fCard = drawTarotCard(pickTarotForReading('fortune', viewerZodiac, reading.viewerId));
+      const fCard = drawTarotCard(pickTarotForReading('fortune', viewerZodiac, reading.viewerId, reading.data.diamonds));
       eventType = 'mystic_fortune';
-      eventData = { name: reading.nickname, zodiac: viewerZodiac, tarotCard: fCard.name };
+      eventData = { name: reading.nickname, zodiac: viewerZodiac, tarotCard: fCard.name, tarotCardIndex: fCard.num };
       if (fCard.mood === 'dark') setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
       else if (viewerZodiac) {
         const e = getElementForZodiac(viewerZodiac);
@@ -1361,20 +1444,20 @@ function processReadingQueue() {
     case 'jodoh': {
       const jCard = drawTarotCard(pickTarotForReading('jodoh', null, reading.viewerId));
       eventType = 'mystic_jodoh';
-      eventData = { name1: reading.nickname, zodiac1: reading.data.zodiac1 || 'unknown', name2: reading.data.partner, zodiac2: reading.data.zodiac2 || 'unknown', tarotCard: jCard.name };
+      eventData = { name1: reading.nickname, zodiac1: reading.data.zodiac1 || 'unknown', name2: reading.data.partner, zodiac2: reading.data.zodiac2 || 'unknown', tarotCard: jCard.name, tarotCardIndex: jCard.num };
       break;
     }
     case 'question': {
       const qCard = drawTarotCard(pickTarotForReading('question', null, reading.viewerId));
       eventType = 'mystic_question';
-      eventData = { name: reading.nickname, question: reading.data.question || '', tarotCard: qCard.name };
+      eventData = { name: reading.nickname, question: reading.data.question || '', tarotCard: qCard.name, tarotCardIndex: qCard.num };
       if (qCard.mood === 'dark') setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
       break;
     }
     case 'gift_reading': {
-      const gCard = drawTarotCard(pickTarotForReading('gift_reading', viewerZodiac, reading.viewerId));
+      const gCard = drawTarotCard(pickTarotForReading('gift_reading', viewerZodiac, reading.viewerId, reading.data.diamonds));
       eventType = 'mystic_gift_reading';
-      eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac, tarotCard: gCard.name };
+      eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac, tarotCard: gCard.name, tarotCardIndex: gCard.num };
       if (gCard.mood === 'dark') {
         setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
       } else if (viewerZodiac) {
@@ -1387,9 +1470,9 @@ function processReadingQueue() {
       break;
     }
     case 'vip_vision': {
-      const vCard = drawTarotCard(pickTarotForReading('vip_vision', null, reading.viewerId));
+      const vCard = drawTarotCard(pickTarotForReading('vip_vision', null, reading.viewerId, reading.data.diamonds));
       eventType = 'mystic_vip_vision';
-      eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac, tarotCard: vCard.name };
+      eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac, tarotCard: vCard.name, tarotCardIndex: vCard.num };
       triggerVIPEffect();
       setTimeout(() => triggerDramaticEffect('fire', 2000), 500);
       setTimeout(() => triggerDramaticEffect('lightning', 2000), 3000);
@@ -1403,6 +1486,12 @@ function processReadingQueue() {
 
   // Attach viewerId for rich context lookup
   eventData.viewerId = reading.viewerId;
+
+  // Store tarot card info on reading so finishReading can track it
+  if (eventData.tarotCard) {
+    reading.data.tarotCard = eventData.tarotCard;
+    reading.data.tarotCardIndex = eventData.tarotCardIndex;
+  }
 
   // Queue voice
   queueVoiceEvent(eventType, eventData, reading.priority);
@@ -1459,7 +1548,7 @@ function finishReading() {
       const fortuneText = document.getElementById('fortuneText')?.textContent || '';
       v.lastReading = { type: currentReading.type, text: fortuneText, timestamp: Date.now() };
       v.readingHistory = v.readingHistory || [];
-      v.readingHistory.push({ type: currentReading.type, tarotCard: currentReading.data?.tarotCard || '', timestamp: Date.now() });
+      v.readingHistory.push({ type: currentReading.type, tarotCard: currentReading.data?.tarotCard || '', tarotCardIndex: currentReading.data?.tarotCardIndex, timestamp: Date.now() });
       if (v.readingHistory.length > 5) v.readingHistory.shift();
     }
     conversationLog.push({ type: 'reading_done', name: currentReading.nickname, summary: `${currentReading.type} untuk ${currentReading.nickname}`, timestamp: Date.now() });

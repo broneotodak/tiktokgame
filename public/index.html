@@ -712,10 +712,16 @@
       document.getElementById('sumoUrl').value = `${window.location.origin}/sumo${roomParam}`;
       document.getElementById('fortunetellerUrl').value = `${window.location.origin}/fortuneteller${roomParam}`;
 
-      // Load config
-      fetch(`/api/config?room=${ROOM}`).then(r => r.json()).then(config => {
-        document.getElementById('usernameInput').value = config.username;
-      });
+      // Load config — only pre-fill username for pre-configured hosts, not access mode
+      if (ROOM) {
+        fetch(`/api/config?room=${ROOM}`).then(r => r.json()).then(config => {
+          document.getElementById('usernameInput').value = config.username;
+        });
+      } else {
+        // Access mode — leave username empty so host can type their own
+        document.getElementById('usernameInput').value = '';
+        document.getElementById('usernameInput').focus();
+      }
 
       // Start cost polling if room is set
       if (ROOM) {
