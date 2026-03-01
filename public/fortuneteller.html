@@ -2198,25 +2198,61 @@ function handleChat(data) {
     return;
   }
 
-  // Check for jodoh/love — Eyang replies + store pending for in-depth tarot if gift
+  // Check for jodoh/love
   const lower = comment.toLowerCase();
-  if (lower.includes('jodoh') || lower.includes('love') || lower.includes('match') || lower.includes('cinta') || lower.includes('pasangan')) {
+  const isJodohKeyword = lower.includes('jodoh') || lower.includes('love') || lower.includes('match') || lower.includes('cinta') || lower.includes('pasangan');
+
+  // If viewer already has a pending jodoh request, this chat might be their partner name/status
+  if (viewer.pendingRequest?.type === 'jodoh' && !isJodohKeyword) {
+    const partnerName = comment.trim();
+    if (partnerName.length > 0 && partnerName.length < 50) {
+      viewer.pendingRequest.partnerName = partnerName;
+      viewer.pendingRequest.time = Date.now(); // refresh expiry
+      addNotification(`<strong>${nick}</strong> mau cek jodoh sama <strong>${partnerName}</strong>`, 'zodiac');
+      queueVoiceEvent('mystic_jodoh_partner', { name: nick, viewerId: uid, zodiac: viewer.zodiac || null, partnerName }, 2);
+      showViewerFocus(uid, nick, '💕 Jodoh');
+      updateLeaderboard();
+      return;
+    }
+  }
+
+  if (isJodohKeyword) {
     viewer.score += 2;
-    viewer.pendingRequest = { type: 'jodoh', comment, time: Date.now() };
-    addNotification(`<strong>${nick}</strong> mau cek jodoh! Eyang lihat...`, 'zodiac');
-    queueVoiceEvent('mystic_jodoh_reply', { name: nick, viewerId: uid, zodiac: viewer.zodiac || null, comment }, 2);
+    // Extract partner name if mentioned: "jodoh sama Aisyah", "cinta dgn Haziq", etc
+    let partnerName = null;
+    const partnerMatch = comment.match(/(?:jodoh|cinta|pasangan|love|match)\s+(?:sama|dgn|dengan|dan|with|&)\s+(.+)/i);
+    if (partnerMatch) partnerName = partnerMatch[1].trim().slice(0, 40);
+    viewer.pendingRequest = { type: 'jodoh', comment, partnerName, time: Date.now() };
+    addNotification(`<strong>${nick}</strong> mau cek jodoh!${partnerName ? ' Sama <strong>' + partnerName + '</strong>' : ''}`, 'zodiac');
+    // Eyang asks for partner info if not provided, or acknowledges if provided
+    queueVoiceEvent(partnerName ? 'mystic_jodoh_partner' : 'mystic_jodoh_ask', {
+      name: nick, viewerId: uid, zodiac: viewer.zodiac || null, comment, partnerName
+    }, 2);
     showViewerFocus(uid, nick, '💕 Jodoh');
     updateLeaderboard();
     return;
   }
 
-  // Check for question — Eyang answers + store pending for in-depth if gift
-  if (comment.endsWith('?') || lower.startsWith('tanya') || lower.startsWith('soalan')
-    || lower.includes('gimana') || lower.includes('kapan') || lower.includes('apakah')) {
+  // Check for real question — not casual greetings like "apa kabar" or "gimana"
+  const casualPhrases = ['apa kabar', 'gimana kabar', 'halo', 'hai', 'hello', 'hi eyang', 'assalamualaikum', 'apa tu', 'apa ni', 'siapa tu', 'mana tau'];
+  const isCasual = casualPhrases.some(p => lower.includes(p));
+  const isRealQuestion = !isCasual && (
+    (comment.endsWith('?') && comment.length > 10) // short "?" not enough
+    || lower.startsWith('tanya ')
+    || lower.startsWith('soalan ')
+    || (lower.includes('apakah ') && comment.length > 15) // "apakah saya..." real question
+    || (lower.includes('kapan ') && comment.length > 12)  // "kapan saya..." real question
+    || (lower.includes('bagaimana ') && comment.length > 15)
+    || lower.includes('ramalan')
+    || lower.includes('nasib')
+    || lower.includes('masa depan')
+  );
+  if (isRealQuestion) {
     viewer.score += 1;
     viewer.pendingRequest = { type: 'question', comment, time: Date.now() };
-    addNotification(`<strong>${nick}</strong> punya pertanyaan... Eyang jawab!`, 'zodiac');
-    queueVoiceEvent('mystic_question_reply', { name: nick, viewerId: uid, question: comment }, 2);
+    addNotification(`<strong>${nick}</strong> punya pertanyaan...`, 'zodiac');
+    // Short teaser — don't give full answer for free
+    queueVoiceEvent('mystic_question_tease', { name: nick, viewerId: uid, question: comment, zodiac: viewer.zodiac || null }, 2);
     showViewerFocus(uid, nick, '❓ Pertanyaan');
     updateLeaderboard();
     return;
@@ -2233,14 +2269,11 @@ function handleChat(data) {
     return;
   }
 
-  // Regular chat — gifters always get reply, others when host is free
+  // Regular chat — gifters always get reply, others occasionally
   viewer.score += 1;
   addNotification(`<strong>${nick}</strong>: ${comment}`);
 
   const isGifter = (viewer.totalGifted || 0) > 0;
-  const hasQuestion = comment.includes('?') || lower.includes('gimana') || lower.includes('kenapa')
-    || lower.includes('kapan') || lower.includes('siapa') || lower.includes('apa') || lower.includes('bagaimana')
-    || lower.includes('berapa') || lower.includes('dimana') || lower.includes('boleh');
 
   if (isGifter) {
     // Gift givers ALWAYS get a voice reply to their comments
@@ -2252,8 +2285,8 @@ function handleChat(data) {
       isGifter: true
     }, 3);
     showViewerFocus(uid, nick, '💎 VIP Chat');
-  } else if (hasQuestion) {
-    // Anyone with a question gets a reply (when host can fit it in)
+  } else if (comment.length > 8 && !voiceIsGenerating && !voiceIsPlaying && readingState === 'IDLE') {
+    // Non-gifter: only reply when Eyang is free and comment is substantial
     queueVoiceEvent('mystic_chat_reply', {
       name: nick, viewerId: uid,
       comment,
@@ -2261,7 +2294,6 @@ function handleChat(data) {
       zodiac: viewer.zodiac || null,
       isGifter: false
     }, 1);
-    showViewerFocus(uid, nick, '💬 Chat');
   }
 
   updateLeaderboard();
@@ -2364,18 +2396,24 @@ function triggerAccumulatedGift(uid) {
 
   // Determine tier based on ACCUMULATED total
   if (hasPending && pending.type === 'jodoh') {
-    const allV = Array.from(viewers.values()).filter(v => v.uniqueId !== uid);
-    const partner = allV.length > 0 ? allV[Math.floor(Math.random() * allV.length)] : null;
+    // Use partner name from chat if provided, otherwise "seseorang misterius"
+    const partnerName = pending.partnerName || null;
+    // Try to find partner in viewers list for zodiac info
+    let partnerZodiac = 'unknown';
+    if (partnerName) {
+      const match = Array.from(viewers.values()).find(v => v.nickname.toLowerCase() === partnerName.toLowerCase());
+      if (match?.zodiac) partnerZodiac = match.zodiac;
+    }
     viewer.score += Math.max(30, diamonds);
     const label = diamonds >= 100 ? 'VISI JODOH SPESIAL' : 'Cek Jodoh';
-    addNotification(`<strong>${nick}</strong> ${label}! (${diamonds}💎 terkumpul)`, 'gift');
+    addNotification(`<strong>${nick}</strong> ${label}!${partnerName ? ' Sama <strong>' + partnerName + '</strong>' : ''} (${diamonds}💎)`, 'gift');
     if (diamonds >= 100) triggerGiftEffect('big');
     else if (diamonds >= 11) triggerGiftEffect('medium');
     queueReading('jodoh', uid, nick, {
       ...readingData,
       zodiac1: viewer.zodiac || 'unknown',
-      partner: partner ? partner.nickname : 'seseorang misterius',
-      zodiac2: partner?.zodiac || 'unknown',
+      partner: partnerName || 'seseorang misterius',
+      zodiac2: partnerZodiac,
     }, diamonds >= 100 ? 4 : 3);
   } else if (hasPending && pending.type === 'question') {
     viewer.score += Math.max(30, diamonds);
@@ -2875,16 +2913,20 @@ function animate() {
         const viewerNames = Array.from(viewers.values()).slice(0, 5).map(v => v.nickname);
         const hasGifters = Array.from(viewers.values()).some(v => (v.totalGifted || 0) > 0);
 
-        // Rotate through different idle chat types
+        // Rotate through idle chat types — weighted towards interactive/engaging
         const chatTypes = [
-          'mystic_idle_explain',    // explain how readings work
-          'mystic_idle_tarot',      // explain a random tarot card (upright/reversed)
-          'mystic_idle_atmosphere', // comment on crystal ball / mystical atmosphere
-          'mystic_ask_engage',      // ask viewers to send gifts
-          'mystic_idle_tarot',      // explain another tarot card
-          'mystic_idle_wisdom',     // share mystic wisdom / life advice
-          'mystic_idle_tease',      // tease a random viewer
-          'mystic_invite_friends',  // invite friends
+          'mystic_idle_tease',       // call out a viewer by name — creates engagement
+          'mystic_idle_tarot',       // explain a random tarot card
+          'mystic_idle_question',    // ask viewers a question they can answer in chat
+          'mystic_idle_atmosphere',  // crystal ball / mystical vibe
+          'mystic_idle_wisdom',      // life advice
+          'mystic_idle_tease',       // tease another viewer
+          'mystic_idle_callback',    // reference a recent reading / stream moment
+          'mystic_idle_question',    // another question for chat engagement
+          'mystic_idle_tarot',       // another card
+          'mystic_ask_engage',       // soft gift ask (wrapped in mystery)
+          'mystic_idle_tease',       // tease again
+          'mystic_invite_friends',   // invite friends
         ];
         const type = chatTypes[idleChatType % chatTypes.length];
         idleChatType++;
@@ -2918,6 +2960,34 @@ function animate() {
           const v = allV[Math.floor(Math.random() * allV.length)];
           idleEventData.targetName = v.nickname;
           idleEventData.targetZodiac = v.zodiac || null;
+          idleEventData.targetReadings = v.readingsCount || 0;
+          idleEventData.targetGifted = v.totalGifted || 0;
+        }
+
+        // For question, pick a topic that invites chat replies
+        if (type === 'mystic_idle_question') {
+          const topics = [
+            'zodiac', 'dream', 'luck', 'love', 'fear', 'wish', 'past', 'future', 'color', 'animal'
+          ];
+          idleEventData.questionTopic = topics[Math.floor(Math.random() * topics.length)];
+          // Include viewer names so Eyang can direct the question
+          if (viewers.size > 0) {
+            const allV = Array.from(viewers.values());
+            const v = allV[Math.floor(Math.random() * allV.length)];
+            idleEventData.targetName = v.nickname;
+          }
+        }
+
+        // For callback, reference recent conversation/reading
+        if (type === 'mystic_idle_callback') {
+          const recentReadings = conversationLog.filter(c => c.type === 'reading_done').slice(-3);
+          if (recentReadings.length > 0) {
+            const r = recentReadings[Math.floor(Math.random() * recentReadings.length)];
+            idleEventData.callbackName = r.name;
+            idleEventData.callbackSummary = r.summary;
+            idleEventData.callbackMinutesAgo = Math.round((Date.now() - r.timestamp) / 60000);
+          }
+          idleEventData.streamMinutes = Math.round((Date.now() - streamStartTime) / 60000);
         }
 
         queueVoiceEvent(type, idleEventData, 1);
@@ -3065,13 +3135,16 @@ window._debug = function(action) {
       break;
     }
     case 'jodoh': {
-      const all = Array.from(viewers.values());
-      if (all.length >= 2) {
-        const a = all[0], b = all[1];
-        queueReading('jodoh', a.uniqueId, a.nickname, {
-          partner: b.nickname, zodiac1: a.zodiac || 'aries', zodiac2: b.zodiac || 'pisces'
-        }, 3);
-        addNotification(`[DEBUG] Jodoh: ${a.nickname} + ${b.nickname}`, 'zodiac');
+      // Simulate viewer chatting "jodoh" — triggers ask flow
+      const v = getRandomViewer();
+      if (v) {
+        handleChat({ uniqueId: v.uniqueId, nickname: v.nickname, comment: 'jodoh' });
+        addNotification(`[DEBUG] ${v.nickname} asks jodoh`, 'zodiac');
+        // Simulate partner reply after 2s
+        setTimeout(() => {
+          handleChat({ uniqueId: v.uniqueId, nickname: v.nickname, comment: 'Aisyah' });
+          addNotification(`[DEBUG] ${v.nickname} says partner: Aisyah`, 'zodiac');
+        }, 2000);
       }
       break;
     }
