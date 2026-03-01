@@ -557,7 +557,7 @@ app.post('/api/fortuneteller/viewer/save', async (req, res) => {
   if (!viewers || !Array.isArray(viewers) || viewers.length === 0) {
     return res.status(400).json({ error: 'viewers array required' });
   }
-  const result = await supabaseRest('POST', 'fortuneteller_viewers', '', viewers, {
+  const result = await supabaseRest('POST', 'fortuneteller_viewers', 'on_conflict=unique_id', viewers, {
     'Prefer': 'resolution=merge-duplicates',
   });
   if (!result.ok) {
