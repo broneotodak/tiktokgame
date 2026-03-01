@@ -194,24 +194,54 @@
     }
     .dramatic-overlay.show { opacity: 1; }
 
-    /* Fire */
-    .fire-effect { background: radial-gradient(ellipse at bottom, rgba(255,100,0,0.3), rgba(255,50,0,0.1) 60%, transparent 80%); }
+    /* Fire — intense rising flames with multiple layers */
+    .fire-effect {
+      background: radial-gradient(ellipse at bottom, rgba(255,60,0,0.5), rgba(255,30,0,0.2) 40%, transparent 75%);
+    }
     .fire-effect::before, .fire-effect::after {
-      content: ''; position: absolute; bottom: 0; width: 100%; height: 50%;
-      background: linear-gradient(to top, rgba(255,80,0,0.4), rgba(255,150,0,0.1), transparent);
-      animation: fireFlicker 0.8s ease-in-out infinite alternate;
+      content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 70%;
+      background: linear-gradient(to top,
+        rgba(255,80,0,0.6) 0%, rgba(255,150,0,0.4) 20%,
+        rgba(255,200,0,0.2) 40%, transparent 70%);
+      animation: fireRise 0.6s ease-in-out infinite alternate;
+      border-radius: 50% 50% 0 0;
     }
-    .fire-effect::after { animation-delay: 0.4s; animation-duration: 1.2s; height: 40%; }
-    @keyframes fireFlicker { 0% { opacity: 0.6; transform: scaleY(0.95); } 100% { opacity: 1; transform: scaleY(1.05); } }
+    .fire-effect::after {
+      animation-delay: 0.3s; animation-duration: 0.8s; height: 55%;
+      background: linear-gradient(to top,
+        rgba(255,50,0,0.5) 0%, rgba(255,120,0,0.3) 30%, transparent 65%);
+    }
+    @keyframes fireRise {
+      0% { opacity: 0.7; transform: scaleY(0.9) scaleX(1.05); filter: blur(2px); }
+      50% { opacity: 1; transform: scaleY(1.1) scaleX(0.95); filter: blur(1px); }
+      100% { opacity: 0.8; transform: scaleY(1.05) scaleX(1.02); filter: blur(3px); }
+    }
 
-    /* Water */
-    .water-effect { background: radial-gradient(ellipse at top, rgba(0,100,255,0.25), rgba(0,50,200,0.1) 60%, transparent 80%); }
-    .water-effect::before {
-      content: ''; position: absolute; inset: 0;
-      background: repeating-linear-gradient(0deg, transparent, transparent 20%, rgba(0,150,255,0.08) 20%, rgba(0,150,255,0.08) 21%);
-      animation: waterWave 3s ease-in-out infinite;
+    /* Water — cascading waves with depth */
+    .water-effect {
+      background: radial-gradient(ellipse at center, rgba(0,80,200,0.35), rgba(0,40,150,0.15) 50%, transparent 80%);
     }
-    @keyframes waterWave { 0%,100% { transform: translateY(0); } 50% { transform: translateY(10px); } }
+    .water-effect::before, .water-effect::after {
+      content: ''; position: absolute; inset: 0;
+      border-radius: 50%;
+    }
+    .water-effect::before {
+      background:
+        radial-gradient(circle at 30% 40%, rgba(100,200,255,0.3) 0%, transparent 40%),
+        radial-gradient(circle at 70% 60%, rgba(0,150,255,0.25) 0%, transparent 35%);
+      animation: waterPulse 2s ease-in-out infinite;
+    }
+    .water-effect::after {
+      background:
+        radial-gradient(circle at 50% 50%, rgba(0,180,255,0.2) 0%, transparent 50%),
+        repeating-conic-gradient(from 0deg, transparent 0deg, rgba(100,200,255,0.1) 3deg, transparent 6deg);
+      animation: waterSpin 4s linear infinite;
+    }
+    @keyframes waterPulse {
+      0%,100% { transform: scale(0.8); opacity: 0.5; }
+      50% { transform: scale(1.2); opacity: 1; }
+    }
+    @keyframes waterSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
     /* Skull / Dark */
     .skull-effect {
@@ -224,20 +254,30 @@
     }
     @keyframes skullAppear { 0% { opacity: 0; transform: translate(-50%,-50%) scale(0.3); } 30% { opacity: 0.7; transform: translate(-50%,-50%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.5); } }
 
-    /* Lightning */
-    .lightning-effect { background: transparent; }
+    /* Lightning — dramatic multi-bolt storm */
+    .lightning-effect {
+      background: radial-gradient(circle at 50% 30%, rgba(150,150,255,0.15), transparent 60%);
+    }
     .lightning-flash {
       position: absolute; inset: 0;
-      animation: lightningBolt 0.15s ease-out;
-      background: rgba(200,200,255,0.6);
+      animation: lightningBolt 0.12s ease-out;
+      background: rgba(220,220,255,0.7);
     }
     @keyframes lightningBolt { 0% { opacity: 1; } 100% { opacity: 0; } }
     .lightning-bolt {
-      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-      font-size: 100px; opacity: 0; animation: boltStrike 1.5s ease-out forwards;
-      filter: drop-shadow(0 0 30px rgba(200,200,255,0.9));
+      position: absolute; top: -10%; left: 50%; transform: translateX(-50%);
+      font-size: 120px; opacity: 0; animation: boltStrike 1.8s ease-out forwards;
+      filter: drop-shadow(0 0 40px rgba(150,150,255,1)) drop-shadow(0 0 80px rgba(100,100,255,0.6));
+      text-shadow: 0 0 30px rgba(200,200,255,0.9);
     }
-    @keyframes boltStrike { 0% { opacity: 0; transform: translateX(-50%) translateY(-20px); } 10% { opacity: 1; transform: translateX(-50%) translateY(0); } 50% { opacity: 0.8; } 100% { opacity: 0; transform: translateX(-50%) translateY(20px); } }
+    @keyframes boltStrike {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(0.5); }
+      8% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.2); }
+      15% { opacity: 0.3; transform: translateX(-50%) translateY(5px) scale(1); }
+      25% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.1); }
+      60% { opacity: 0.8; transform: translateX(-50%) translateY(10px) scale(1); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(30px) scale(0.8); }
+    }
 
     /* Flood status bar */
     #floodStatus {
@@ -579,6 +619,10 @@ let floodMode = false;
 let readingCooldowns = new Map(); // uid → timestamp, prevent spam per user
 const PER_USER_COOLDOWN = 30000; // 30s between readings for same person
 
+// Gift accumulation — batch rapid small gifts into one reading
+const giftAccumulators = new Map(); // uid → { diamonds, timer, nick, pic, data }
+const GIFT_ACCUMULATE_WINDOW = 8000; // 8 seconds to collect gifts before triggering
+
 // Engagement prompts + idle chatter
 let engageTimer = 30; // first prompt after 30s
 let lastEngageTime = 0;
@@ -817,6 +861,33 @@ for (const [suitName, suitData] of Object.entries(MINOR_SUITS)) {
 
 // Full 78-card deck
 const TAROT_CARDS = [...MAJOR_ARCANA, ...MINOR_ARCANA];
+
+// ===== TAROT UPRIGHT / REVERSED MEANINGS =====
+// Used for readings and idle card explanations
+const TAROT_MEANINGS = {
+  0:  { upright: 'Permulaan baru, spontan, potensi tak terbatas', reversed: 'Ceroboh, takut memulai, salah langkah' },
+  1:  { upright: 'Manifestasi, kemampuan, kekuatan untuk mewujudkan', reversed: 'Manipulasi, bakat terpendam, kurang fokus' },
+  2:  { upright: 'Intuisi, misteri, kebijaksanaan tersembunyi', reversed: 'Rahasia, ilmu terpendam, abaikan firasat' },
+  3:  { upright: 'Kelimpahan, kesuburan, kasih sayang ibu', reversed: 'Ketergantungan, kurang percaya diri, kreatif terhambat' },
+  4:  { upright: 'Otoritas, struktur, kepemimpinan, stabilitas', reversed: 'Dominasi berlebihan, kaku, tiran' },
+  5:  { upright: 'Tradisi, kebijaksanaan, bimbingan spiritual', reversed: 'Pemberontakan, cara baru, pecah dari tradisi' },
+  6:  { upright: 'Cinta, harmoni, pilihan hati, koneksi jiwa', reversed: 'Hubungan tak seimbang, pilihan sulit, konflik batin' },
+  7:  { upright: 'Kemenangan, determinasi, maju terus pantang mundur', reversed: 'Arah tak jelas, kehilangan kendali, agresif' },
+  8:  { upright: 'Kekuatan batin, keberanian, kesabaran', reversed: 'Keraguan, kelemahan, kurang percaya diri' },
+  9:  { upright: 'Pencarian jiwa, refleksi, kebijaksanaan dalam', reversed: 'Terlalu tertutup, isolasi, takut berubah' },
+  10: { upright: 'Takdir berputar, keberuntungan, perubahan besar', reversed: 'Nasib buruk sementara, tolak perubahan, siklus negatif' },
+  11: { upright: 'Keadilan, kebenaran, keputusan adil', reversed: 'Ketidakadilan, bias, konsekuensi karma' },
+  12: { upright: 'Pengorbanan, perspektif baru, lepaskan ego', reversed: 'Menolak berubah, korban sia-sia, keras kepala' },
+  13: { upright: 'Transformasi besar, akhir satu bab, awal baru', reversed: 'Takut perubahan, menahan yang perlu dilepas' },
+  14: { upright: 'Keseimbangan, kesabaran, harmoni hidup', reversed: 'Berlebihan, tidak seimbang, terburu-buru' },
+  15: { upright: 'Godaan, keterikatan, bayangan diri', reversed: 'Pembebasan, lepas dari belenggu, sadar diri' },
+  16: { upright: 'Kejutan, perubahan mendadak, fondasi runtuh', reversed: 'Hindari bencana, belajar dari krisis, bangkit' },
+  17: { upright: 'Harapan, inspirasi, ketenangan jiwa', reversed: 'Putus asa, kehilangan iman, gelap sementara' },
+  18: { upright: 'Ilusi, intuisi kuat, rahasia terungkap', reversed: 'Kebingungan, ketakutan, tertipu penampilan' },
+  19: { upright: 'Kebahagiaan, sukses, vitalitas, kejelasan', reversed: 'Terlalu optimis, kelelahan, ego berlebihan' },
+  20: { upright: 'Kebangkitan, panggilan jiwa, evaluasi hidup', reversed: 'Menolak evaluasi, takut dihakimi, menyesal' },
+  21: { upright: 'Pencapaian total, keutuhan, siklus lengkap', reversed: 'Belum selesai, takut penutupan, kurang puas' },
+};
 
 const tarotSprites = [];
 let drawnCard = null; // { sprite, targetPos, startPos, animProgress, card }
@@ -1068,7 +1139,8 @@ MINOR_ARCANA.forEach((card, i) => {
 });
 
 // Draw a tarot card — flies from ring/deck to center
-function drawTarotCard(cardIndex) {
+// forcePosition: 'upright' | 'reversed' | null (random ~30% reversed)
+function drawTarotCard(cardIndex, forcePosition) {
   if (cardIndex === undefined || cardIndex === null) {
     cardIndex = Math.floor(Math.random() * TAROT_CARDS.length);
   }
@@ -1076,12 +1148,20 @@ function drawTarotCard(cardIndex) {
   const card = TAROT_CARDS[cardIndex];
   const isMinor = card.suit !== 'major';
 
+  // Determine upright or reversed (~30% chance reversed unless forced)
+  const isReversed = forcePosition === 'reversed' ? true :
+    forcePosition === 'upright' ? false :
+    Math.random() < 0.3;
+
   // Minor Arcana: make visible and start from below
   if (isMinor) {
     sprite.visible = true;
     sprite.position.set(0, -2, 2);
     sprite.scale.set(0.35, 0.52, 1);
   }
+
+  // Use rotation instead of negative scale for reversed cards
+  sprite.material.rotation = isReversed ? Math.PI : 0;
 
   drawnCard = {
     sprite,
@@ -1092,23 +1172,85 @@ function drawTarotCard(cardIndex) {
     startScale: sprite.scale.clone(),
     targetScale: new THREE.Vector3(0.7, 1.05, 1),
     isMinor,
+    isReversed,
   };
   drawnCardTimer = 6;
 
   // Highlight the card
   sprite.material.opacity = 1.0;
 
-  return card;
+  // Return card with position info
+  return { ...card, isReversed, position: isReversed ? 'Terbalik (Reversed)' : 'Tegak (Upright)' };
+}
+
+// Multi-card spread — draw multiple cards for richer readings
+// spreadType: '1-card', '3-card' (past/present/future), '5-card' (cross)
+let drawnSpread = []; // array of drawnCard objects
+
+function drawTarotSpread(cardIndices, spreadType) {
+  dismissDrawnCard(); // clear any existing
+  const cards = [];
+  const positions = {
+    '1-card': [new THREE.Vector3(0, 2.0, 2.0)],
+    '3-card': [
+      new THREE.Vector3(-0.55, 2.0, 2.0),  // Past (left)
+      new THREE.Vector3(0, 2.0, 2.0),       // Present (center)
+      new THREE.Vector3(0.55, 2.0, 2.0),    // Future (right)
+    ],
+    '5-card': [
+      new THREE.Vector3(-0.55, 2.0, 2.0),   // Past
+      new THREE.Vector3(0, 2.0, 2.0),        // Present
+      new THREE.Vector3(0.55, 2.0, 2.0),     // Future
+      new THREE.Vector3(0, 2.55, 2.0),       // Above (advice)
+      new THREE.Vector3(0, 1.45, 2.0),       // Below (foundation)
+    ],
+  };
+  const targets = positions[spreadType] || positions['1-card'];
+  const spreadLabels = {
+    '3-card': ['Masa Lalu', 'Sekarang', 'Masa Depan'],
+    '5-card': ['Masa Lalu', 'Sekarang', 'Masa Depan', 'Nasihat', 'Fondasi'],
+  };
+
+  for (let i = 0; i < cardIndices.length && i < targets.length; i++) {
+    const result = drawTarotCard(cardIndices[i]);
+    // Override target position for multi-card layout
+    if (drawnCard && cardIndices.length > 1) {
+      drawnCard.targetPos = targets[i];
+      drawnCard.targetScale = new THREE.Vector3(0.5, 0.75, 1);
+    }
+    if (drawnCard) {
+      drawnCard.spreadLabel = spreadLabels[spreadType]?.[i] || '';
+      drawnSpread.push(drawnCard);
+    }
+    cards.push(result);
+  }
+  // Keep drawnCard pointing to center card for compatibility
+  drawnCard = drawnSpread.length > 0 ? drawnSpread[Math.floor(drawnSpread.length / 2)] : null;
+  drawnCardTimer = cardIndices.length > 1 ? 10 : 6; // longer display for spreads
+  return cards;
 }
 
 function dismissDrawnCard() {
-  if (!drawnCard) return;
-  drawnCard.sprite.material.opacity = drawnCard.sprite.userData.originalOpacity;
-  drawnCard.sprite.scale.copy(drawnCard.startScale);
-  // Hide Minor Arcana cards back off-screen
-  if (drawnCard.isMinor) {
-    drawnCard.sprite.visible = false;
-    drawnCard.sprite.position.set(0, -5, 0);
+  // Dismiss all cards in spread
+  for (const dc of drawnSpread) {
+    if (!dc) continue;
+    dc.sprite.material.opacity = dc.sprite.userData.originalOpacity;
+    dc.sprite.scale.copy(dc.startScale);
+    dc.sprite.material.rotation = 0;
+    if (dc.isMinor) {
+      dc.sprite.visible = false;
+      dc.sprite.position.set(0, -5, 0);
+    }
+  }
+  drawnSpread = [];
+  if (drawnCard && !drawnSpread.includes(drawnCard)) {
+    drawnCard.sprite.material.opacity = drawnCard.sprite.userData.originalOpacity;
+    drawnCard.sprite.scale.copy(drawnCard.startScale);
+    drawnCard.sprite.material.rotation = 0;
+    if (drawnCard.isMinor) {
+      drawnCard.sprite.visible = false;
+      drawnCard.sprite.position.set(0, -5, 0);
+    }
   }
   drawnCard = null;
 }
@@ -1414,6 +1556,18 @@ function processReadingQueue() {
   // Determine voice event
   let eventType, eventData;
   const viewerZodiac = reading.data.zodiac || viewers.get(reading.viewerId)?.zodiac || null;
+
+  // Helper: build card info for eventData
+  function cardInfo(card) {
+    const meaning = TAROT_MEANINGS[card.num];
+    return {
+      tarotCard: card.name,
+      tarotCardIndex: card.num,
+      tarotPosition: card.position,
+      tarotMeaning: meaning ? (card.isReversed ? meaning.reversed : meaning.upright) : '',
+    };
+  }
+
   switch (reading.type) {
     case 'welcome':
       eventType = 'mystic_welcome';
@@ -1422,19 +1576,18 @@ function processReadingQueue() {
     case 'zodiac': {
       const zCard = drawTarotCard(pickTarotForReading('zodiac', reading.data.zodiac, reading.viewerId));
       eventType = 'mystic_zodiac';
-      eventData = { name: reading.nickname, zodiac: reading.data.zodiac, date: reading.data.date || '', tarotCard: zCard.name, tarotCardIndex: zCard.num };
+      eventData = { name: reading.nickname, zodiac: reading.data.zodiac, date: reading.data.date || '', ...cardInfo(zCard) };
       showZodiacBadge(reading.data.zodiac);
-      // Dramatic effect based on zodiac element
       const elem = getElementForZodiac(reading.data.zodiac);
       if (elem) setTimeout(() => triggerDramaticEffect(elem, 3000), 1500);
-      if (zCard.mood === 'dark') setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
+      if (zCard.mood === 'dark' || zCard.isReversed) setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
       break;
     }
     case 'fortune': {
       const fCard = drawTarotCard(pickTarotForReading('fortune', viewerZodiac, reading.viewerId, reading.data.diamonds));
       eventType = 'mystic_fortune';
-      eventData = { name: reading.nickname, zodiac: viewerZodiac, tarotCard: fCard.name, tarotCardIndex: fCard.num };
-      if (fCard.mood === 'dark') setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
+      eventData = { name: reading.nickname, zodiac: viewerZodiac, ...cardInfo(fCard) };
+      if (fCard.mood === 'dark' || fCard.isReversed) setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
       else if (viewerZodiac) {
         const e = getElementForZodiac(viewerZodiac);
         if (e) setTimeout(() => triggerDramaticEffect(e, 2500), 1500);
@@ -1444,35 +1597,73 @@ function processReadingQueue() {
     case 'jodoh': {
       const jCard = drawTarotCard(pickTarotForReading('jodoh', null, reading.viewerId));
       eventType = 'mystic_jodoh';
-      eventData = { name1: reading.nickname, zodiac1: reading.data.zodiac1 || 'unknown', name2: reading.data.partner, zodiac2: reading.data.zodiac2 || 'unknown', tarotCard: jCard.name, tarotCardIndex: jCard.num };
+      eventData = { name1: reading.nickname, zodiac1: reading.data.zodiac1 || 'unknown', name2: reading.data.partner, zodiac2: reading.data.zodiac2 || 'unknown', ...cardInfo(jCard) };
       break;
     }
     case 'question': {
       const qCard = drawTarotCard(pickTarotForReading('question', null, reading.viewerId));
       eventType = 'mystic_question';
-      eventData = { name: reading.nickname, question: reading.data.question || '', tarotCard: qCard.name, tarotCardIndex: qCard.num };
-      if (qCard.mood === 'dark') setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
+      eventData = { name: reading.nickname, question: reading.data.question || '', ...cardInfo(qCard) };
+      if (qCard.mood === 'dark' || qCard.isReversed) setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
       break;
     }
     case 'gift_reading': {
-      const gCard = drawTarotCard(pickTarotForReading('gift_reading', viewerZodiac, reading.viewerId, reading.data.diamonds));
-      eventType = 'mystic_gift_reading';
-      eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac, tarotCard: gCard.name, tarotCardIndex: gCard.num };
-      if (gCard.mood === 'dark') {
-        setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
-      } else if (viewerZodiac) {
-        const e = getElementForZodiac(viewerZodiac);
-        if (e) setTimeout(() => triggerDramaticEffect(e, 3000), 1000);
+      const diamonds = reading.data.diamonds || 0;
+      if (diamonds >= 100) {
+        // Big gift: 3-card spread (Past, Present, Future)
+        const indices = [
+          pickTarotForReading('gift_reading', viewerZodiac, reading.viewerId, diamonds),
+          pickTarotForReading('fortune', viewerZodiac, reading.viewerId, diamonds),
+          pickTarotForReading('gift_reading', viewerZodiac, reading.viewerId, diamonds),
+        ];
+        const gCards = drawTarotSpread(indices, '3-card');
+        eventType = 'mystic_gift_reading';
+        eventData = {
+          name: reading.nickname, diamonds, zodiac: viewerZodiac,
+          spreadType: '3-card',
+          tarotSpread: gCards.map((c, i) => `${['Masa Lalu', 'Sekarang', 'Masa Depan'][i]}: ${c.name} (${c.position})`).join(' | '),
+          ...cardInfo(gCards[1]), // center card as primary
+        };
+        const hasDark = gCards.some(c => c.mood === 'dark' || c.isReversed);
+        if (hasDark) setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
+        else {
+          const e = viewerZodiac ? getElementForZodiac(viewerZodiac) : null;
+          if (e) setTimeout(() => triggerDramaticEffect(e, 3000), 1000);
+        }
       } else {
-        const randomElements = ['fire', 'water', 'lightning'];
-        setTimeout(() => triggerDramaticEffect(randomElements[Math.floor(Math.random() * randomElements.length)], 2500), 1000);
+        // Small/medium gift: 1 card
+        const gCard = drawTarotCard(pickTarotForReading('gift_reading', viewerZodiac, reading.viewerId, diamonds));
+        eventType = 'mystic_gift_reading';
+        eventData = { name: reading.nickname, diamonds, zodiac: viewerZodiac, spreadType: '1-card', ...cardInfo(gCard) };
+        if (gCard.mood === 'dark' || gCard.isReversed) {
+          setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
+        } else if (viewerZodiac) {
+          const e = getElementForZodiac(viewerZodiac);
+          if (e) setTimeout(() => triggerDramaticEffect(e, 3000), 1000);
+        } else {
+          const randomElements = ['fire', 'water', 'lightning'];
+          setTimeout(() => triggerDramaticEffect(randomElements[Math.floor(Math.random() * randomElements.length)], 2500), 1000);
+        }
       }
       break;
     }
     case 'vip_vision': {
-      const vCard = drawTarotCard(pickTarotForReading('vip_vision', null, reading.viewerId, reading.data.diamonds));
+      // VIP: 5-card cross spread (Past, Present, Future, Advice, Foundation)
+      const indices = [
+        pickTarotForReading('vip_vision', null, reading.viewerId, reading.data.diamonds),
+        pickTarotForReading('gift_reading', viewerZodiac, reading.viewerId, reading.data.diamonds),
+        pickTarotForReading('vip_vision', null, reading.viewerId, reading.data.diamonds),
+        pickTarotForReading('fortune', viewerZodiac, reading.viewerId, reading.data.diamonds),
+        pickTarotForReading('gift_reading', viewerZodiac, reading.viewerId, reading.data.diamonds),
+      ];
+      const vCards = drawTarotSpread(indices, '5-card');
       eventType = 'mystic_vip_vision';
-      eventData = { name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac, tarotCard: vCard.name, tarotCardIndex: vCard.num };
+      eventData = {
+        name: reading.nickname, diamonds: reading.data.diamonds || 0, zodiac: viewerZodiac,
+        spreadType: '5-card',
+        tarotSpread: vCards.map((c, i) => `${['Masa Lalu', 'Sekarang', 'Masa Depan', 'Nasihat', 'Fondasi'][i]}: ${c.name} (${c.position})`).join(' | '),
+        ...cardInfo(vCards[1]), // center card as primary
+      };
       triggerVIPEffect();
       setTimeout(() => triggerDramaticEffect('fire', 2000), 500);
       setTimeout(() => triggerDramaticEffect('lightning', 2000), 3000);
@@ -1529,6 +1720,8 @@ function showFortuneDisplay(reading) {
   nameEl.textContent = reading.nickname;
   textEl.textContent = 'Bola kristal sedang membaca...';
   el.classList.add('show');
+  // Hide subtitle to avoid redundant text display
+  document.getElementById('voiceSubtitle').style.display = 'none';
 }
 
 function hideFortuneDisplay() {
@@ -1750,15 +1943,16 @@ function triggerDramaticEffect(element, duration = 3000) {
     case 'Api':
     case 'fire':
       overlay.classList.add('fire-effect');
+      spawn3DElementParticles('fire', duration);
       break;
     case 'Air':
     case 'water':
       overlay.classList.add('water-effect');
+      spawn3DElementParticles('water', duration);
       break;
     case 'skull':
     case 'dark': {
       overlay.classList.add('skull-effect');
-      // Show 3D skull model instead of emoji
       showSkull(duration);
       break;
     }
@@ -1766,33 +1960,35 @@ function triggerDramaticEffect(element, duration = 3000) {
     case 'lightning': {
       overlay.classList.add('lightning-effect');
       // Multiple lightning flashes
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
         setTimeout(() => {
           const flash = document.createElement('div');
           flash.className = 'lightning-flash';
           overlay.appendChild(flash);
-          setTimeout(() => flash.remove(), 200);
-        }, i * 400);
+          setTimeout(() => flash.remove(), 150);
+        }, i * 300);
       }
       const bolt = document.createElement('div');
       bolt.className = 'lightning-bolt';
       bolt.textContent = '\u26A1';
       overlay.appendChild(bolt);
+      spawn3DElementParticles('lightning', duration);
       break;
     }
     case 'Tanah':
     default:
-      // Subtle earth rumble — no overlay, just camera shake
+      // Earth rumble — camera shake + 3D particles
+      spawn3DElementParticles('earth', duration);
       if (!manualCamera) {
         const origY = camera.position.y;
         let shakeTime = 0;
         const shakeInterval = setInterval(() => {
           shakeTime += 50;
-          camera.position.y = origY + (Math.random() - 0.5) * 0.1;
-          if (shakeTime > 800) { clearInterval(shakeInterval); camera.position.y = origY; }
+          camera.position.y = origY + (Math.random() - 0.5) * 0.15;
+          if (shakeTime > 1200) { clearInterval(shakeInterval); camera.position.y = origY; }
         }, 50);
       }
-      return; // No overlay for earth
+      return;
   }
 
   overlay.classList.add('show');
@@ -1800,6 +1996,98 @@ function triggerDramaticEffect(element, duration = 3000) {
     overlay.classList.remove('show');
     setTimeout(() => { overlay.innerHTML = ''; overlay.className = 'dramatic-overlay'; }, 500);
   }, duration);
+}
+
+// 3D Element Particles — dramatic particle burst in Three.js scene
+let elementParticles = null;
+let elementParticleData = null;
+
+function spawn3DElementParticles(type, duration = 3000) {
+  // Remove existing
+  if (elementParticles) {
+    scene.remove(elementParticles);
+    elementParticles.geometry.dispose();
+    elementParticles.material.dispose();
+    elementParticles = null;
+  }
+
+  const count = type === 'lightning' ? 60 : 80;
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const sizes = new Float32Array(count);
+
+  const colorSets = {
+    fire: [[1, 0.3, 0], [1, 0.6, 0], [1, 0.9, 0.2], [1, 0.15, 0]],
+    water: [[0, 0.4, 1], [0.2, 0.6, 1], [0, 0.7, 0.9], [0.3, 0.8, 1]],
+    lightning: [[0.7, 0.7, 1], [0.9, 0.9, 1], [0.5, 0.5, 1], [1, 1, 1]],
+    earth: [[0.6, 0.4, 0.2], [0.4, 0.3, 0.1], [0.5, 0.5, 0.3], [0.3, 0.2, 0.1]],
+  };
+  const cs = colorSets[type] || colorSets.fire;
+
+  for (let i = 0; i < count; i++) {
+    // Start near crystal ball center
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 0.2 + Math.random() * 0.3;
+    positions[i * 3] = Math.cos(angle) * radius;
+    positions[i * 3 + 1] = 1.5 + Math.random() * 0.5;
+    positions[i * 3 + 2] = Math.sin(angle) * radius;
+
+    // Velocities depend on element
+    if (type === 'fire') {
+      velocities[i * 3] = (Math.random() - 0.5) * 1.5;
+      velocities[i * 3 + 1] = 2 + Math.random() * 3; // rise fast
+      velocities[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
+    } else if (type === 'water') {
+      velocities[i * 3] = (Math.random() - 0.5) * 2;
+      velocities[i * 3 + 1] = -1 - Math.random() * 2; // fall like rain
+      velocities[i * 3 + 2] = (Math.random() - 0.5) * 2;
+    } else if (type === 'lightning') {
+      velocities[i * 3] = (Math.random() - 0.5) * 4;
+      velocities[i * 3 + 1] = (Math.random() - 0.5) * 4; // chaotic
+      velocities[i * 3 + 2] = (Math.random() - 0.5) * 4;
+    } else { // earth
+      velocities[i * 3] = (Math.random() - 0.5) * 1;
+      velocities[i * 3 + 1] = 0.5 + Math.random(); // gentle rise
+      velocities[i * 3 + 2] = (Math.random() - 0.5) * 1;
+    }
+
+    const c = cs[Math.floor(Math.random() * cs.length)];
+    colors[i * 3] = c[0];
+    colors[i * 3 + 1] = c[1];
+    colors[i * 3 + 2] = c[2];
+    sizes[i] = type === 'lightning' ? 8 + Math.random() * 12 : 6 + Math.random() * 8;
+  }
+
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+  const mat = new THREE.PointsMaterial({
+    size: 0.12,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.9,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    sizeAttenuation: true,
+  });
+
+  elementParticles = new THREE.Points(geo, mat);
+  elementParticleData = { velocities, startTime: Date.now(), duration, type };
+  scene.add(elementParticles);
+
+  // Auto-cleanup
+  setTimeout(() => {
+    if (elementParticles) {
+      scene.remove(elementParticles);
+      elementParticles.geometry.dispose();
+      elementParticles.material.dispose();
+      elementParticles = null;
+      elementParticleData = null;
+    }
+  }, duration + 500);
 }
 
 // ===== TIKTOK EVENT HANDLERS =====
@@ -1987,41 +2275,86 @@ function handleGift(data) {
   conversationLog.push({ type: 'viewer_gift', name: nick, summary: `gift ${diamonds}💎`, timestamp: Date.now() });
   if (conversationLog.length > MAX_CONVERSATION_LOG) conversationLog.shift();
 
-  // Check per-user cooldown (VIP bypasses)
-  if (diamonds < 500 && readingCooldowns.has(uid) && Date.now() - readingCooldowns.get(uid) < PER_USER_COOLDOWN) {
-    addNotification(`<strong>${nick}</strong> terima kasih! Tunggu sebentar ya...`, 'gift');
-    viewer.score += Math.min(diamonds, 10);
+  // VIP gifts (500+) bypass accumulation — trigger immediately
+  if (diamonds >= 500) {
+    viewer.score += 250;
+    addNotification(`<strong>${nick}</strong> membuka VIP PROPHECY! (${diamonds} diamonds)`, 'gift');
+    triggerGiftEffect('big');
+    queueReading('vip_vision', uid, nick, { diamonds, zodiac: viewer.zodiac || null }, 5);
     updateLeaderboard();
+    refreshOrbs();
+    return;
+  }
+
+  // Gift accumulation — collect small gifts over 8s window before triggering reading
+  const existing = giftAccumulators.get(uid);
+  if (existing) {
+    // Add to existing accumulator
+    existing.diamonds += diamonds;
+    existing.nick = nick;
+    existing.pic = pic;
+    clearTimeout(existing.timer);
+    // Show accumulation feedback
+    addNotification(`<strong>${nick}</strong> +${diamonds}💎 (total: ${existing.diamonds}💎)`, 'gift');
+    triggerGiftEffect('small');
+    viewer.score += Math.min(diamonds, 5);
+    // Reset the window timer
+    existing.timer = setTimeout(() => triggerAccumulatedGift(uid), GIFT_ACCUMULATE_WINDOW);
+  } else {
+    // Start new accumulator
+    addNotification(`<strong>${nick}</strong> gift ${diamonds}💎`, 'gift');
+    triggerGiftEffect('small');
+    viewer.score += Math.min(diamonds, 5);
+    const acc = {
+      diamonds,
+      nick,
+      pic,
+      timer: setTimeout(() => triggerAccumulatedGift(uid), GIFT_ACCUMULATE_WINDOW),
+    };
+    giftAccumulators.set(uid, acc);
+  }
+  updateLeaderboard();
+  refreshOrbs();
+}
+
+// Fire the accumulated gift as a single reading
+function triggerAccumulatedGift(uid) {
+  const acc = giftAccumulators.get(uid);
+  if (!acc) return;
+  giftAccumulators.delete(uid);
+
+  const viewer = viewers.get(uid);
+  if (!viewer) return;
+  const nick = acc.nick;
+  const diamonds = acc.diamonds;
+
+  // Check per-user cooldown
+  if (readingCooldowns.has(uid) && Date.now() - readingCooldowns.get(uid) < PER_USER_COOLDOWN) {
+    addNotification(`<strong>${nick}</strong> terima kasih ${diamonds}💎! Tunggu sebentar ya...`, 'gift');
     return;
   }
   readingCooldowns.set(uid, Date.now());
 
-  // Check if viewer has a pending request (jodoh, question, career) from chat
+  // Check pending request from chat
   const pending = viewer.pendingRequest;
-  const hasPending = pending && (Date.now() - pending.time < 300000); // valid for 5 minutes
+  const hasPending = pending && (Date.now() - pending.time < 300000);
   const readingData = { diamonds, zodiac: viewer.zodiac || null };
 
-  // Include pending request data
   if (hasPending) {
     readingData.pendingType = pending.type;
     readingData.pendingComment = pending.comment;
-    viewer.pendingRequest = null; // consume it
+    viewer.pendingRequest = null;
   }
 
-  if (diamonds >= 500) {
-    viewer.score += 250;
-    addNotification(`<strong>${nick}</strong> membuka VIP PROPHECY! (${diamonds} diamonds)`, 'gift');
-    queueReading('vip_vision', uid, nick, readingData, 5);
-  } else if (hasPending && pending.type === 'jodoh') {
-    // Jodoh request — pair with a random viewer
+  // Determine tier based on ACCUMULATED total
+  if (hasPending && pending.type === 'jodoh') {
     const allV = Array.from(viewers.values()).filter(v => v.uniqueId !== uid);
     const partner = allV.length > 0 ? allV[Math.floor(Math.random() * allV.length)] : null;
     viewer.score += Math.max(30, diamonds);
     const label = diamonds >= 100 ? 'VISI JODOH SPESIAL' : 'Cek Jodoh';
-    addNotification(`<strong>${nick}</strong> ${label}! (${diamonds} 💎)`, 'gift');
+    addNotification(`<strong>${nick}</strong> ${label}! (${diamonds}💎 terkumpul)`, 'gift');
     if (diamonds >= 100) triggerGiftEffect('big');
     else if (diamonds >= 11) triggerGiftEffect('medium');
-    else triggerGiftEffect('small');
     queueReading('jodoh', uid, nick, {
       ...readingData,
       zodiac1: viewer.zodiac || 'unknown',
@@ -2029,46 +2362,33 @@ function handleGift(data) {
       zodiac2: partner?.zodiac || 'unknown',
     }, diamonds >= 100 ? 4 : 3);
   } else if (hasPending && pending.type === 'question') {
-    // Question request — answer their specific question
     viewer.score += Math.max(30, diamonds);
-    addNotification(`<strong>${nick}</strong> Eyang jawab pertanyaanmu! (${diamonds} 💎)`, 'gift');
+    addNotification(`<strong>${nick}</strong> Eyang jawab pertanyaanmu! (${diamonds}💎 terkumpul)`, 'gift');
     if (diamonds >= 100) triggerGiftEffect('big');
     else if (diamonds >= 11) triggerGiftEffect('medium');
-    else triggerGiftEffect('small');
-    queueReading('question', uid, nick, {
-      ...readingData,
-      question: pending.comment,
-    }, diamonds >= 100 ? 4 : 3);
+    queueReading('question', uid, nick, { ...readingData, question: pending.comment }, diamonds >= 100 ? 4 : 3);
   } else if (hasPending && pending.type === 'career') {
-    // Career request — career-focused reading
     viewer.score += Math.max(30, diamonds);
-    addNotification(`<strong>${nick}</strong> Ramalan karir! (${diamonds} 💎)`, 'gift');
+    addNotification(`<strong>${nick}</strong> Ramalan karir! (${diamonds}💎 terkumpul)`, 'gift');
     if (diamonds >= 100) triggerGiftEffect('big');
     else if (diamonds >= 11) triggerGiftEffect('medium');
-    else triggerGiftEffect('small');
-    queueReading('gift_reading', uid, nick, {
-      ...readingData,
-      focusTopic: 'karir dan rezeki',
-      question: pending.comment,
-    }, diamonds >= 100 ? 4 : 3);
+    queueReading('gift_reading', uid, nick, { ...readingData, focusTopic: 'karir dan rezeki', question: pending.comment }, diamonds >= 100 ? 4 : 3);
   } else if (diamonds >= 100) {
     viewer.score += 80;
-    addNotification(`<strong>${nick}</strong> VISI SPESIAL! (${diamonds} diamonds)`, 'gift');
+    addNotification(`<strong>${nick}</strong> VISI SPESIAL! (${diamonds}💎 terkumpul)`, 'gift');
     triggerGiftEffect('big');
     queueReading('gift_reading', uid, nick, readingData, 4);
   } else if (diamonds >= 11) {
     viewer.score += 30;
-    addNotification(`<strong>${nick}</strong> ramalan mendalam! (${diamonds} diamonds)`, 'gift');
+    addNotification(`<strong>${nick}</strong> ramalan mendalam! (${diamonds}💎 terkumpul)`, 'gift');
     triggerGiftEffect('medium');
     queueReading('gift_reading', uid, nick, readingData, 3);
   } else {
     viewer.score += 10;
-    addNotification(`<strong>${nick}</strong> ramalan pribadi! (${diamonds} diamonds)`, 'gift');
-    triggerGiftEffect('small');
+    addNotification(`<strong>${nick}</strong> ramalan pribadi! (${diamonds}💎)`, 'gift');
     queueReading('fortune', uid, nick, readingData, 3);
   }
   updateLeaderboard();
-  refreshOrbs();
 }
 
 function handleFollow(data) {
@@ -2234,6 +2554,11 @@ async function processVoiceQueue() {
     if (!res.ok) {
       console.error('Voice API error:', res.status);
       document.getElementById('voiceStatusText').textContent = 'API Error';
+      // Still update fortune display with fallback text so reading doesn't get stuck
+      if (readingState === 'REVEAL') {
+        document.getElementById('fortuneText').textContent = '🔮 Energi mistis sedang kuat... bola kristal berbisik...';
+        setTimeout(() => finishReading(), 8000);
+      }
       return;
     }
 
@@ -2279,6 +2604,11 @@ async function processVoiceQueue() {
   } catch (err) {
     console.error('Voice error:', err);
     document.getElementById('voiceStatusText').textContent = 'Error';
+    // Gracefully finish reading on network/fetch errors
+    if (readingState === 'REVEAL') {
+      document.getElementById('fortuneText').textContent = '🔮 Energi mistis sedang kuat... bola kristal berbisik...';
+      setTimeout(() => finishReading(), 3000);
+    }
   } finally {
     voiceIsGenerating = false;
     if (voiceQueue.length > 0) setTimeout(processVoiceQueue, 500);
@@ -2306,8 +2636,13 @@ function playNextVoice() {
   const item = voiceAudioQueue.shift();
 
   const subtitleEl = document.getElementById('voiceSubtitle');
-  subtitleEl.textContent = item.text;
-  subtitleEl.style.display = 'block';
+  // Hide subtitle during readings — fortuneDisplay already shows the text
+  if (readingState === 'REVEAL') {
+    subtitleEl.style.display = 'none';
+  } else {
+    subtitleEl.textContent = item.text;
+    subtitleEl.style.display = 'block';
+  }
   document.getElementById('voiceStatusText').textContent = 'Speaking...';
   document.getElementById('voiceSpeakerIcon').textContent = '\uD83D\uDD0A';
 
@@ -2388,27 +2723,30 @@ function animate() {
   }
 
   // Tarot card ring rotation — only Major Arcana (first 22) orbit
+  const spreadSprites = new Set(drawnSpread.map(dc => dc?.sprite));
   for (let i = 0; i < 22; i++) {
     const s = tarotSprites[i];
-    if (drawnCard && drawnCard.sprite === s) continue;
+    if (spreadSprites.has(s) || (drawnCard && drawnCard.sprite === s)) continue;
     const angle = s.userData.baseAngle + elapsedTotal * 0.08;
     const r = 3.0;
     s.position.set(Math.cos(angle) * r, 2.2 + Math.sin(elapsedTotal * 0.4 + i * 0.5) * 0.08, Math.sin(angle) * r);
   }
 
-  // Drawn card animation — fly to center
-  if (drawnCard) {
-    drawnCard.animProgress = Math.min(1, drawnCard.animProgress + dt * 1.5);
-    const t = drawnCard.animProgress;
-    // Ease out cubic
+  // Drawn card(s) animation — fly to position (supports spread)
+  const cardsToAnimate = drawnSpread.length > 0 ? drawnSpread : (drawnCard ? [drawnCard] : []);
+  for (const dc of cardsToAnimate) {
+    if (!dc) continue;
+    dc.animProgress = Math.min(1, dc.animProgress + dt * 1.5);
+    const t = dc.animProgress;
     const ease = 1 - Math.pow(1 - t, 3);
-    drawnCard.sprite.position.lerpVectors(drawnCard.startPos, drawnCard.targetPos, ease);
-    drawnCard.sprite.scale.lerpVectors(drawnCard.startScale, drawnCard.targetScale, ease);
-    // Gentle float when arrived
+    dc.sprite.position.lerpVectors(dc.startPos, dc.targetPos, ease);
+    dc.sprite.scale.lerpVectors(dc.startScale, dc.targetScale, ease);
     if (t >= 1) {
-      drawnCard.sprite.position.y = 2.0 + Math.sin(elapsedTotal * 2) * 0.05;
+      dc.sprite.position.y = dc.targetPos.y + Math.sin(elapsedTotal * 2) * 0.05;
     }
-    // Auto dismiss — but keep card visible during reading
+  }
+  if (cardsToAnimate.length > 0) {
+    // Auto dismiss — but keep cards visible during reading
     if (readingState === 'IDLE') {
       drawnCardTimer -= dt;
       if (drawnCardTimer <= 0) {
@@ -2447,6 +2785,35 @@ function animate() {
     orb.mesh.position.z = Math.sin(orb.angle + elapsedTotal * 0.08) * r;
     orb.mesh.position.y = 1.6 + Math.sin(elapsedTotal * 2 + orb.bobOffset) * 0.1;
   });
+
+  // 3D Element particles animation
+  if (elementParticles && elementParticleData) {
+    const pos = elementParticles.geometry.attributes.position.array;
+    const vel = elementParticleData.velocities;
+    const elapsed = (Date.now() - elementParticleData.startTime) / 1000;
+    const progress = elapsed / (elementParticleData.duration / 1000);
+    const fade = progress < 0.2 ? progress / 0.2 : progress > 0.7 ? (1 - progress) / 0.3 : 1;
+    elementParticles.material.opacity = fade * 0.9;
+
+    for (let i = 0; i < pos.length / 3; i++) {
+      pos[i * 3] += vel[i * 3] * dt;
+      pos[i * 3 + 1] += vel[i * 3 + 1] * dt;
+      pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
+
+      if (elementParticleData.type === 'fire') {
+        vel[i * 3] += (Math.random() - 0.5) * 2 * dt; // turbulence
+        vel[i * 3 + 1] *= 0.995; // slow down rising
+      } else if (elementParticleData.type === 'water') {
+        vel[i * 3] *= 0.98; // slow horizontal
+        pos[i * 3 + 1] = Math.max(0.5, pos[i * 3 + 1]); // floor
+      } else if (elementParticleData.type === 'lightning') {
+        vel[i * 3] = (Math.random() - 0.5) * 6; // chaotic jitter
+        vel[i * 3 + 1] = (Math.random() - 0.5) * 6;
+        vel[i * 3 + 2] = (Math.random() - 0.5) * 6;
+      }
+    }
+    elementParticles.geometry.attributes.position.needsUpdate = true;
+  }
 
   // 3D Skull animation
   if (skullMixer) skullMixer.update(dt);
@@ -2499,8 +2866,10 @@ function animate() {
         // Rotate through different idle chat types
         const chatTypes = [
           'mystic_idle_explain',    // explain how readings work
+          'mystic_idle_tarot',      // explain a random tarot card (upright/reversed)
           'mystic_idle_atmosphere', // comment on crystal ball / mystical atmosphere
           'mystic_ask_engage',      // ask viewers to send gifts
+          'mystic_idle_tarot',      // explain another tarot card
           'mystic_idle_wisdom',     // share mystic wisdom / life advice
           'mystic_idle_tease',      // tease a random viewer
           'mystic_invite_friends',  // invite friends
@@ -2508,7 +2877,7 @@ function animate() {
         const type = chatTypes[idleChatType % chatTypes.length];
         idleChatType++;
 
-        const eventData = {
+        const idleEventData = {
           viewerCount: viewers.size,
           queueLength: readingQueue.length,
           viewerNames: viewerNames.join(', '),
@@ -2517,15 +2886,29 @@ function animate() {
           crystalEnergy,
         };
 
+        // For tarot explanation, pick a random Major Arcana and show it
+        if (type === 'mystic_idle_tarot') {
+          const cardIdx = Math.floor(Math.random() * 22); // Major Arcana only
+          const card = TAROT_CARDS[cardIdx];
+          const isReversed = Math.random() < 0.4;
+          const meaning = TAROT_MEANINGS[cardIdx];
+          idleEventData.tarotCard = card.name;
+          idleEventData.tarotPosition = isReversed ? 'Terbalik (Reversed)' : 'Tegak (Upright)';
+          idleEventData.tarotMeaning = meaning ? (isReversed ? meaning.reversed : meaning.upright) : '';
+          idleEventData.tarotMeaningOpposite = meaning ? (isReversed ? meaning.upright : meaning.reversed) : '';
+          // Draw the card visually
+          drawTarotCard(cardIdx, isReversed ? 'reversed' : 'upright');
+        }
+
         // For tease, pick a random viewer
         if (type === 'mystic_idle_tease' && viewers.size > 0) {
           const allV = Array.from(viewers.values());
           const v = allV[Math.floor(Math.random() * allV.length)];
-          eventData.targetName = v.nickname;
-          eventData.targetZodiac = v.zodiac || null;
+          idleEventData.targetName = v.nickname;
+          idleEventData.targetZodiac = v.zodiac || null;
         }
 
-        queueVoiceEvent(type, eventData, 1);
+        queueVoiceEvent(type, idleEventData, 1);
       }
     }
   }
