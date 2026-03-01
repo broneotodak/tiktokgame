@@ -429,6 +429,7 @@
     <button class="dbtn" onclick="window._debug('lightning')">Bolt (E)</button>
     <div class="debug-title" style="margin-top:6px;">VOICE</div>
     <button class="dbtn" id="voiceToggleBtn" onclick="window._toggleVoice()" style="border-left:3px solid #9b59b6;">Voice: OFF</button>
+    <button class="dbtn" id="autoReplyToggleBtn" onclick="window._toggleAutoReply()" style="border-left:3px solid #27ae60;">Chat Reply: OFF</button>
   </div>
   <style>
     #debugPanel {
@@ -632,6 +633,16 @@ let idleChatType = 0; // rotate through different idle chat types
 // Free random readings — keep viewers engaged
 let freeReadingTimer = 60; // first free reading after 60s
 const FREE_READING_INTERVAL = 90; // every 90s give a random viewer a free reading
+
+// ===== PERSISTENCE STATE =====
+let _savePending = false;
+let _saveTimer = null;
+const SAVE_INTERVAL = 120000; // 2 minutes
+let _peakViewers = 0;
+let _sessionSaved = false;
+let autoReplyEnabled = false;
+let _lastAutoReplyTime = 0;
+const AUTO_REPLY_COOLDOWN = 15000; // 15s between auto-replies
 
 // ===== THREE.JS SETUP =====
 const canvas = document.getElementById('gameCanvas');
@@ -1748,6 +1759,9 @@ function finishReading() {
     if (conversationLog.length > MAX_CONVERSATION_LOG) conversationLog.shift();
   }
 
+  // Debounced save after reading (5s delay to batch)
+  scheduleSaveDebounced();
+
   // Keep text visible 5s after voice ends so viewers can read it
   setTimeout(() => {
     hideFortuneDisplay();
@@ -2096,11 +2110,13 @@ function handleViewerJoin(data) {
   const nick = data.nickname || uid;
   const pic = data.profilePic || data.profilePictureUrl || '';
   if (!viewers.has(uid)) {
-    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic, firstSeen: Date.now(), readingHistory: [], chatCount: 0, lastReading: null, giftHistory: [], isFollower: data.isFollower || false, totalGifted: 0 });
+    viewers.set(uid, { uniqueId: uid, nickname: nick, zodiac: null, score: 0, readingsCount: 0, lastActive: Date.now(), profilePic: pic, firstSeen: Date.now(), readingHistory: [], chatCount: 0, lastReading: null, giftHistory: [], isFollower: data.isFollower || false, totalGifted: 0, _persistedReadings: 0, _persistedDiamonds: 0, _persistedSessions: 0, _isReturning: false });
     document.getElementById('viewerCount').textContent = viewers.size;
     addNotification(`<strong>${nick}</strong> memasuki dunia mistis`);
     viewers.get(uid).score += 1;
     updateLeaderboard();
+    // Fire-and-forget: load persisted data from Supabase
+    loadPersistedViewer(uid);
   } else {
     // Update profile pic if we didn't have it before
     const v = viewers.get(uid);
@@ -2476,6 +2492,8 @@ function buildViewerProfile(uid) {
   const v = viewers.get(uid);
   if (!v) return null;
   const minutesInStream = Math.round((Date.now() - (v.firstSeen || Date.now())) / 60000);
+  const lifetimeReadings = (v._persistedReadings || 0) + (v.readingsCount || 0);
+  const lifetimeDiamonds = (v._persistedDiamonds || 0) + (v.totalGifted || 0);
   const profile = {
     name: v.nickname,
     zodiac: v.zodiac || null,
@@ -2484,13 +2502,17 @@ function buildViewerProfile(uid) {
     chatCount: v.chatCount || 0,
     isFollower: v.isFollower || false,
     minutesInStream,
-    isReturning: (v.readingsCount || 0) > 0,
+    isReturning: v._isReturning || (v.readingsCount || 0) > 0,
+    lifetimeReadings,
+    lifetimeDiamonds,
+    sessionsAttended: (v._persistedSessions || 0) + 1,
   };
   if (v.lastReading) {
     profile.lastReading = {
       type: v.lastReading.type,
       text: (v.lastReading.text || '').slice(0, 60),
       minutesAgo: Math.round((Date.now() - v.lastReading.timestamp) / 60000),
+      fromPreviousStream: !!v.lastReading._fromPreviousStream,
     };
   }
   return profile;
@@ -2570,18 +2592,8 @@ async function processVoiceQueue() {
     if (conversationLog.length > MAX_CONVERSATION_LOG) conversationLog.shift();
     totalVoiceCalls++;
 
-    // Auto-reply in TikTok chat (priority 2+ only, rate-limited)
-    if (text && text.length <= 150 && event.priority >= 2) {
-      const now = Date.now();
-      if (!window._lastChatReplyTime || now - window._lastChatReplyTime > 15000) {
-        window._lastChatReplyTime = now;
-        fetch('/api/chat/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: `🔮 ${text.slice(0, 145)}`, room: ROOM })
-        }).catch(() => {}); // fire-and-forget
-      }
-    }
+    // Auto-reply in TikTok chat (toggle-controlled, priority 2+, rate-limited)
+    sendAutoReply(text, event.priority, event.eventType);
 
     lastVoiceTime = Date.now();
     enqueueVoiceAudio(blob, text);
@@ -3127,7 +3139,9 @@ function connectSocket() {
     socket.on('share', (data) => handleShare(data));
     socket.on('viewer-join', (data) => handleViewerJoin(data));
     socket.on('room-stats', (data) => {
-      document.getElementById('viewerCount').textContent = data.viewerCount || viewers.size;
+      const vc = data.viewerCount || viewers.size;
+      document.getElementById('viewerCount').textContent = vc;
+      if (vc > _peakViewers) _peakViewers = vc;
     });
 
     console.log('Socket connected, room:', ROOM || '(default)');
@@ -3171,7 +3185,219 @@ function init() {
 
   connectSocket();
   animate();
+  scheduleSave();
 }
+
+// ===== PERSISTENCE FUNCTIONS =====
+
+// Load persisted viewer data from Supabase (fire-and-forget)
+async function loadPersistedViewer(uid) {
+  try {
+    const res = await fetch('/api/fortuneteller/viewer/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uniqueId: uid }),
+    });
+    const { viewer: pv } = await res.json();
+    if (!pv) return; // New viewer, no persisted data
+
+    const v = viewers.get(uid);
+    if (!v) return;
+
+    // Restore persisted fields
+    if (pv.zodiac && !v.zodiac) v.zodiac = pv.zodiac;
+    if (pv.is_follower) v.isFollower = true;
+    v._persistedReadings = pv.total_readings || 0;
+    v._persistedDiamonds = pv.total_diamonds || 0;
+    v._persistedSessions = pv.total_sessions || 0;
+    v._isReturning = (pv.total_sessions || 0) > 0;
+
+    // Merge reading history from DB (older first, cap at 5)
+    if (Array.isArray(pv.reading_history) && pv.reading_history.length > 0) {
+      const dbHistory = pv.reading_history.slice(-5).map(r => ({ ...r, _fromPreviousStream: true }));
+      v.readingHistory = [...dbHistory, ...v.readingHistory].slice(-5);
+    }
+
+    // Restore last reading from previous stream
+    if (pv.last_reading && !v.lastReading) {
+      v.lastReading = { ...pv.last_reading, _fromPreviousStream: true };
+    }
+
+    if (v._isReturning) {
+      console.log(`🔮 Returning viewer: ${v.nickname} (${v._persistedReadings} readings, ${v._persistedSessions} sessions)`);
+    }
+  } catch (err) {
+    // Graceful fallback — persistence is best-effort
+    console.warn('FT load viewer failed:', err.message);
+  }
+}
+
+// Batch save viewers to Supabase
+async function batchSaveViewers() {
+  const toSave = [];
+  for (const [uid, v] of viewers) {
+    // Only save viewers with meaningful activity
+    if ((v.score || 0) <= 0 && (v.readingsCount || 0) <= 0 && (v.totalGifted || 0) <= 0) continue;
+
+    const lifetimeReadings = (v._persistedReadings || 0) + (v.readingsCount || 0);
+    const lifetimeDiamonds = (v._persistedDiamonds || 0) + (v.totalGifted || 0);
+
+    toSave.push({
+      unique_id: uid,
+      nickname: v.nickname || uid,
+      profile_pic: v.profilePic || '',
+      zodiac: v.zodiac || null,
+      total_diamonds: lifetimeDiamonds,
+      total_readings: lifetimeReadings,
+      total_chats: (v.chatCount || 0),
+      total_sessions: (v._persistedSessions || 0) + 1,
+      is_follower: v.isFollower || false,
+      last_reading: v.lastReading ? { type: v.lastReading.type, text: (v.lastReading.text || '').slice(0, 200), timestamp: v.lastReading.timestamp } : null,
+      reading_history: (v.readingHistory || []).filter(r => !r._fromPreviousStream).slice(-5),
+      gift_history: (v.giftHistory || []).slice(-10),
+      last_seen_at: new Date().toISOString(),
+    });
+  }
+
+  if (toSave.length === 0) return;
+
+  try {
+    const res = await fetch('/api/fortuneteller/viewer/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ viewers: toSave }),
+    });
+    if (res.ok) {
+      console.log(`💾 Saved ${toSave.length} viewer(s) to Supabase`);
+    }
+  } catch (err) {
+    console.warn('FT save viewers failed:', err.message);
+  }
+}
+
+// Save session summary
+async function saveSessionSummary() {
+  if (_sessionSaved) return;
+  _sessionSaved = true;
+
+  const durationMins = Math.round((Date.now() - streamStartTime) / 60000);
+  const topViewers = Array.from(viewers.values())
+    .sort((a, b) => (b.totalGifted || 0) - (a.totalGifted || 0))
+    .slice(0, 5)
+    .map(v => ({ nickname: v.nickname, uniqueId: v.uniqueId, diamonds: v.totalGifted || 0, readings: v.readingsCount || 0 }));
+
+  const recentConvo = conversationLog.slice(-15).map(c => `${c.name || ''}: ${c.summary || c.text || ''}`).join('\n').slice(0, 2000);
+
+  const snapshot = {};
+  for (const [uid, v] of viewers) {
+    snapshot[uid] = { nickname: v.nickname, score: v.score, readings: v.readingsCount, diamonds: v.totalGifted || 0 };
+  }
+
+  const sessionData = {
+    room: ROOM || 'default',
+    started_at: new Date(streamStartTime).toISOString(),
+    ended_at: new Date().toISOString(),
+    duration_mins: durationMins,
+    peak_viewers: _peakViewers,
+    total_viewers: viewers.size,
+    total_readings: totalReadings,
+    total_gifts: Math.round(totalGiftsReceived),
+    total_voice: totalVoiceCalls,
+    top_viewers: topViewers,
+    conversation_summary: recentConvo,
+    viewer_snapshot: snapshot,
+  };
+
+  try {
+    const res = await fetch('/api/fortuneteller/session/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: sessionData }),
+    });
+    if (res.ok) console.log('💾 Session summary saved');
+  } catch (err) {
+    // Fallback: try sendBeacon
+    try {
+      navigator.sendBeacon('/api/fortuneteller/session/save', JSON.stringify({ session: sessionData }));
+    } catch (e) { /* best effort */ }
+  }
+}
+
+// Schedule periodic save (every 2 minutes)
+function scheduleSave() {
+  _saveTimer = setInterval(() => {
+    batchSaveViewers();
+  }, SAVE_INTERVAL);
+}
+
+// Debounced save after reading (5s delay)
+let _saveDebounceTimer = null;
+function scheduleSaveDebounced() {
+  if (_saveDebounceTimer) clearTimeout(_saveDebounceTimer);
+  _saveDebounceTimer = setTimeout(() => batchSaveViewers(), 5000);
+}
+
+// Save on page close
+window.addEventListener('beforeunload', () => {
+  // Save viewers via sendBeacon
+  const toSave = [];
+  for (const [uid, v] of viewers) {
+    if ((v.score || 0) <= 0 && (v.readingsCount || 0) <= 0 && (v.totalGifted || 0) <= 0) continue;
+    toSave.push({
+      unique_id: uid,
+      nickname: v.nickname || uid,
+      profile_pic: v.profilePic || '',
+      zodiac: v.zodiac || null,
+      total_diamonds: (v._persistedDiamonds || 0) + (v.totalGifted || 0),
+      total_readings: (v._persistedReadings || 0) + (v.readingsCount || 0),
+      total_chats: (v.chatCount || 0),
+      total_sessions: (v._persistedSessions || 0) + 1,
+      is_follower: v.isFollower || false,
+      last_reading: v.lastReading ? { type: v.lastReading.type, text: (v.lastReading.text || '').slice(0, 200), timestamp: v.lastReading.timestamp } : null,
+      reading_history: (v.readingHistory || []).filter(r => !r._fromPreviousStream).slice(-5),
+      gift_history: (v.giftHistory || []).slice(-10),
+      last_seen_at: new Date().toISOString(),
+    });
+  }
+  if (toSave.length > 0) {
+    navigator.sendBeacon('/api/fortuneteller/viewer/save', new Blob([JSON.stringify({ viewers: toSave })], { type: 'application/json' }));
+  }
+  // Save session summary
+  saveSessionSummary();
+});
+
+// ===== AUTO-REPLY FUNCTION =====
+function sendAutoReply(text, priority, eventType) {
+  if (!autoReplyEnabled) return;
+  if (priority < 2) return;
+  // Skip idle/invite events
+  const skipEvents = ['mystic_idle_explain', 'mystic_idle_tarot', 'mystic_idle_atmosphere', 'mystic_idle_wisdom', 'mystic_idle_tease', 'mystic_invite_friends', 'mystic_viewers_welcome', 'mystic_flood_acknowledge'];
+  if (skipEvents.includes(eventType)) return;
+  if (!text || text.length > 150) return;
+  // Rate limit
+  const now = Date.now();
+  if (now - _lastAutoReplyTime < AUTO_REPLY_COOLDOWN) return;
+  _lastAutoReplyTime = now;
+  // Prefix + truncate
+  let msg = '\u{1F52E} ' + text;
+  if (msg.length > 145) msg = msg.slice(0, 142) + '...';
+  // Fire-and-forget POST
+  fetch('/api/chat/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: msg, room: ROOM }),
+  }).catch(() => {}); // ignore errors
+}
+
+function toggleAutoReply() {
+  autoReplyEnabled = !autoReplyEnabled;
+  const btn = document.getElementById('autoReplyToggleBtn');
+  btn.textContent = autoReplyEnabled ? 'Chat Reply: ON' : 'Chat Reply: OFF';
+  btn.style.background = autoReplyEnabled ? '#27ae60' : '#222';
+  btn.style.color = autoReplyEnabled ? '#fff' : '#ccc';
+  console.log('Chat auto-reply:', autoReplyEnabled ? 'ON' : 'OFF');
+}
+window._toggleAutoReply = toggleAutoReply;
 
 init();
 

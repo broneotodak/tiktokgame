@@ -23,6 +23,33 @@ const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'yXG8bh6LkPVmQb2P
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+// ===== Supabase REST helper (reusable for all tables) =====
+async function supabaseRest(method, table, query = '', body = null, headers = {}) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return { ok: false, error: 'No Supabase config' };
+  const url = `${SUPABASE_URL}/rest/v1/${table}${query ? '?' + query : ''}`;
+  const opts = {
+    method,
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+      const err = await res.text();
+      return { ok: false, error: err, status: res.status };
+    }
+    const text = await res.text();
+    return { ok: true, data: text ? JSON.parse(text) : null };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
 // ===== Multi-Host: Parse HOST_PINS =====
 // Format: HOST_PINS=name:pin:username,name2:pin2:username2
 // Or simple gate: ACCESS_PIN=mypin (shared PIN for all hosts)
@@ -507,6 +534,53 @@ app.post('/api/chat/send', async (req, res) => {
     console.error('Chat send error:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ===== Fortune Teller Persistence API =====
+
+// POST /api/fortuneteller/viewer/load — Load persisted viewer profile
+app.post('/api/fortuneteller/viewer/load', async (req, res) => {
+  const { uniqueId } = req.body;
+  if (!uniqueId) return res.status(400).json({ error: 'uniqueId required' });
+  const result = await supabaseRest('GET', 'fortuneteller_viewers', `unique_id=eq.${encodeURIComponent(uniqueId)}&limit=1`);
+  if (!result.ok) {
+    console.error('FT viewer load error:', result.error);
+    return res.json({ viewer: null });
+  }
+  const viewer = result.data?.[0] || null;
+  res.json({ viewer });
+});
+
+// POST /api/fortuneteller/viewer/save — Batch upsert viewers
+app.post('/api/fortuneteller/viewer/save', async (req, res) => {
+  const { viewers } = req.body;
+  if (!viewers || !Array.isArray(viewers) || viewers.length === 0) {
+    return res.status(400).json({ error: 'viewers array required' });
+  }
+  const result = await supabaseRest('POST', 'fortuneteller_viewers', '', viewers, {
+    'Prefer': 'resolution=merge-duplicates',
+  });
+  if (!result.ok) {
+    console.error('FT viewer save error:', result.error);
+    return res.status(500).json({ error: 'Save failed' });
+  }
+  console.log(`💾 FT saved ${viewers.length} viewer(s)`);
+  res.json({ ok: true, count: viewers.length });
+});
+
+// POST /api/fortuneteller/session/save — Save session summary
+app.post('/api/fortuneteller/session/save', async (req, res) => {
+  const { session } = req.body;
+  if (!session) return res.status(400).json({ error: 'session required' });
+  const result = await supabaseRest('POST', 'fortuneteller_sessions', '', session, {
+    'Prefer': 'return=minimal',
+  });
+  if (!result.ok) {
+    console.error('FT session save error:', result.error);
+    return res.status(500).json({ error: 'Save failed' });
+  }
+  console.log(`💾 FT session saved (room: ${session.room || 'default'})`);
+  res.json({ ok: true });
 });
 
 // ===== TikTok Connection (scoped to session) =====
