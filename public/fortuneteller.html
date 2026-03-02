@@ -49,21 +49,25 @@
     .live-dot { width: 7px; height: 7px; background: #9b59b6; border-radius: 50%; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-    /* Fortune display */
+    /* Fortune display — bottom of screen so it doesn't cover tarot cards */
     #fortuneDisplay {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
       z-index: 120; pointer-events: none; text-align: center;
-      max-width: 85%; opacity: 0; transition: opacity 0.5s;
+      width: 95%; max-width: 95%; opacity: 0; transition: opacity 0.5s;
     }
     #fortuneDisplay.show { opacity: 1; }
     #fortuneDisplay .fortune-box {
-      background: rgba(10,0,20,0.85); border: 2px solid rgba(241,196,15,0.5);
-      border-radius: 16px; padding: 16px 20px;
+      background: rgba(10,0,20,0.92); border: 2px solid rgba(241,196,15,0.5);
+      border-radius: 12px; padding: 10px 14px;
       box-shadow: 0 0 30px rgba(155,89,182,0.3), inset 0 0 20px rgba(155,89,182,0.1);
     }
-    #fortuneDisplay .fortune-zodiac { font-size: 2em; margin-bottom: 4px; }
-    #fortuneDisplay .fortune-name { font-size: 12px; color: #f1c40f; font-weight: 700; margin-bottom: 6px; letter-spacing: 1px; }
-    #fortuneDisplay .fortune-text { font-size: 14px; color: #e0d0ff; line-height: 1.5; }
+    #fortuneDisplay .fortune-zodiac { font-size: 1.4em; margin-bottom: 2px; display: inline-block; }
+    #fortuneDisplay .fortune-name { font-size: 13px; color: #f1c40f; font-weight: 700; margin-bottom: 4px; letter-spacing: 1px; display: inline-block; margin-left: 6px; }
+    #fortuneDisplay .fortune-text { font-size: 13px; color: #e0d0ff; line-height: 1.5; max-height: 80px; overflow: hidden; }
+    #fortuneDisplay .fortune-card {
+      margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(241,196,15,0.3);
+      font-size: 11px; color: #f1c40f; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;
+    }
 
     /* Leaderboard */
     #leaderboard {
@@ -254,29 +258,28 @@
     }
     @keyframes skullAppear { 0% { opacity: 0; transform: translate(-50%,-50%) scale(0.3); } 30% { opacity: 0.7; transform: translate(-50%,-50%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.5); } }
 
-    /* Lightning — dramatic multi-bolt storm */
+    /* Lightning — electric spiral energy */
     .lightning-effect {
-      background: radial-gradient(circle at 50% 30%, rgba(150,150,255,0.15), transparent 60%);
+      background: radial-gradient(circle at 50% 60%, rgba(120,40,200,0.2), transparent 55%);
     }
     .lightning-flash {
       position: absolute; inset: 0;
-      animation: lightningBolt 0.12s ease-out;
-      background: rgba(220,220,255,0.7);
+      animation: electricFlicker 0.2s ease-out;
+      background: radial-gradient(circle at 50% 60%, rgba(170,80,255,0.4), transparent 50%);
     }
-    @keyframes lightningBolt { 0% { opacity: 1; } 100% { opacity: 0; } }
-    .lightning-bolt {
-      position: absolute; top: -10%; left: 50%; transform: translateX(-50%);
-      font-size: 120px; opacity: 0; animation: boltStrike 1.8s ease-out forwards;
-      filter: drop-shadow(0 0 40px rgba(150,150,255,1)) drop-shadow(0 0 80px rgba(100,100,255,0.6));
-      text-shadow: 0 0 30px rgba(200,200,255,0.9);
+    @keyframes electricFlicker { 0% { opacity: 0.8; } 50% { opacity: 0.2; } 100% { opacity: 0; } }
+    .lightning-glow {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 200px; height: 200px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(170,68,255,0.6), rgba(100,0,200,0.2), transparent 70%);
+      animation: spiralGlow 2.5s ease-in-out forwards;
+      filter: blur(8px);
     }
-    @keyframes boltStrike {
-      0% { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(0.5); }
-      8% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.2); }
-      15% { opacity: 0.3; transform: translateX(-50%) translateY(5px) scale(1); }
-      25% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.1); }
-      60% { opacity: 0.8; transform: translateX(-50%) translateY(10px) scale(1); }
-      100% { opacity: 0; transform: translateX(-50%) translateY(30px) scale(0.8); }
+    @keyframes spiralGlow {
+      0% { opacity: 0; transform: translate(-50%,-50%) scale(0.3); }
+      30% { opacity: 1; transform: translate(-50%,-50%) scale(1.2); }
+      70% { opacity: 0.7; transform: translate(-50%,-50%) scale(1.5); }
+      100% { opacity: 0; transform: translate(-50%,-50%) scale(2); }
     }
 
     /* Flood status bar */
@@ -332,6 +335,7 @@
         <div class="fortune-zodiac" id="fortuneZodiac"></div>
         <div class="fortune-name" id="fortuneName"></div>
         <div class="fortune-text" id="fortuneText"></div>
+        <div class="fortune-card" id="fortuneCard"></div>
       </div>
     </div>
 
@@ -592,6 +596,13 @@ function detectBirthday(msg) {
 
   return null;
 }
+
+// ===== TEST MODE =====
+const _urlParams = new URLSearchParams(window.location.search);
+const IS_TEST_MODE = _urlParams.get('test') === '1';
+const OPENAI_VOICE_OVERRIDE = _urlParams.get('voice') || null; // e.g. ?voice=sage
+if (IS_TEST_MODE) console.log('🧪 TEST MODE — Voice & Supabase persistence disabled');
+if (OPENAI_VOICE_OVERRIDE) console.log('🎤 OpenAI voice override:', OPENAI_VOICE_OVERRIDE);
 
 // ===== STATE =====
 const viewers = new Map();
@@ -1167,7 +1178,7 @@ function drawTarotCard(cardIndex, forcePosition) {
   // Minor Arcana: make visible and start from below
   if (isMinor) {
     sprite.visible = true;
-    sprite.position.set(0, -2, 2);
+    sprite.position.set(0, -2, 2.5);
     sprite.scale.set(0.35, 0.52, 1);
   }
 
@@ -1178,10 +1189,10 @@ function drawTarotCard(cardIndex, forcePosition) {
     sprite,
     card,
     startPos: sprite.position.clone(),
-    targetPos: new THREE.Vector3(0, 2.0, 2.0),
+    targetPos: new THREE.Vector3(0, 1.9, 2.5),
     animProgress: 0,
     startScale: sprite.scale.clone(),
-    targetScale: new THREE.Vector3(0.7, 1.05, 1),
+    targetScale: new THREE.Vector3(0.75, 1.12, 1),
     isMinor,
     isReversed,
   };
@@ -1201,19 +1212,21 @@ let drawnSpread = []; // array of drawnCard objects
 function drawTarotSpread(cardIndices, spreadType) {
   dismissDrawnCard(); // clear any existing
   const cards = [];
+  // Portrait-friendly positions — centered in camera view (9:16 frame)
+  // Camera at (0, 3.5, 5) looking at (0, 1, 0) — visual center at z=2.5 is ~y=1.9
   const positions = {
-    '1-card': [new THREE.Vector3(0, 2.0, 2.0)],
+    '1-card': [new THREE.Vector3(0, 1.9, 2.5)],
     '3-card': [
-      new THREE.Vector3(-0.55, 2.0, 2.0),  // Past (left)
-      new THREE.Vector3(0, 2.0, 2.0),       // Present (center)
-      new THREE.Vector3(0.55, 2.0, 2.0),    // Future (right)
+      new THREE.Vector3(-0.55, 1.9, 2.5),  // Past (left)
+      new THREE.Vector3(0, 1.9, 2.5),       // Present (center)
+      new THREE.Vector3(0.55, 1.9, 2.5),    // Future (right)
     ],
     '5-card': [
-      new THREE.Vector3(-0.55, 2.0, 2.0),   // Past
-      new THREE.Vector3(0, 2.0, 2.0),        // Present
-      new THREE.Vector3(0.55, 2.0, 2.0),     // Future
-      new THREE.Vector3(0, 2.55, 2.0),       // Above (advice)
-      new THREE.Vector3(0, 1.45, 2.0),       // Below (foundation)
+      new THREE.Vector3(-0.5, 1.9, 2.5),    // Past
+      new THREE.Vector3(0, 1.9, 2.5),        // Present
+      new THREE.Vector3(0.5, 1.9, 2.5),      // Future
+      new THREE.Vector3(0, 2.4, 2.5),        // Above (advice)
+      new THREE.Vector3(0, 1.4, 2.5),        // Below (foundation)
     ],
   };
   const targets = positions[spreadType] || positions['1-card'];
@@ -1221,13 +1234,18 @@ function drawTarotSpread(cardIndices, spreadType) {
     '3-card': ['Masa Lalu', 'Sekarang', 'Masa Depan'],
     '5-card': ['Masa Lalu', 'Sekarang', 'Masa Depan', 'Nasihat', 'Fondasi'],
   };
+  // Scale down cards for multi-card spreads to fit portrait screen
+  const spreadScales = {
+    '3-card': new THREE.Vector3(0.45, 0.67, 1),
+    '5-card': new THREE.Vector3(0.38, 0.57, 1),
+  };
 
   for (let i = 0; i < cardIndices.length && i < targets.length; i++) {
     const result = drawTarotCard(cardIndices[i]);
     // Override target position for multi-card layout
     if (drawnCard && cardIndices.length > 1) {
       drawnCard.targetPos = targets[i];
-      drawnCard.targetScale = new THREE.Vector3(0.5, 0.75, 1);
+      drawnCard.targetScale = spreadScales[spreadType] || new THREE.Vector3(0.5, 0.75, 1);
     }
     if (drawnCard) {
       drawnCard.spreadLabel = spreadLabels[spreadType]?.[i] || '';
@@ -1395,6 +1413,270 @@ function hideSkull() {
   // Restore crystal light
   crystalLight.color.set(0x9b59b6);
   crystalLight.intensity = 2;
+}
+
+// ===== 3D FIRE MAIDEN MODEL =====
+let fireMaidenModel = null;
+let fireMaidenMixer = null;
+let fireMaidenAnimations = {};
+let fireMaidenVisible = false;
+let fireMaidenElapsed = 0;
+let fireMaidenDuration = 4;
+
+// Load fire maiden character model + merge animations from both GLB files
+gltfLoader.load('/fortuneteller-assets/effects/fire/fire%20maiden.glb', (gltf) => {
+  fireMaidenModel = gltf.scene;
+  fireMaidenModel.scale.set(1.2, 1.2, 1.2);
+  fireMaidenModel.position.set(0, 1.5, 0);
+  fireMaidenModel.visible = false;
+
+  // Fiery emissive tint
+  fireMaidenModel.traverse(child => {
+    if (child.isMesh) {
+      child.material = child.material.clone();
+      child.material.emissive = new THREE.Color(0xff4400);
+      child.material.emissiveIntensity = 0.6;
+      child.material.transparent = true;
+      child.material.opacity = 0.95;
+    }
+  });
+
+  scene.add(fireMaidenModel);
+
+  // Setup mixer and animations from main character file
+  fireMaidenMixer = new THREE.AnimationMixer(fireMaidenModel);
+  gltf.animations.forEach(clip => {
+    fireMaidenAnimations[clip.name] = fireMaidenMixer.clipAction(clip);
+    fireMaidenAnimations[clip.name].setLoop(THREE.LoopRepeat);
+  });
+
+  console.log('🔥 Fire Maiden loaded:', Object.keys(fireMaidenAnimations).join(', '));
+
+  // Also load extra animations from the animation file and merge them
+  gltfLoader.load('/fortuneteller-assets/effects/fire/Meshy_AI_Character_output.glb', (gltf2) => {
+    gltf2.animations.forEach(clip => {
+      if (!fireMaidenAnimations[clip.name]) {
+        fireMaidenAnimations[clip.name] = fireMaidenMixer.clipAction(clip);
+        fireMaidenAnimations[clip.name].setLoop(THREE.LoopRepeat);
+      }
+    });
+    console.log('🔥 Fire Maiden animations merged:', Object.keys(fireMaidenAnimations).join(', '));
+  }, undefined, () => {}); // silently ignore if extra anims fail
+
+}, undefined, (err) => {
+  console.warn('Fire maiden load failed:', err);
+});
+
+function showFireMaiden(duration = 4000) {
+  if (!fireMaidenModel) { console.warn('Fire Maiden not loaded yet'); return; }
+  fireMaidenModel.visible = true;
+  fireMaidenVisible = true;
+  fireMaidenElapsed = 0;
+  fireMaidenDuration = Math.max(duration, 8000) / 1000; // min 8s to fit animation
+  fireMaidenModel.position.set(0, 0.3, 0);
+  fireMaidenModel.rotation.set(0, -Math.PI / 2, 0);
+  fireMaidenModel.scale.set(0.01, 0.01, 0.01);
+
+  // Hide crystal ball
+  crystalOuter.visible = false;
+  crystalInner.visible = false;
+  base.visible = false;
+
+  // Play all available animations (bow + clip0)
+  Object.values(fireMaidenAnimations).forEach(a => a.reset().play());
+
+  // Fiery orange light
+  crystalLight.color.set(0xff6600);
+  crystalLight.intensity = 5;
+}
+
+function hideFireMaiden() {
+  if (!fireMaidenModel) return;
+  fireMaidenModel.visible = false;
+  fireMaidenVisible = false;
+  Object.values(fireMaidenAnimations).forEach(a => a.stop());
+  // Restore crystal ball (only if no other 3D character visible)
+  if (!skullVisible && !waterMaidenVisible && !lightningMaidenVisible) {
+    crystalOuter.visible = true;
+    crystalInner.visible = true;
+    base.visible = true;
+    crystalLight.color.set(0x9b59b6);
+    crystalLight.intensity = 2;
+  }
+}
+
+// ===== 3D WATER MAIDEN MODEL =====
+let waterMaidenModel = null;
+let waterMaidenMixer = null;
+let waterMaidenAnimations = {};
+let waterMaidenVisible = false;
+let waterMaidenElapsed = 0;
+let waterMaidenDuration = 4;
+
+gltfLoader.load('/fortuneteller-assets/effects/water/Water%20Maiden.glb', (gltf) => {
+  waterMaidenModel = gltf.scene;
+  waterMaidenModel.scale.set(1.2, 1.2, 1.2);
+  waterMaidenModel.position.set(0, 1.5, 0);
+  waterMaidenModel.visible = false;
+
+  // Aqua blue emissive tint
+  waterMaidenModel.traverse(child => {
+    if (child.isMesh) {
+      child.material = child.material.clone();
+      child.material.emissive = new THREE.Color(0x0066ff);
+      child.material.emissiveIntensity = 0.6;
+      child.material.transparent = true;
+      child.material.opacity = 0.95;
+    }
+  });
+
+  scene.add(waterMaidenModel);
+
+  waterMaidenMixer = new THREE.AnimationMixer(waterMaidenModel);
+  gltf.animations.forEach(clip => {
+    waterMaidenAnimations[clip.name] = waterMaidenMixer.clipAction(clip);
+    waterMaidenAnimations[clip.name].setLoop(THREE.LoopRepeat);
+  });
+
+  console.log('💧 Water Maiden loaded:', Object.keys(waterMaidenAnimations).join(', '));
+
+  // Merge extra animations from animation file
+  gltfLoader.load('/fortuneteller-assets/effects/water/Meshy_AI_Character_output.glb', (gltf2) => {
+    gltf2.animations.forEach(clip => {
+      if (!waterMaidenAnimations[clip.name]) {
+        waterMaidenAnimations[clip.name] = waterMaidenMixer.clipAction(clip);
+        waterMaidenAnimations[clip.name].setLoop(THREE.LoopRepeat);
+      }
+    });
+    console.log('💧 Water Maiden animations merged:', Object.keys(waterMaidenAnimations).join(', '));
+  }, undefined, () => {});
+
+}, undefined, (err) => {
+  console.warn('Water maiden load failed:', err);
+});
+
+function showWaterMaiden(duration = 4000) {
+  if (!waterMaidenModel) { console.warn('Water Maiden not loaded yet'); return; }
+  waterMaidenModel.visible = true;
+  waterMaidenVisible = true;
+  waterMaidenElapsed = 0;
+  waterMaidenDuration = Math.max(duration, 7000) / 1000; // min 7s to fit animation
+  waterMaidenModel.position.set(0, 0.3, 0);
+  waterMaidenModel.rotation.set(0, -Math.PI / 2, 0);
+  waterMaidenModel.scale.set(0.01, 0.01, 0.01);
+
+  // Hide crystal ball
+  crystalOuter.visible = false;
+  crystalInner.visible = false;
+  base.visible = false;
+
+  // Play all animations
+  Object.values(waterMaidenAnimations).forEach(a => a.reset().play());
+
+  // Aqua blue light
+  crystalLight.color.set(0x0088ff);
+  crystalLight.intensity = 5;
+}
+
+function hideWaterMaiden() {
+  if (!waterMaidenModel) return;
+  waterMaidenModel.visible = false;
+  waterMaidenVisible = false;
+  Object.values(waterMaidenAnimations).forEach(a => a.stop());
+  if (!skullVisible && !fireMaidenVisible && !lightningMaidenVisible) {
+    crystalOuter.visible = true;
+    crystalInner.visible = true;
+    base.visible = true;
+    crystalLight.color.set(0x9b59b6);
+    crystalLight.intensity = 2;
+  }
+}
+
+// ===== 3D LIGHTNING MAIDEN MODEL =====
+let lightningMaidenModel = null;
+let lightningMaidenMixer = null;
+let lightningMaidenAnimations = {};
+let lightningMaidenVisible = false;
+let lightningMaidenElapsed = 0;
+let lightningMaidenDuration = 4;
+
+gltfLoader.load('/fortuneteller-assets/effects/lightning/lightning%20maiden.glb', (gltf) => {
+  lightningMaidenModel = gltf.scene;
+  lightningMaidenModel.scale.set(1.2, 1.2, 1.2);
+  lightningMaidenModel.position.set(0, 1.5, 0);
+  lightningMaidenModel.visible = false;
+
+  // Electric purple/yellow emissive tint
+  lightningMaidenModel.traverse(child => {
+    if (child.isMesh) {
+      child.material = child.material.clone();
+      child.material.emissive = new THREE.Color(0xaa00ff);
+      child.material.emissiveIntensity = 0.6;
+      child.material.transparent = true;
+      child.material.opacity = 0.95;
+    }
+  });
+
+  scene.add(lightningMaidenModel);
+
+  lightningMaidenMixer = new THREE.AnimationMixer(lightningMaidenModel);
+  gltf.animations.forEach(clip => {
+    lightningMaidenAnimations[clip.name] = lightningMaidenMixer.clipAction(clip);
+    lightningMaidenAnimations[clip.name].setLoop(THREE.LoopRepeat);
+  });
+
+  console.log('⚡ Lightning Maiden loaded:', Object.keys(lightningMaidenAnimations).join(', '));
+
+  // Merge extra animations from animation file
+  gltfLoader.load('/fortuneteller-assets/effects/lightning/Meshy_AI_Character_output.glb', (gltf2) => {
+    gltf2.animations.forEach(clip => {
+      if (!lightningMaidenAnimations[clip.name]) {
+        lightningMaidenAnimations[clip.name] = lightningMaidenMixer.clipAction(clip);
+        lightningMaidenAnimations[clip.name].setLoop(THREE.LoopRepeat);
+      }
+    });
+    console.log('⚡ Lightning Maiden animations merged:', Object.keys(lightningMaidenAnimations).join(', '));
+  }, undefined, () => {});
+
+}, undefined, (err) => {
+  console.warn('Lightning maiden load failed:', err);
+});
+
+function showLightningMaiden(duration = 4000) {
+  if (!lightningMaidenModel) { console.warn('Lightning Maiden not loaded yet'); return; }
+  lightningMaidenModel.visible = true;
+  lightningMaidenVisible = true;
+  lightningMaidenElapsed = 0;
+  lightningMaidenDuration = Math.max(duration, 7000) / 1000; // min 7s
+  lightningMaidenModel.position.set(0, 0.3, 0);
+  lightningMaidenModel.rotation.set(0, -Math.PI / 2, 0);
+  lightningMaidenModel.scale.set(0.01, 0.01, 0.01);
+
+  // Hide crystal ball
+  crystalOuter.visible = false;
+  crystalInner.visible = false;
+  base.visible = false;
+
+  // Play all animations
+  Object.values(lightningMaidenAnimations).forEach(a => a.reset().play());
+
+  // Electric purple light
+  crystalLight.color.set(0xaa44ff);
+  crystalLight.intensity = 6;
+}
+
+function hideLightningMaiden() {
+  if (!lightningMaidenModel) return;
+  lightningMaidenModel.visible = false;
+  lightningMaidenVisible = false;
+  Object.values(lightningMaidenAnimations).forEach(a => a.stop());
+  if (!skullVisible && !fireMaidenVisible && !waterMaidenVisible) {
+    crystalOuter.visible = true;
+    crystalInner.visible = true;
+    base.visible = true;
+    crystalLight.color.set(0x9b59b6);
+    crystalLight.intensity = 2;
+  }
 }
 
 // ===== VIEWER ORB SYSTEM =====
@@ -1612,10 +1894,13 @@ function processReadingQueue() {
       break;
     }
     case 'question': {
-      const qCard = drawTarotCard(pickTarotForReading('question', null, reading.viewerId));
+      // No tarot card for questions — crystal ball glow + voice answer only
       eventType = 'mystic_question';
-      eventData = { name: reading.nickname, question: reading.data.question || '', ...cardInfo(qCard) };
-      if (qCard.mood === 'dark' || qCard.isReversed) setTimeout(() => triggerDramaticEffect('skull', 3500), 1000);
+      eventData = { name: reading.nickname, question: reading.data.question || '', zodiac: viewerZodiac };
+      // Crystal ball glow intensifies
+      crystalLight.color.set(0x7733ff);
+      crystalLight.intensity = 6;
+      crystalInnerMat.opacity = 0.6;
       break;
     }
     case 'gift_reading': {
@@ -1693,6 +1978,7 @@ function processReadingQueue() {
   if (eventData.tarotCard) {
     reading.data.tarotCard = eventData.tarotCard;
     reading.data.tarotCardIndex = eventData.tarotCardIndex;
+    reading.data.tarotPosition = eventData.tarotPosition;
   }
 
   // Queue voice
@@ -1722,6 +2008,7 @@ function showFortuneDisplay(reading) {
   const zodiacEl = document.getElementById('fortuneZodiac');
   const nameEl = document.getElementById('fortuneName');
   const textEl = document.getElementById('fortuneText');
+  const cardEl = document.getElementById('fortuneCard');
 
   if (reading.data.zodiac && ZODIAC_DATA[reading.data.zodiac]) {
     zodiacEl.textContent = ZODIAC_DATA[reading.data.zodiac].symbol;
@@ -1730,6 +2017,16 @@ function showFortuneDisplay(reading) {
   }
   nameEl.textContent = reading.nickname;
   textEl.textContent = 'Bola kristal sedang membaca...';
+
+  // Show tarot card name + position if available
+  if (reading.data.tarotCard && reading.data.tarotPosition) {
+    const posIcon = reading.data.tarotPosition.includes('Terbalik') ? '🔄' : '🔥';
+    cardEl.textContent = `${posIcon} ${reading.data.tarotCard} — ${reading.data.tarotPosition}`;
+    cardEl.style.display = 'block';
+  } else {
+    cardEl.style.display = 'none';
+  }
+
   el.classList.add('show');
   // Hide subtitle to avoid redundant text display
   document.getElementById('voiceSubtitle').style.display = 'none';
@@ -1757,6 +2054,12 @@ function finishReading() {
     }
     conversationLog.push({ type: 'reading_done', name: currentReading.nickname, summary: `${currentReading.type} untuk ${currentReading.nickname}`, timestamp: Date.now() });
     if (conversationLog.length > MAX_CONVERSATION_LOG) conversationLog.shift();
+
+    // Send reading to TikTok chat for gift readings (priority 3+) and ALL question readings
+    if (currentReading.priority >= 3 || currentReading.type === 'question') {
+      const fortuneText = document.getElementById('fortuneText')?.textContent || '';
+      sendReadingToChat(currentReading.nickname, currentReading.type, fortuneText);
+    }
   }
 
   // Debounced save after reading (5s delay to batch)
@@ -1958,11 +2261,13 @@ function triggerDramaticEffect(element, duration = 3000) {
     case 'fire':
       overlay.classList.add('fire-effect');
       spawn3DElementParticles('fire', duration);
+      showFireMaiden(duration);
       break;
     case 'Air':
     case 'water':
       overlay.classList.add('water-effect');
       spawn3DElementParticles('water', duration);
+      showWaterMaiden(duration);
       break;
     case 'skull':
     case 'dark': {
@@ -1973,20 +2278,21 @@ function triggerDramaticEffect(element, duration = 3000) {
     case 'Angin':
     case 'lightning': {
       overlay.classList.add('lightning-effect');
-      // Multiple lightning flashes
-      for (let i = 0; i < 4; i++) {
+      // Subtle purple flickers (not harsh white)
+      for (let i = 0; i < 3; i++) {
         setTimeout(() => {
           const flash = document.createElement('div');
           flash.className = 'lightning-flash';
           overlay.appendChild(flash);
-          setTimeout(() => flash.remove(), 150);
-        }, i * 300);
+          setTimeout(() => flash.remove(), 250);
+        }, i * 500 + Math.random() * 200);
       }
-      const bolt = document.createElement('div');
-      bolt.className = 'lightning-bolt';
-      bolt.textContent = '\u26A1';
-      overlay.appendChild(bolt);
+      // Central purple glow instead of emoji bolt
+      const glow = document.createElement('div');
+      glow.className = 'lightning-glow';
+      overlay.appendChild(glow);
       spawn3DElementParticles('lightning', duration);
+      showLightningMaiden(duration);
       break;
     }
     case 'Tanah':
@@ -2035,7 +2341,7 @@ function spawn3DElementParticles(type, duration = 3000) {
   const colorSets = {
     fire: [[1, 0.3, 0], [1, 0.6, 0], [1, 0.9, 0.2], [1, 0.15, 0]],
     water: [[0, 0.4, 1], [0.2, 0.6, 1], [0, 0.7, 0.9], [0.3, 0.8, 1]],
-    lightning: [[0.7, 0.7, 1], [0.9, 0.9, 1], [0.5, 0.5, 1], [1, 1, 1]],
+    lightning: [[0.6, 0.2, 1], [0.7, 0.3, 1], [0.5, 0.1, 0.9], [0.8, 0.5, 1]],
     earth: [[0.6, 0.4, 0.2], [0.4, 0.3, 0.1], [0.5, 0.5, 0.3], [0.3, 0.2, 0.1]],
   };
   const cs = colorSets[type] || colorSets.fire;
@@ -2058,9 +2364,11 @@ function spawn3DElementParticles(type, duration = 3000) {
       velocities[i * 3 + 1] = -1 - Math.random() * 2; // fall like rain
       velocities[i * 3 + 2] = (Math.random() - 0.5) * 2;
     } else if (type === 'lightning') {
-      velocities[i * 3] = (Math.random() - 0.5) * 4;
-      velocities[i * 3 + 1] = (Math.random() - 0.5) * 4; // chaotic
-      velocities[i * 3 + 2] = (Math.random() - 0.5) * 4;
+      // Spiral upward — store angle for spiral motion in x/z velocities
+      const spiralAngle = (i / count) * Math.PI * 4; // 2 full spirals
+      velocities[i * 3] = Math.cos(spiralAngle) * 1.5;
+      velocities[i * 3 + 1] = 1.5 + Math.random() * 2; // rise
+      velocities[i * 3 + 2] = Math.sin(spiralAngle) * 1.5;
     } else { // earth
       velocities[i * 3] = (Math.random() - 0.5) * 1;
       velocities[i * 3 + 1] = 0.5 + Math.random(); // gentle rise
@@ -2071,7 +2379,7 @@ function spawn3DElementParticles(type, duration = 3000) {
     colors[i * 3] = c[0];
     colors[i * 3 + 1] = c[1];
     colors[i * 3 + 2] = c[2];
-    sizes[i] = type === 'lightning' ? 8 + Math.random() * 12 : 6 + Math.random() * 8;
+    sizes[i] = type === 'lightning' ? 4 + Math.random() * 6 : 6 + Math.random() * 8;
   }
 
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -2233,26 +2541,45 @@ function handleChat(data) {
     return;
   }
 
-  // Check for real question — not casual greetings like "apa kabar" or "gimana"
+  // Check for questions — split into SIMPLE (general/fun) vs PERSONAL (fortune/destiny)
   const casualPhrases = ['apa kabar', 'gimana kabar', 'halo', 'hai', 'hello', 'hi eyang', 'assalamualaikum', 'apa tu', 'apa ni', 'siapa tu', 'mana tau'];
   const isCasual = casualPhrases.some(p => lower.includes(p));
-  const isRealQuestion = !isCasual && (
-    (comment.endsWith('?') && comment.length > 10) // short "?" not enough
+
+  // Personal fortune questions — need tarot reading (gift required)
+  const isPersonalFortune = !isCasual && (
+    lower.includes('nasib') || lower.includes('ramalan') || lower.includes('masa depan')
+    || (lower.includes('apakah saya') && comment.length > 15)
+    || (lower.includes('kapan saya') && comment.length > 12)
+    || (lower.includes('apakah aku') && comment.length > 15)
+    || lower.includes('takdir') || lower.includes('peruntungan')
+  );
+
+  // Simple/fun questions — Eyang just answers via voice, no card needed
+  const isSimpleQuestion = !isCasual && !isPersonalFortune && (
+    (comment.endsWith('?') && comment.length > 10)
     || lower.startsWith('tanya ')
     || lower.startsWith('soalan ')
-    || (lower.includes('apakah ') && comment.length > 15) // "apakah saya..." real question
-    || (lower.includes('kapan ') && comment.length > 12)  // "kapan saya..." real question
+    || (lower.includes('gimana ') && comment.length > 12)
+    || (lower.includes('kenapa ') && comment.length > 10)
     || (lower.includes('bagaimana ') && comment.length > 15)
-    || lower.includes('ramalan')
-    || lower.includes('nasib')
-    || lower.includes('masa depan')
   );
-  if (isRealQuestion) {
+
+  if (isPersonalFortune) {
     viewer.score += 1;
     viewer.pendingRequest = { type: 'question', comment, time: Date.now() };
-    addNotification(`<strong>${nick}</strong> punya pertanyaan...`, 'zodiac');
-    // Short teaser — don't give full answer for free
+    addNotification(`<strong>${nick}</strong> mau tahu nasib...`, 'zodiac');
+    // Teaser only — gift for full tarot reading
     queueVoiceEvent('mystic_question_tease', { name: nick, viewerId: uid, question: comment, zodiac: viewer.zodiac || null }, 2);
+    showViewerFocus(uid, nick, '🔮 Nasib');
+    updateLeaderboard();
+    return;
+  }
+
+  if (isSimpleQuestion) {
+    viewer.score += 1;
+    addNotification(`<strong>${nick}</strong>: ${comment}`);
+    // Just answer via voice — no reading state, no card, no pending
+    queueVoiceEvent('mystic_question_reply', { name: nick, viewerId: uid, question: comment, zodiac: viewer.zodiac || null }, 2);
     showViewerFocus(uid, nick, '❓ Pertanyaan');
     updateLeaderboard();
     return;
@@ -2325,6 +2652,7 @@ function handleGift(data) {
 
   // VIP gifts (500+) bypass accumulation — trigger immediately
   if (diamonds >= 500) {
+    interruptForGift(5); // Cut off anything lower priority
     viewer.score += 250;
     addNotification(`<strong>${nick}</strong> membuka VIP PROPHECY! (${diamonds} diamonds)`, 'gift');
     triggerGiftEffect('big');
@@ -2392,6 +2720,11 @@ function triggerAccumulatedGift(uid) {
     readingData.pendingType = pending.type;
     readingData.pendingComment = pending.comment;
     viewer.pendingRequest = null;
+  }
+
+  // Interrupt low-priority voice for gift readings (11+ diamonds)
+  if (diamonds >= 11) {
+    interruptForGift(diamonds >= 100 ? 4 : 3);
   }
 
   // Determine tier based on ACCUMULATED total
@@ -2478,7 +2811,7 @@ function handleShare(data) {
 }
 
 // ===== VOICE COMMENTARY SYSTEM =====
-let voiceEnabled = true; // Auto-enabled for fortune reader
+let voiceEnabled = !IS_TEST_MODE; // Auto-enabled for live, OFF in test mode
 let voiceIsGenerating = false;
 let voiceIsPlaying = false;
 const voiceQueue = [];
@@ -2568,6 +2901,70 @@ function buildConversationSummary(n) {
   });
 }
 
+// Interrupt low-priority voice for high-tier gifts
+// Flushes queue of idle/chat items and stops current audio if it's low priority
+let _currentVoicePriority = 0;
+let _currentAudio = null;
+let _voiceAbortController = null; // AbortController for in-flight voice fetch
+let _generatingPriority = 0;     // priority of current in-flight generation
+
+// Smooth 500ms volume fade instead of hard audio.pause()
+function fadeOutAudio(audio, durationMs = 500) {
+  if (!audio) return;
+  const steps = 10;
+  const interval = durationMs / steps;
+  const startVol = audio.volume;
+  let step = 0;
+  const fade = setInterval(() => {
+    step++;
+    audio.volume = Math.max(0, startVol * (1 - step / steps));
+    if (step >= steps) {
+      clearInterval(fade);
+      audio.pause();
+      audio.currentTime = 0;
+      URL.revokeObjectURL(audio.src);
+      voiceIsPlaying = false;
+      _currentAudio = null;
+      _currentVoicePriority = 0;
+      document.getElementById('voiceSubtitle').style.display = 'none';
+      document.getElementById('voiceStatusText').textContent = 'Voice Ready';
+      playNextVoice();
+    }
+  }, interval);
+}
+
+function interruptForGift(giftPriority) {
+  // Guard: never interrupt an active reading — new gifts queue behind
+  if (readingState !== 'IDLE') {
+    console.log('🎁 Reading active — gift queued, not interrupting');
+    return;
+  }
+
+  // Only flush idle/chat items (priority <= 2) from voice generation queue
+  const before = voiceQueue.length;
+  for (let i = voiceQueue.length - 1; i >= 0; i--) {
+    if (voiceQueue[i].priority <= 2) voiceQueue.splice(i, 1);
+  }
+  // Only flush low-priority audio items (keep priority 3+)
+  for (let i = voiceAudioQueue.length - 1; i >= 0; i--) {
+    if ((voiceAudioQueue[i].priority || 1) <= 2) {
+      URL.revokeObjectURL(voiceAudioQueue[i].url);
+      voiceAudioQueue.splice(i, 1);
+    }
+  }
+  // Abort in-flight idle voice generation so gift reading can start immediately
+  if (_voiceAbortController && _generatingPriority <= 2) {
+    _voiceAbortController.abort();
+    console.log('🎁 Aborted in-flight idle voice generation');
+  }
+  // Fade out current audio if it's idle/chat (priority <= 2)
+  if (_currentAudio && _currentVoicePriority <= 2 && voiceIsPlaying) {
+    fadeOutAudio(_currentAudio, 500);
+    console.log('🎁 Fading out idle voice for gift');
+  }
+  if (before > 0) console.log(`🎁 Flushed ${before - voiceQueue.length} low-priority voice items`);
+}
+
 function queueVoiceEvent(eventType, eventData, priority = 1) {
   if (!voiceEnabled) return;
   // During active reading (READING/REVEAL), only allow priority 3+ (gift/VIP)
@@ -2582,23 +2979,33 @@ function queueVoiceEvent(eventType, eventData, priority = 1) {
   processVoiceQueue();
 }
 
+let _voiceErrorCount = 0;
+let _voiceBackoffUntil = 0;
+
 async function processVoiceQueue() {
   if (voiceIsGenerating) return;
   if (voiceQueue.length === 0) return;
-  if (Date.now() - lastVoiceTime < VOICE_COOLDOWN) {
+  // Backoff after consecutive API errors
+  if (Date.now() < _voiceBackoffUntil) return;
+  voiceQueue.sort((a, b) => b.priority - a.priority);
+  // Skip cooldown for gift/reading events (priority 3+) — they need immediate response
+  const nextPriority = voiceQueue[0]?.priority || 0;
+  if (nextPriority < 3 && Date.now() - lastVoiceTime < VOICE_COOLDOWN) {
     setTimeout(processVoiceQueue, VOICE_COOLDOWN - (Date.now() - lastVoiceTime));
     return;
   }
 
-  voiceQueue.sort((a, b) => b.priority - a.priority);
   const event = voiceQueue.shift();
   voiceIsGenerating = true;
+  _generatingPriority = event.priority;
+  _voiceAbortController = new AbortController();
   document.getElementById('voiceStatusText').textContent = 'Generating...';
 
   try {
     const res = await fetch('/api/voice/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: _voiceAbortController.signal,
       body: JSON.stringify({
         eventType: event.eventType,
         eventData: event.eventData,
@@ -2607,13 +3014,17 @@ async function processVoiceQueue() {
         conversationLog: buildConversationSummary(15),
         recentContext: buildConversationSummary(5),
         room: ROOM,
-        voiceId: MYSTIC_VOICE_ID
+        voiceId: MYSTIC_VOICE_ID,
+        openaiVoice: OPENAI_VOICE_OVERRIDE
       }),
     });
 
     if (!res.ok) {
-      console.error('Voice API error:', res.status);
-      document.getElementById('voiceStatusText').textContent = 'API Error';
+      _voiceErrorCount++;
+      const backoffSec = Math.min(120, 15 * Math.pow(2, _voiceErrorCount - 1)); // 15s, 30s, 60s, 120s
+      _voiceBackoffUntil = Date.now() + backoffSec * 1000;
+      console.error(`Voice API error: ${res.status} (${_voiceErrorCount} failures, backoff ${backoffSec}s)`);
+      document.getElementById('voiceStatusText').textContent = `API Error (retry ${backoffSec}s)`;
       // Still update fortune display with fallback text so reading doesn't get stuck
       if (readingState === 'REVEAL') {
         document.getElementById('fortuneText').textContent = '🔮 Energi mistis sedang kuat... bola kristal berbisik...';
@@ -2621,6 +3032,10 @@ async function processVoiceQueue() {
       }
       return;
     }
+
+    // Reset error counter on success
+    _voiceErrorCount = 0;
+    _voiceBackoffUntil = 0;
 
     const text = decodeURIComponent(res.headers.get('X-Commentary-Text') || '');
     const blob = await res.blob();
@@ -2634,7 +3049,7 @@ async function processVoiceQueue() {
     sendAutoReply(text, event.priority, event.eventType);
 
     lastVoiceTime = Date.now();
-    enqueueVoiceAudio(blob, text);
+    enqueueVoiceAudio(blob, text, event.priority);
 
     // Update fortune display text if currently showing
     if (readingState === 'REVEAL' && text) {
@@ -2652,32 +3067,45 @@ async function processVoiceQueue() {
       }
     }
   } catch (err) {
-    console.error('Voice error:', err);
-    document.getElementById('voiceStatusText').textContent = 'Error';
-    // Gracefully finish reading on network/fetch errors
-    if (readingState === 'REVEAL') {
-      document.getElementById('fortuneText').textContent = '🔮 Energi mistis sedang kuat... bola kristal berbisik...';
-      setTimeout(() => finishReading(), 3000);
+    // Aborted by interruptForGift — not a real error, process next immediately
+    if (err.name === 'AbortError') {
+      console.log('🎁 Voice generation aborted for gift priority');
+      document.getElementById('voiceStatusText').textContent = 'Voice Ready';
+    } else {
+      _voiceErrorCount++;
+      const backoffSec = Math.min(120, 15 * Math.pow(2, _voiceErrorCount - 1));
+      _voiceBackoffUntil = Date.now() + backoffSec * 1000;
+      console.error(`Voice error: ${err.message} (${_voiceErrorCount} failures, backoff ${backoffSec}s)`);
+      document.getElementById('voiceStatusText').textContent = `Error (retry ${backoffSec}s)`;
+      // Gracefully finish reading on network/fetch errors
+      if (readingState === 'REVEAL') {
+        document.getElementById('fortuneText').textContent = '🔮 Energi mistis sedang kuat... bola kristal berbisik...';
+        setTimeout(() => finishReading(), 3000);
+      }
     }
   } finally {
     voiceIsGenerating = false;
-    if (voiceQueue.length > 0) setTimeout(processVoiceQueue, 500);
+    _voiceAbortController = null;
+    _generatingPriority = 0;
+    if (voiceQueue.length > 0) setTimeout(processVoiceQueue, 300);
   }
 }
 
-function enqueueVoiceAudio(blob, text) {
+function enqueueVoiceAudio(blob, text, priority = 1) {
   if (voiceAudioQueue.length >= 3) {
     const old = voiceAudioQueue.shift();
     URL.revokeObjectURL(old.url);
   }
   const url = URL.createObjectURL(blob);
-  voiceAudioQueue.push({ url, text });
+  voiceAudioQueue.push({ url, text, priority });
   if (!voiceIsPlaying) playNextVoice();
 }
 
 function playNextVoice() {
   if (voiceAudioQueue.length === 0) {
     voiceIsPlaying = false;
+    _currentAudio = null;
+    _currentVoicePriority = 0;
     document.getElementById('voiceStatusText').textContent = 'Voice Ready';
     document.getElementById('voiceSubtitle').style.display = 'none';
     return;
@@ -2698,8 +3126,12 @@ function playNextVoice() {
 
   const audio = new Audio(item.url);
   audio.volume = 0.85;
+  _currentAudio = audio;
+  _currentVoicePriority = item.priority || 1;
   audio.onended = () => {
     URL.revokeObjectURL(item.url);
+    _currentAudio = null;
+    _currentVoicePriority = 0;
     document.getElementById('voiceSpeakerIcon').textContent = '\uD83C\uDFA4';
     clearTimeout(voiceSubtitleTimer);
     voiceSubtitleTimer = setTimeout(() => subtitleEl.style.display = 'none', 1000);
@@ -2709,8 +3141,8 @@ function playNextVoice() {
     }
     playNextVoice();
   };
-  audio.onerror = () => { URL.revokeObjectURL(item.url); playNextVoice(); };
-  audio.play().catch(() => playNextVoice());
+  audio.onerror = () => { URL.revokeObjectURL(item.url); _currentAudio = null; _currentVoicePriority = 0; playNextVoice(); };
+  audio.play().catch(() => { _currentAudio = null; _currentVoicePriority = 0; playNextVoice(); });
 }
 
 // ===== VIEWER JOIN BATCHING =====
@@ -2735,7 +3167,9 @@ function flushJoinBatch() {
   const names = batch.map(v => v.nickname);
   const nameStr = names.length <= 4 ? names.join(', ') : names.slice(0, 3).join(', ') + ` dan ${names.length - 3} lagi`;
 
-  queueVoiceEvent('mystic_viewers_welcome', { count: batch.length, names: nameStr, queueLength: readingQueue.length }, 1);
+  const hour = new Date().getHours();
+  const timeGreet = hour < 12 ? 'pagi' : hour < 15 ? 'siang' : hour < 18 ? 'sore' : 'malam';
+  queueVoiceEvent('mystic_viewers_welcome', { count: batch.length, names: nameStr, queueLength: readingQueue.length, timeGreet }, 1);
 }
 
 // ===== ANIMATION LOOP =====
@@ -2773,10 +3207,19 @@ function animate() {
   }
 
   // Tarot card ring rotation — only Major Arcana (first 22) orbit
+  // Hide circling cards during active reading so viewer can focus on drawn cards
+  const isReadingActive = readingState !== 'IDLE';
   const spreadSprites = new Set(drawnSpread.map(dc => dc?.sprite));
   for (let i = 0; i < 22; i++) {
     const s = tarotSprites[i];
     if (spreadSprites.has(s) || (drawnCard && drawnCard.sprite === s)) continue;
+    if (isReadingActive) {
+      // Fade out ring cards during reading
+      s.material.opacity = Math.max(0, s.material.opacity - dt * 2);
+    } else {
+      // Restore opacity when idle
+      s.material.opacity = Math.min(s.userData.originalOpacity || 0.5, s.material.opacity + dt * 2);
+    }
     const angle = s.userData.baseAngle + elapsedTotal * 0.08;
     const r = 3.0;
     s.position.set(Math.cos(angle) * r, 2.2 + Math.sin(elapsedTotal * 0.4 + i * 0.5) * 0.08, Math.sin(angle) * r);
@@ -2892,6 +3335,87 @@ function animate() {
     }
   }
 
+  // 3D Fire Maiden animation
+  if (fireMaidenMixer) fireMaidenMixer.update(dt);
+  if (fireMaidenVisible && fireMaidenModel) {
+    fireMaidenElapsed += dt;
+    // Scale up in first 0.6s
+    if (fireMaidenElapsed < 0.6) {
+      const s = (fireMaidenElapsed / 0.6) * 1.2;
+      fireMaidenModel.scale.setScalar(s);
+    } else {
+      fireMaidenModel.scale.setScalar(1.2);
+    }
+    // Slow rotation
+    fireMaidenModel.rotation.y += dt * 0.8;
+    // Gentle bob
+    fireMaidenModel.position.y = 0.3 + Math.sin(elapsedTotal * 2) * 0.1;
+    // Fiery emissive pulse
+    fireMaidenModel.traverse(child => {
+      if (child.isMesh) {
+        child.material.emissiveIntensity = 0.4 + Math.sin(elapsedTotal * 5) * 0.3;
+      }
+    });
+    // Hide after duration
+    if (fireMaidenElapsed >= fireMaidenDuration) {
+      hideFireMaiden();
+    }
+  }
+
+  // 3D Water Maiden animation
+  if (waterMaidenMixer) waterMaidenMixer.update(dt);
+  if (waterMaidenVisible && waterMaidenModel) {
+    waterMaidenElapsed += dt;
+    // Scale up in first 0.6s
+    if (waterMaidenElapsed < 0.6) {
+      const s = (waterMaidenElapsed / 0.6) * 1.2;
+      waterMaidenModel.scale.setScalar(s);
+    } else {
+      waterMaidenModel.scale.setScalar(1.2);
+    }
+    // Slow rotation
+    waterMaidenModel.rotation.y += dt * 0.6;
+    // Wave-like bob (slower, more fluid than fire)
+    waterMaidenModel.position.y = 0.3 + Math.sin(elapsedTotal * 1.5) * 0.15;
+    // Aqua emissive pulse
+    waterMaidenModel.traverse(child => {
+      if (child.isMesh) {
+        child.material.emissiveIntensity = 0.4 + Math.sin(elapsedTotal * 3) * 0.25;
+      }
+    });
+    // Hide after duration
+    if (waterMaidenElapsed >= waterMaidenDuration) {
+      hideWaterMaiden();
+    }
+  }
+
+  // 3D Lightning Maiden animation
+  if (lightningMaidenMixer) lightningMaidenMixer.update(dt);
+  if (lightningMaidenVisible && lightningMaidenModel) {
+    lightningMaidenElapsed += dt;
+    // Scale up in first 0.4s (faster, more electric)
+    if (lightningMaidenElapsed < 0.4) {
+      const s = (lightningMaidenElapsed / 0.4) * 1.2;
+      lightningMaidenModel.scale.setScalar(s);
+    } else {
+      lightningMaidenModel.scale.setScalar(1.2);
+    }
+    // Smooth rotation
+    lightningMaidenModel.rotation.y += dt * 0.9;
+    // Gentle floating bob
+    lightningMaidenModel.position.y = 0.3 + Math.sin(elapsedTotal * 2.5) * 0.12;
+    // Soft purple pulse (not harsh flicker)
+    lightningMaidenModel.traverse(child => {
+      if (child.isMesh) {
+        child.material.emissiveIntensity = 0.5 + Math.sin(elapsedTotal * 4) * 0.3;
+      }
+    });
+    // Hide after duration
+    if (lightningMaidenElapsed >= lightningMaidenDuration) {
+      hideLightningMaiden();
+    }
+  }
+
   // Flood counter reset (every 60s, reset counter)
   eventCounterTimer += dt;
   if (eventCounterTimer >= 60) {
@@ -2901,6 +3425,22 @@ function animate() {
       floodMode = false;
       document.getElementById('floodStatus').classList.remove('show');
     }
+
+    // Inactive viewer cleanup — remove viewers silent for 5+ minutes
+    const INACTIVE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+    const now = Date.now();
+    for (const [uid, v] of viewers) {
+      if (now - v.lastActive > INACTIVE_THRESHOLD) {
+        // Keep viewers with readings/gifts (they might return), just remove orb
+        removeViewerOrb(uid);
+        // Remove completely if they have no activity
+        if ((v.score || 0) <= 1 && (v.readingsCount || 0) <= 0 && (v.totalGifted || 0) <= 0) {
+          viewers.delete(uid);
+        }
+      }
+    }
+    document.getElementById('viewerCount').textContent = viewers.size;
+    refreshOrbs();
   }
 
   // Idle chatter — Eyang talks when room is quiet, rotates through different topics
@@ -3195,8 +3735,7 @@ window._debug = function(action) {
 window._toggleVoice = toggleVoiceCommentary;
 
 // ===== SOCKET.IO =====
-const params = new URLSearchParams(window.location.search);
-const ROOM = params.get('room') || '';
+const ROOM = _urlParams.get('room') || '';
 
 let socket = null;
 function connectSocket() {
@@ -3243,11 +3782,11 @@ function init() {
       clearInterval(loadInterval);
       setTimeout(() => {
         document.getElementById('loadingScreen').classList.add('hidden');
-        // Enable voice indicator
-        document.getElementById('voiceIndicator').style.display = 'block';
-        document.getElementById('voiceToggleBtn').textContent = 'Voice: ON';
-        document.getElementById('voiceToggleBtn').style.background = '#9b59b6';
-        document.getElementById('voiceToggleBtn').style.color = '#fff';
+        // Enable voice indicator (respect test mode)
+        document.getElementById('voiceIndicator').style.display = voiceEnabled ? 'block' : 'none';
+        document.getElementById('voiceToggleBtn').textContent = voiceEnabled ? 'Voice: ON' : 'Voice: OFF';
+        document.getElementById('voiceToggleBtn').style.background = voiceEnabled ? '#9b59b6' : '#222';
+        document.getElementById('voiceToggleBtn').style.color = voiceEnabled ? '#fff' : '#ccc';
       }, 500);
       return;
     }
@@ -3265,6 +3804,7 @@ function init() {
 
 // Load persisted viewer data from Supabase (fire-and-forget)
 async function loadPersistedViewer(uid) {
+  if (IS_TEST_MODE) return; // Skip persistence in test mode
   try {
     const res = await fetch('/api/fortuneteller/viewer/load', {
       method: 'POST',
@@ -3296,7 +3836,10 @@ async function loadPersistedViewer(uid) {
       v.lastReading = { ...pv.last_reading, _fromPreviousStream: true };
     }
 
+    // Returning viewers get a score boost so they appear as orbs immediately
     if (v._isReturning) {
+      v.score = Math.max(v.score, 5 + Math.min(v._persistedReadings, 10));
+      refreshOrbs();
       console.log(`🔮 Returning viewer: ${v.nickname} (${v._persistedReadings} readings, ${v._persistedSessions} sessions)`);
     }
   } catch (err) {
@@ -3307,6 +3850,7 @@ async function loadPersistedViewer(uid) {
 
 // Batch save viewers to Supabase
 async function batchSaveViewers() {
+  if (IS_TEST_MODE) return; // Skip persistence in test mode
   const toSave = [];
   for (const [uid, v] of viewers) {
     // Only save viewers with meaningful activity
@@ -3350,6 +3894,7 @@ async function batchSaveViewers() {
 
 // Save session summary
 async function saveSessionSummary() {
+  if (IS_TEST_MODE) return; // Skip persistence in test mode
   if (_sessionSaved) return;
   _sessionSaved = true;
 
@@ -3412,6 +3957,7 @@ function scheduleSaveDebounced() {
 
 // Save on page close
 window.addEventListener('beforeunload', () => {
+  if (IS_TEST_MODE) return; // Skip persistence in test mode
   // Save viewers via sendBeacon
   const toSave = [];
   for (const [uid, v] of viewers) {
@@ -3446,12 +3992,13 @@ function sendAutoReply(text, priority, eventType) {
   // Skip idle/invite events
   const skipEvents = ['mystic_idle_explain', 'mystic_idle_tarot', 'mystic_idle_atmosphere', 'mystic_idle_wisdom', 'mystic_idle_tease', 'mystic_invite_friends', 'mystic_viewers_welcome', 'mystic_flood_acknowledge'];
   if (skipEvents.includes(eventType)) return;
-  if (!text || text.length > 150) return;
-  // Rate limit
+  if (!text) return;
+  // Question events always get sent (bypass cooldown)
+  const isQuestion = eventType.includes('question');
   const now = Date.now();
-  if (now - _lastAutoReplyTime < AUTO_REPLY_COOLDOWN) return;
+  if (!isQuestion && now - _lastAutoReplyTime < AUTO_REPLY_COOLDOWN) return;
   _lastAutoReplyTime = now;
-  // Prefix + truncate
+  // Prefix + truncate (always truncate, never skip long text)
   let msg = '\u{1F52E} ' + text;
   if (msg.length > 145) msg = msg.slice(0, 142) + '...';
   // Fire-and-forget POST
@@ -3460,6 +4007,46 @@ function sendAutoReply(text, priority, eventType) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: msg, room: ROOM }),
   }).catch(() => {}); // ignore errors
+}
+
+// Send reading result to TikTok chat (separate cooldown from auto-reply)
+let _lastReadingChatTime = 0;
+const READING_CHAT_COOLDOWN = 5000; // 5s between reading chat sends
+
+function sendReadingToChat(nickname, readingType, fortuneText) {
+  if (!autoReplyEnabled) return;
+  if (!fortuneText || fortuneText === 'Bola kristal sedang membaca...') return;
+
+  const now = Date.now();
+  if (now - _lastReadingChatTime < READING_CHAT_COOLDOWN) return;
+  _lastReadingChatTime = now;
+
+  const typeLabels = {
+    zodiac: 'Zodiak', fortune: 'Ramalan', jodoh: 'Cek Jodoh',
+    question: 'Jawaban', gift_reading: 'Gift Reading', vip_vision: 'VIP PROPHECY'
+  };
+  const typeLabel = typeLabels[readingType] || 'Reading';
+
+  // Message 1: Header
+  const header = `🔮 ${nickname} — ${typeLabel}:`;
+  fetch('/api/chat/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: header, room: ROOM }),
+  }).catch(() => {});
+
+  // Message 2: Body (after 1.5s delay, 140 char max)
+  setTimeout(() => {
+    let body = fortuneText;
+    if (body.length > 140) body = body.slice(0, 137) + '...';
+    fetch('/api/chat/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: body, room: ROOM }),
+    }).catch(() => {});
+  }, 1500);
+
+  console.log('📨 Reading sent to chat:', nickname, typeLabel);
 }
 
 function toggleAutoReply() {

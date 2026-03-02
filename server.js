@@ -295,7 +295,7 @@ function buildCommentaryPrompt(eventType, eventData, recentContext, liveContext,
       }
       return `${contextStr}\nKartu tarot: "${eventData.tarotCard || 'The Lovers'}", posisi ${eventData.tarotPosition || 'Tegak'}. Makna: "${eventData.tarotMeaning || ''}". Cek kecocokan viewer "${eventData.name1}" (${eventData.zodiac1}) sama "${eventData.name2}" (${eventData.zodiac2}). PANGGIL MEREKA DENGAN NAMA YANG BENAR! ${eventData.tarotPosition?.includes('Terbalik') ? 'Kartu terbalik = ada tantangan dalam hubungan, tapi bisa diatasi.' : 'Kartu tegak = koneksi kuat.'} Persentase, kelebihan, tantangan. 25-40 kata.`;
     case 'mystic_question':
-      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Kartu: "${eventData.tarotCard || 'The Hermit'}", posisi ${eventData.tarotPosition || 'Tegak'}. Makna: "${eventData.tarotMeaning || ''}". Dia nanya: '${eventData.question}'. JAWAB PERTANYAAN DIA SECARA SPESIFIK berdasarkan kartu — bukan jawaban generik. Hubungkan makna kartu langsung ke pertanyaannya. ${eventData.tarotPosition?.includes('Terbalik') ? 'Terbalik = jawabannya ada tantangan/pelajaran yang harus dihadapi.' : 'Tegak = jawaban positif, jalan terbuka.'} Kasih satu nasihat konkret. 25-35 kata.`;
+      return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Dia nanya: '${eventData.question}'.${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} Eyang LIHAT JAWABAN DI BOLA KRISTAL — bukan kartu tarot. Jawab pertanyaannya SPESIFIK pakai penglihatan mistis. Deskripsikan apa yang Eyang lihat di bola kristal (bayangan, warna, simbol) yang menjawab pertanyaannya. Kasih satu nasihat konkret. Hangat tapi mystical. 25-40 kata.`;
     case 'mystic_gift_reading':
       if (eventData.spreadType === '3-card') {
         return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! Dia kasih ${eventData.diamonds} diamonds! SPREAD 3 KARTU (Masa Lalu-Sekarang-Masa Depan): ${eventData.tarotSpread}.${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''}${eventData.focusTopic ? ` Fokus: ${eventData.focusTopic}.` : ''} Baca KETIGA kartu secara berurutan — apa yang terjadi di masa lalu, situasi sekarang, dan apa yang akan datang. Hubungkan ketiganya jadi satu cerita. Perhatikan mana yang tegak (positif) dan terbalik (tantangan). Angka bertuah (3 angka), warna. 50-70 kata.`;
@@ -304,7 +304,7 @@ function buildCommentaryPrompt(eventType, eventData, recentContext, liveContext,
     case 'mystic_vip_vision':
       return `${contextStr}\nViewer bernama "${eventData.name}" — PANGGIL DIA "${eventData.name}"! VIP VISION — ${eventData.diamonds} diamonds! SPREAD 5 KARTU CROSS: ${eventData.tarotSpread || eventData.tarotCard}.${eventData.zodiac ? ` Zodiak: ${eventData.zodiac}.` : ''} Reading PALING PREMIUM — baca KELIMA kartu: Masa Lalu, Sekarang, Masa Depan, Nasihat Alam Semesta, Fondasi Jiwa. Ceritakan perjalanan hidup viewer dari setiap kartu. Perhatikan tegak vs terbalik. Personality unik, prediksi jodoh spesifik, karir terbaik, 4 angka keberuntungan, warna + hari beruntung. Pesan akhir dari alam semesta. Dramatis, mistis. 80-120 kata.`;
     case 'mystic_viewers_welcome':
-      return `${contextStr}\n${eventData.count} viewers baru masuk live! Nama: ${eventData.names}. Sambut semua, kasih tahu mereka: tulis tanggal lahir di chat buat set zodiak, lalu kirim gift biar Eyang bacain ramalannya. Ceria dan mengundang. Bahasa Indonesia gaul. 15-25 kata.`;
+      return `${contextStr}\n${eventData.count} viewers baru masuk! Nama: ${eventData.names}. Waktu: ${eventData.timeGreet || 'malam'}. Sapa CASUAL — "hi ${eventData.names}!" atau "selamat ${eventData.timeGreet || 'malam'}" atau "eh ada yang baru nih". JANGAN pakai "selamat datang" — terlalu formal. Santai kayak ngobrol sama teman. Kasih tahu singkat: tulis tanggal lahir di chat buat zodiak, gift = ramalan tarot. Bahasa Indonesia gaul, santai. 15-25 kata.`;
     case 'mystic_invite_friends':
       return `${contextStr}\nAda ${eventData.viewerCount} viewers sekarang. Ajak mereka invite teman buat cek nasib bareng-bareng. Bahasa Indonesia gaul. Seru dan persuasif. 15-25 kata.`;
     case 'mystic_ask_engage':
@@ -504,43 +504,90 @@ app.post('/api/voice/generate', async (req, res) => {
       session.cost.voiceCalls++;
     }
 
-    // Step 2: ElevenLabs TTS -> audio/mpeg
+    // Step 2: TTS — try ElevenLabs first, fallback to OpenAI TTS on quota/error
+    let ttsBuffer = null;
+
+    // 2a: ElevenLabs TTS (primary — better voice clone)
     const selectedVoice = voiceId || ELEVENLABS_VOICE_ID;
-    // Mystic events use more expressive settings for natural Indonesian delivery
     const voiceSettings = isMystic
       ? { stability: 0.35, similarity_boost: 0.7, style: 0.85, use_speaker_boost: true }
       : { stability: 0.3, similarity_boost: 0.85, style: 0.7, use_speaker_boost: true };
-    const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${selectedVoice}/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': ELEVENLABS_API_KEY,
-      },
-      body: JSON.stringify({
-        text: commentary,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: voiceSettings,
-      }),
-    });
+    try {
+      const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${selectedVoice}/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key': ELEVENLABS_API_KEY,
+        },
+        body: JSON.stringify({
+          text: commentary,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: voiceSettings,
+        }),
+      });
 
-    if (!ttsRes.ok) {
-      const err = await ttsRes.text();
-      console.error('ElevenLabs error:', err);
-      return res.status(502).json({ error: 'ElevenLabs TTS failed' });
+      if (ttsRes.ok) {
+        ttsBuffer = Buffer.from(await ttsRes.arrayBuffer());
+        if (session) session.cost.elevenlabsChars += commentary.length;
+        console.log('🔊 TTS: ElevenLabs OK');
+      } else {
+        const err = await ttsRes.text();
+        console.warn('⚠️ ElevenLabs failed, falling back to OpenAI TTS:', err);
+      }
+    } catch (elErr) {
+      console.warn('⚠️ ElevenLabs error, falling back to OpenAI TTS:', elErr.message);
     }
 
-    // Track ElevenLabs chars
-    if (session) {
-      session.cost.elevenlabsChars += commentary.length;
+    // 2b: OpenAI TTS fallback
+    // Available voices: alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse
+    // Best for Eyang: ash (warm deep), sage (calm wise), coral (warm), ballad (expressive)
+    if (!ttsBuffer) {
+      try {
+        const openaiVoice = req.body.openaiVoice || (isMystic ? 'ash' : 'nova');
+        // Voice instructions tuned per voice for best delivery
+        const mysticInstructions = {
+          echo: 'Speak as a mystical Indonesian fortune teller. Soft, whispery and mysterious. Slow pace with dramatic pauses before key revelations. Natural Bahasa Indonesia flow.',
+          ash: 'Speak as a warm, wise Indonesian elder (Eyang). Deep gentle voice with gravitas. Slow, deliberate pacing. Natural Bahasa Indonesia rhythm with warmth.',
+          default: 'Speak as a wise Indonesian fortune teller (Eyang). Mysterious but warm tone. Slow dramatic delivery with natural Bahasa Indonesia rhythm.',
+        };
+        const voiceInstructions = isMystic
+          ? (mysticInstructions[openaiVoice] || mysticInstructions.default)
+          : 'Casual, friendly Malaysian male voice. Natural and warm.';
+        const openaiTtsRes = await fetch('https://api.openai.com/v1/audio/speech', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini-tts',
+            input: commentary,
+            voice: openaiVoice,
+            instructions: voiceInstructions,
+            response_format: 'mp3',
+          }),
+        });
+
+        if (!openaiTtsRes.ok) {
+          const err = await openaiTtsRes.text();
+          console.error('OpenAI TTS also failed:', err);
+          return res.status(502).json({ error: 'All TTS providers failed' });
+        }
+
+        ttsBuffer = Buffer.from(await openaiTtsRes.arrayBuffer());
+        if (session) session.cost.openaiTokens += commentary.length; // rough tracking
+        console.log('🔊 TTS: OpenAI fallback OK (voice:', openaiVoice, ')');
+      } catch (oaiErr) {
+        console.error('OpenAI TTS error:', oaiErr.message);
+        return res.status(502).json({ error: 'All TTS providers failed' });
+      }
     }
 
     // Stream audio back with commentary text in header
     res.set('Content-Type', 'audio/mpeg');
     res.set('X-Commentary-Text', encodeURIComponent(commentary));
     res.set('Access-Control-Expose-Headers', 'X-Commentary-Text');
-
-    const arrayBuf = await ttsRes.arrayBuffer();
-    res.send(Buffer.from(arrayBuf));
+    res.send(ttsBuffer);
 
   } catch (err) {
     console.error('Voice generate error:', err);
@@ -597,6 +644,7 @@ app.post('/api/fortuneteller/viewer/save', async (req, res) => {
 
 // POST /api/fortuneteller/session/save — Save session summary
 app.post('/api/fortuneteller/session/save', async (req, res) => {
+  if (!req.body) return res.status(400).json({ error: 'empty body' });
   const { session } = req.body;
   if (!session) return res.status(400).json({ error: 'session required' });
   const result = await supabaseRest('POST', 'fortuneteller_sessions', '', session, {
