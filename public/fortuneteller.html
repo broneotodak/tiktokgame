@@ -2017,8 +2017,8 @@ function processReadingQueue() {
     reading.data.tarotPosition = eventData.tarotPosition;
   }
 
-  // Queue voice
-  queueVoiceEvent(eventType, eventData, reading.priority);
+  // Queue voice — force=true bypasses readingState gate (this IS the reading's voice)
+  queueVoiceEvent(eventType, eventData, reading.priority, true);
 
   // After brief delay, transition to REVEAL
   setTimeout(() => {
@@ -3001,11 +3001,11 @@ function interruptForGift(giftPriority) {
   if (before > 0) console.log(`🎁 Flushed ${before - voiceQueue.length} low-priority voice items`);
 }
 
-function queueVoiceEvent(eventType, eventData, priority = 1) {
+function queueVoiceEvent(eventType, eventData, priority = 1, forceQueue = false) {
   if (!voiceEnabled) return;
   // During active reading (READING/REVEAL), only allow priority 3+ (gift/VIP)
-  // This prevents chat replies from cutting off tarot readings
-  if (readingState !== 'IDLE' && priority < 3) return;
+  // forceQueue=true bypasses this — used for the reading's OWN voice event
+  if (!forceQueue && readingState !== 'IDLE' && priority < 3) return;
   if (voiceQueue.length >= MAX_VOICE_QUEUE) {
     const lowIdx = voiceQueue.findIndex(q => q.priority < priority);
     if (lowIdx !== -1) voiceQueue.splice(lowIdx, 1);
@@ -3571,21 +3571,24 @@ function animate() {
     }
   }
 
-  // Free random readings — pick a random viewer and give them a fortune
+  // Free random readings — pick an ACTIVE viewer and give them a fortune
   if (voiceEnabled) {
     freeReadingTimer -= dt;
     if (freeReadingTimer <= 0) {
       freeReadingTimer = FREE_READING_INTERVAL + Math.random() * 30;
       if (viewers.size > 0 && readingState === 'IDLE' && readingQueue.length === 0 && !voiceIsGenerating && !voiceIsPlaying) {
-        const allViewers = Array.from(viewers.values());
-        const v = allViewers[Math.floor(Math.random() * allViewers.length)];
-        const zodiac = v.zodiac || null;
-        if (zodiac) {
-          addNotification(`Eyang tertarik dengan aura <strong>${v.nickname}</strong>...`, 'zodiac');
-          queueReading('zodiac', v.uniqueId, v.nickname, { zodiac }, 2);
-        } else {
-          addNotification(`Eyang merasakan sesuatu tentang <strong>${v.nickname}</strong>...`, 'zodiac');
-          queueReading('fortune', v.uniqueId, v.nickname, {}, 2);
+        // Only pick from ACTIVE viewers (active in last 2 min)
+        const activeViewers = Array.from(viewers.values()).filter(v => Date.now() - v.lastActive < 120000);
+        if (activeViewers.length > 0) {
+          const v = activeViewers[Math.floor(Math.random() * activeViewers.length)];
+          const zodiac = v.zodiac || null;
+          if (zodiac) {
+            addNotification(`Eyang tertarik dengan aura <strong>${v.nickname}</strong>...`, 'zodiac');
+            queueReading('zodiac', v.uniqueId, v.nickname, { zodiac }, 2);
+          } else {
+            addNotification(`Eyang merasakan sesuatu tentang <strong>${v.nickname}</strong>...`, 'zodiac');
+            queueReading('fortune', v.uniqueId, v.nickname, {}, 2);
+          }
         }
       }
     }
